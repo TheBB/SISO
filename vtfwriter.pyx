@@ -41,7 +41,7 @@ cdef extern from 'VTFAPI.h':
 
     cdef cppclass VTFAGeometryBlock 'VTFAGeometryBlock' (VTFABlock):
         VTFAGeometryBlock()
-        int SetGeometryElementBlocks(const int *, int)
+        int AddGeometryElementBlock(int)
 
     cdef cppclass VTFAResultBlock 'VTFAResultBlock' (VTFABlock):
         VTFAResultBlock(int, int, int, int)
@@ -53,7 +53,7 @@ cdef extern from 'VTFAPI.h':
     cdef cppclass VTFAScalarBlock 'VTFAScalarBlock' (VTFABlock):
         VTFAScalarBlock(int)
         void SetName(const char*)
-        void SetResultBlocks(const int*, int, int)
+        int AddResultBlock(int, int)
 
     cdef cppclass VTFAStateInfoBlock 'VTFAStateInfoBlock' (VTFABlock):
         VTFAStateInfoBlock()
@@ -65,10 +65,12 @@ cdef class File:
     cdef VTFAFile* vtf
     cdef bytes filename
     cdef str mode
+    cdef int blockid
 
     def __init__(self, filename, mode='r'):
         self.filename = filename.encode()
         self.mode = mode
+        self.blockid = 1
 
     def __enter__(self):
         self.vtf = new VTFAFile()
@@ -84,10 +86,43 @@ cdef class File:
     def WriteBlock(self, Block block):
         self.vtf.WriteBlock(block._vtf)
 
+    def NodeBlock(self, *args, **kwargs):
+        blk = NodeBlock(self, self.blockid, *args, **kwargs)
+        self.blockid += 1
+        return blk
+
+    def ElementBlock(self, *args, **kwargs):
+        blk = ElementBlock(self, self.blockid, *args, **kwargs)
+        self.blockid += 1
+        return blk
+
+    def GeometryBlock(self, *args, **kwargs):
+        return GeometryBlock(self, *args, **kwargs)
+
+    def ResultBlock(self, *args, **kwargs):
+        blk = ResultBlock(self, self.blockid, *args, **kwargs)
+        self.blockid += 1
+        return blk
+
+    def ScalarBlock(self, *args, **kwargs):
+        blk = ScalarBlock(self, self.blockid, *args, **kwargs)
+        self.blockid += 1
+        return blk
+
+    def StateInfoBlock(self, *args, **kwargs):
+        return StateInfoBlock(self, *args, **kwargs)
+
 
 cdef class Block:
 
     cdef VTFABlock* _vtf
+    cdef File parent
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, backtrace):
+        self.parent.WriteBlock(self)
 
     def GetBlockID(self):
         return self._vtf.GetBlockID()
@@ -98,7 +133,8 @@ cdef class Block:
 
 cdef class NodeBlock(Block):
 
-    def __init__(self, blockid):
+    def __init__(self, parent, blockid):
+        self.parent = parent
         self._vtf = new VTFANodeBlock(blockid, 0)
 
     cdef VTFANodeBlock* vtf(self):
@@ -111,20 +147,19 @@ cdef class NodeBlock(Block):
 
 cdef class ElementBlock(Block):
 
-    def __init__(self, blockid):
+    def __init__(self, parent, blockid):
+        self.parent = parent
         self._vtf = new VTFAElementBlock(blockid, 0, 0)
 
     cdef VTFAElementBlock* vtf(self):
         return <VTFAElementBlock*> self._vtf
 
-    def SetNodeBlockID(self, i):
-        self.vtf().SetNodeBlockID(i)
+    def BindNodeBlock(self, NodeBlock blk):
+        self.vtf().SetNodeBlockID(blk.GetBlockID())
+        self.vtf().SetPartID(blk.GetBlockID())
 
     def SetPartName(self, name):
         self.vtf().SetPartName(name.encode())
-
-    def SetPartID(self, i):
-        self.vtf().SetPartID(i)
 
     def AddElements(self, elements, dim):
         cdef np.ndarray[int] data = np.ascontiguousarray(elements, dtype=ctypes.c_int)
@@ -138,20 +173,22 @@ cdef class ElementBlock(Block):
 
 cdef class GeometryBlock(Block):
 
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
         self._vtf = new VTFAGeometryBlock()
 
     cdef VTFAGeometryBlock* vtf(self):
         return <VTFAGeometryBlock*> self._vtf
 
-    def SetGeometryElementBlocks(self, blocks):
-        cdef np.ndarray[int] data = np.ascontiguousarray(blocks, dtype=ctypes.c_int)
-        self.vtf().SetGeometryElementBlocks(&data[0], len(blocks))
+    def BindElementBlocks(self, *blocks):
+        for blk in blocks:
+            self.vtf().AddGeometryElementBlock(blk.GetBlockID())
 
 
 cdef class ResultBlock(Block):
 
-    def __init__(self, blockid, vector=False, cells=False):
+    def __init__(self, parent, blockid, vector=False, cells=False):
+        self.parent = parent
         self._vtf = new VTFAResultBlock(
             blockid,
             VTFA_DIM_VECTOR if vector else VTFA_DIM_SCALAR,
@@ -162,14 +199,14 @@ cdef class ResultBlock(Block):
     cdef VTFAResultBlock* vtf(self):
         return <VTFAResultBlock*> self._vtf
 
-    def SetMapToBlockID(self, i):
-        self.vtf().SetMapToBlockID(i)
+    def BindBlock(self, blk):
+        self.vtf().SetMapToBlockID(blk.GetBlockID())
 
     def SetResults(self, results):
         cdef np.ndarray[float] data = np.ascontiguousarray(results, dtype=ctypes.c_float)
         if self.GetDimension() == VTFA_DIM_SCALAR:
             self.vtf().SetResults1D(&data[0], len(results))
-        elif self.GetDimension() == VTFA_DIM_SCALAR:
+        elif self.GetDimension() == VTFA_DIM_VECTOR:
             self.vtf().SetResults3D(&data[0], len(results) / 3)
 
     def GetDimension(self):
@@ -178,7 +215,8 @@ cdef class ResultBlock(Block):
 
 cdef class ScalarBlock(Block):
 
-    def __init__(self, blockid):
+    def __init__(self, parent, blockid):
+        self.parent = parent
         self._vtf = new VTFAScalarBlock(blockid)
 
     cdef VTFAScalarBlock* vtf(self):
@@ -187,14 +225,15 @@ cdef class ScalarBlock(Block):
     def SetName(self, name):
         self.vtf().SetName(name.encode())
 
-    def SetResultBlocks(self, blocks, step):
-        cdef np.ndarray[int] data = np.ascontiguousarray(blocks, dtype=ctypes.c_int)
-        self.vtf().SetResultBlocks(&data[0], len(blocks), step)
+    def BindResultBlocks(self, step, *blocks):
+        for blk in blocks:
+            self.vtf().AddResultBlock(blk.GetBlockID(), step)
 
 
 cdef class StateInfoBlock(Block):
 
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
         self._vtf = new VTFAStateInfoBlock()
 
     cdef VTFAStateInfoBlock* vtf(self):

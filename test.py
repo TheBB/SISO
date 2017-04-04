@@ -2,38 +2,31 @@ import numpy as np
 import vtfwriter as vtf
 
 with vtf.File('test.vtf', 'w') as f:
-    nodes = vtf.NodeBlock(1)
-    nodes.SetNodes([
-        0.0, 0.0, 0.0,
-        1.0, 0.0, 0.0,
-        2.0, 0.0, 0.0,
-        0.0, 1.0, 0.0,
-        1.0, 1.0, 0.0,
-        2.0, 1.0, 0.0,
-    ])
-    f.WriteBlock(nodes)
+    with f.NodeBlock() as nodes:
+        nodes.SetNodes([
+            0.0, 0.0, 0.0,
+            1.0, 0.0, 0.0,
+            2.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            1.0, 1.0, 0.0,
+            2.0, 1.0, 0.0,
+        ])
 
-    elements = vtf.ElementBlock(1)
-    elements.AddElements([0, 1, 4, 3, 1, 2, 5, 4], 2)
-    elements.SetPartID(1)
-    elements.SetPartName('Patch 1')
-    elements.SetNodeBlockID(1)
-    f.WriteBlock(elements)
+    with f.ElementBlock() as elements:
+        elements.AddElements([0, 1, 4, 3, 1, 2, 5, 4], 2)
+        elements.SetPartName('Patch 1')
+        elements.BindNodeBlock(nodes)
 
-    geometry = vtf.GeometryBlock()
-    geometry.SetGeometryElementBlocks([1])
-    f.WriteBlock(geometry)
+    with f.GeometryBlock() as geometry:
+        geometry.BindElementBlocks(elements)
 
-    result = vtf.ResultBlock(1)
-    result.SetResults([0.0, 1.0, 2.0, 0.0, -1.0, -2.0])
-    result.SetMapToBlockID(1)
-    f.WriteBlock(result)
+    with f.ResultBlock() as result:
+        result.SetResults([0.0, 1.0, 2.0, 0.0, -1.0, -2.0])
+        result.BindBlock(nodes)
 
-    scalar = vtf.ScalarBlock(2)
-    scalar.SetName('Whatever')
-    scalar.SetResultBlocks([1], 1)
-    f.WriteBlock(scalar)
+    with f.ScalarBlock() as scalar:
+        scalar.SetName('Whatever')
+        scalar.BindResultBlocks(1, result)
 
-    states = vtf.StateInfoBlock()
-    states.SetStepData(1, 'Time 0.0', 0.0)
-    f.WriteBlock(states)
+    with f.StateInfoBlock() as states:
+        states.SetStepData(1, 'Time 0.0', 0.0)
