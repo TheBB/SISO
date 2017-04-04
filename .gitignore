@@ -2,3 +2,6 @@
 /build
 /dist
 *.cpp
+*.so
+__pycache__
+*.vtf
