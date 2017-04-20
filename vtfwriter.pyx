@@ -164,11 +164,11 @@ cdef class ElementBlock(Block):
     def AddElements(self, elements, dim):
         cdef np.ndarray[int] data = np.ascontiguousarray(elements, dtype=ctypes.c_int)
         if dim == 1:
-            self.vtf().AddElements(VTFA_BEAMS, &data[0], len(elements) / 2)
+            self.vtf().AddElements(VTFA_BEAMS, &data[0], len(elements) // 2)
         elif dim == 2:
-            self.vtf().AddElements(VTFA_QUADS, &data[0], len(elements) / 4)
+            self.vtf().AddElements(VTFA_QUADS, &data[0], len(elements) // 4)
         else:
-            self.vtf().AddElements(VTFA_HEXAHEDRONS, &data[0], len(elements) / 8)
+            self.vtf().AddElements(VTFA_HEXAHEDRONS, &data[0], len(elements) // 8)
 
 
 cdef class GeometryBlock(Block):
