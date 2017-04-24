@@ -5,7 +5,9 @@ from itertools import chain, product
 import logging
 import numpy as np
 import splipy.IO
+from splipy import SplineObject
 from splipy.SplineModel import ObjectCatalogue
+import splipy.utils
 
 
 class G2Object(splipy.IO.G2):
@@ -40,13 +42,45 @@ class Reader:
 
     def write(self, w):
         for lid, time, lgrp in self.times():
-            for basis in self.bases.values():
-                if lid in basis.updates:
+            logging.debug('Level %d', lid)
+            for bname, bgrp in lgrp.items():
+                basis = self.bases[bname]
+                if 'basis' in bgrp:
+                    logging.debug('Update found for basis %s', basis.name)
                     self.write_geometry(w, lid, basis)
+                if 'fields' in bgrp:
+                    for fname in bgrp['fields']:
+                        field = self.fields[fname]
+                        logging.debug('Updating field %s', field.name)
+                        self.write_field(w, lid, field)
             w.add_time(time)
 
+    def write_field(self, w, lid, field):
+        for pid in range(self.npatches(lid, field.basis)):
+            patch = self.patch(lid, field.basis, pid).clone()
+            nodeview = self.catalogue.lookup(patch)
+            orig_tesselation = list(nodeview.node.tesselation)
+            for i, f in enumerate(nodeview.orientation.flip):
+                if f:
+                    orig_tesselation[i] = orig_tesselation[i][::-1]
+            tesselation = [
+                orig_tesselation[nodeview.orientation.perm_inv[q]]
+                for q in range(len(orig_tesselation))
+            ]
+            coeffs = self.h5[str(lid)][field.basis.name]['fields'][field.name][str(pid+1)][:]
+            coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
+            patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
+
+            if patch.dimension > 1:
+                kind = 'vector'
+                patch.set_dimension(3)
+            else:
+                kind = 'scalar'
+
+            results = np.ndarray.flatten(patch(*tesselation))
+            w.update_field(results, field.name, pid, kind)
+
     def write_geometry(self, w, lid, basis):
-        geometry = []
         for pid in range(self.npatches(lid, basis)):
             patch = self.patch(lid, basis, pid)
             node = self.catalogue.add(patch).node
@@ -56,8 +90,7 @@ class Reader:
                 node.last_written = -1
 
             if node.last_written >= lid:
-                logging.debug('Skipping update for %s, level %d, patch %d (already written)',
-                              basis.name, lid, pid)
+                logging.debug('Skipping patch %d', pid)
                 continue
             node.last_written = lid
 
@@ -89,9 +122,10 @@ class Reader:
                 eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nodes.shape[:-1])
                 eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nodes.shape[:-1])
 
-            logging.debug('Updating geometry for %s, level %d, patch %d',
-                          basis.name, lid, pid)
-            w.update_geometry(np.ndarray.flatten(nodes), np.ndarray.flatten(eidxs), len(nidxs), node.patchid)
+            logging.debug('Writing patch %d', pid)
+            node.patchid = w.update_geometry(
+                np.ndarray.flatten(nodes), np.ndarray.flatten(eidxs), len(nidxs), node.patchid
+            )
 
     @property
     def ntimes(self):

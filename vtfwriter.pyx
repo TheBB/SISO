@@ -42,6 +42,7 @@ cdef extern from 'VTFAPI.h':
     cdef cppclass VTFAGeometryBlock 'VTFAGeometryBlock' (VTFABlock):
         VTFAGeometryBlock()
         int AddGeometryElementBlock(int)
+        int AddGeometryElementBlock(int, int)
 
     cdef cppclass VTFAResultBlock 'VTFAResultBlock' (VTFABlock):
         VTFAResultBlock(int, int, int, int)
@@ -52,6 +53,11 @@ cdef extern from 'VTFAPI.h':
 
     cdef cppclass VTFAScalarBlock 'VTFAScalarBlock' (VTFABlock):
         VTFAScalarBlock(int)
+        void SetName(const char*)
+        int AddResultBlock(int, int)
+
+    cdef cppclass VTFAVectorBlock 'VTFAVectorBlock' (VTFABlock):
+        VTFAVectorBlock(int)
         void SetName(const char*)
         int AddResultBlock(int, int)
 
@@ -106,6 +112,11 @@ cdef class File:
 
     def ScalarBlock(self, *args, **kwargs):
         blk = ScalarBlock(self, self.blockid, *args, **kwargs)
+        self.blockid += 1
+        return blk
+
+    def VectorBlock(self, *args, **kwargs):
+        blk = VectorBlock(self, self.blockid, *args, **kwargs)
         self.blockid += 1
         return blk
 
@@ -180,9 +191,13 @@ cdef class GeometryBlock(Block):
     cdef VTFAGeometryBlock* vtf(self):
         return <VTFAGeometryBlock*> self._vtf
 
-    def BindElementBlocks(self, *blocks):
-        for blk in blocks:
-            self.vtf().AddGeometryElementBlock(blk.GetBlockID())
+    def BindElementBlocks(self, *blocks, step=None):
+        if step is None:
+            for blk in blocks:
+                self.vtf().AddGeometryElementBlock(blk.GetBlockID())
+        else:
+            for blk in blocks:
+                self.vtf().AddGeometryElementBlock(blk.GetBlockID(), step)
 
 
 cdef class ResultBlock(Block):
@@ -221,6 +236,23 @@ cdef class ScalarBlock(Block):
 
     cdef VTFAScalarBlock* vtf(self):
         return <VTFAScalarBlock*> self._vtf
+
+    def SetName(self, name):
+        self.vtf().SetName(name.encode())
+
+    def BindResultBlocks(self, step, *blocks):
+        for blk in blocks:
+            self.vtf().AddResultBlock(blk.GetBlockID(), step)
+
+
+cdef class VectorBlock(Block):
+
+    def __init__(self, parent, blockid):
+        self.parent = parent
+        self._vtf = new VTFAVectorBlock(blockid)
+
+    cdef VTFAVectorBlock* vtf(self):
+        return <VTFAVectorBlock*> self._vtf
 
     def SetName(self, name):
         self.vtf().SetName(name.encode())
