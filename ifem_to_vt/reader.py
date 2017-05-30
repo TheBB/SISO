@@ -77,8 +77,15 @@ class Reader:
             else:
                 kind = 'scalar'
 
-            results = np.ndarray.flatten(patch(*tesselation))
+            raw = patch(*tesselation)
+
+            results = np.ndarray.flatten(raw)
             w.update_field(results, field.name, pid, kind)
+
+            if field.ncomps > 1:
+                for i in range(field.ncomps):
+                    results = np.ndarray.flatten(raw[...,i])
+                    w.update_field(results, '{}[{}]'.format(field.name, i+1), pid, 'scalar')
 
     def write_geometry(self, w, lid, basis):
         for pid in range(self.npatches(lid, basis)):
