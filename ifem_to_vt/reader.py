@@ -5,7 +5,7 @@ from itertools import chain, product
 import logging
 import numpy as np
 import splipy.io
-from splipy import SplineObject
+from splipy import SplineObject, BSplineBasis
 from splipy.SplineModel import ObjectCatalogue
 import splipy.utils
 
@@ -21,7 +21,7 @@ class G2Object(splipy.io.G2):
         return self
 
 
-Field = namedtuple('Field', ['name', 'basis', 'ncomps'])
+Field = namedtuple('Field', ['name', 'basis', 'ncomps', 'points'])
 Basis = namedtuple('Basis', ['name', 'updates'])
 
 
@@ -48,11 +48,10 @@ class Reader:
                 if 'basis' in bgrp:
                     logging.debug('Update found for basis %s', basis.name)
                     self.write_geometry(w, lid, basis)
-                if 'fields' in bgrp:
-                    for fname in bgrp['fields']:
-                        field = self.fields[fname]
-                        logging.debug('Updating field %s', field.name)
-                        self.write_field(w, lid, field)
+                for fname in chain(bgrp.get('fields', []), bgrp.get('knotspan', [])):
+                    field = self.fields[fname]
+                    logging.debug('Updating field %s', field.name)
+                    self.write_field(w, lid, field)
             w.add_time(time)
 
     def write_field(self, w, lid, field):
@@ -67,9 +66,21 @@ class Reader:
                 orig_tesselation[nodeview.orientation.perm_inv[q]]
                 for q in range(len(orig_tesselation))
             ]
-            coeffs = self.h5[str(lid)][field.basis.name]['fields'][field.name][str(pid+1)][:]
-            coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
-            patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
+            coeffs = self.field_coeffs(field, lid, pid)
+
+            if field.points:
+                coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
+                patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
+            else:
+                # Make a piecewise constant patch
+                bases = [BSplineBasis(1, kts) for kts in patch.knots()]
+                shape = tuple(b.num_functions() for b in bases)
+                coeffs = splipy.utils.reshape(coeffs, shape, order='F')
+                patch = SplineObject(bases, coeffs, False, raw=True)
+                # tesselation = [
+                #     [(a+b)/2 for a, b in zip(t[:-1], t[1:])]
+                #     for t in tesselation
+                # ]
 
             if patch.dimension > 1:
                 kind = 'vector'
@@ -85,7 +96,7 @@ class Reader:
             if field.ncomps > 1:
                 for i in range(field.ncomps):
                     results = np.ndarray.flatten(raw[...,i])
-                    w.update_field(results, '{}[{}]'.format(field.name, i+1), pid, 'scalar')
+                    w.update_field(results, '{}[{}]'.format(field.name, i+1), pid, kind=kind)
 
     def write_geometry(self, w, lid, basis):
         for pid in range(self.npatches(lid, basis)):
@@ -173,6 +184,10 @@ class Reader:
                 self.patch_cache[key] = patch
         return self.patch_cache[key]
 
+    def field_coeffs(self, field, lid, pid):
+        sub = 'fields' if field.points else 'knotspan'
+        return self.h5[str(lid)][field.basis.name][sub][field.name][str(pid+1)][:]
+
     def check(self):
         self.bases = {}
         self.max_pardim = 0
@@ -186,10 +201,16 @@ class Reader:
         self.fields = {}
         basis_iter = ((lid, basis, bgrp) for basis, bgrp in lgrp.items() for lid, _, lgrp in self.times())
         for lid, basis, bgrp in basis_iter:
-            if 'fields' not in bgrp:
-                continue
-            for field, fgrp in bgrp['fields'].items():
-                if field in self.fields:
-                    continue
-                ncomps = len(fgrp['1']) // len(self.patch(lid, basis, 0))
-                self.fields.setdefault(field, Field(field, self.bases[basis], ncomps))
+            if 'fields' in bgrp:
+                for field, fgrp in bgrp['fields'].items():
+                    if field in self.fields:
+                        continue
+                    ncomps = len(fgrp['1']) // len(self.patch(lid, basis, 0))
+                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, True))
+            if 'knotspan' in bgrp:
+                for field, kgrp in bgrp['knotspan'].items():
+                    if field in self.fields:
+                        continue
+                    patch = self.patch(lid, basis, 0)
+                    ncomps = len(fgrp['1']) // np.prod([len(k)-1 for k in patch.knots()])
+                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, False))
