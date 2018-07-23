@@ -77,10 +77,10 @@ class Reader:
                 shape = tuple(b.num_functions() for b in bases)
                 coeffs = splipy.utils.reshape(coeffs, shape, order='F')
                 patch = SplineObject(bases, coeffs, False, raw=True)
-                # tesselation = [
-                #     [(a+b)/2 for a, b in zip(t[:-1], t[1:])]
-                #     for t in tesselation
-                # ]
+                tesselation = [
+                    [(a+b)/2 for a, b in zip(t[:-1], t[1:])]
+                    for t in tesselation
+                ]
 
             if patch.dimension > 1:
                 kind = 'vector'
@@ -91,7 +91,7 @@ class Reader:
             raw = patch(*tesselation)
 
             results = np.ndarray.flatten(raw)
-            w.update_field(results, field.name, pid, kind)
+            w.update_field(results, field.name, pid, kind, cells=not field.points)
 
             if field.ncomps > 1:
                 for i in range(field.ncomps):

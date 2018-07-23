@@ -36,10 +36,10 @@ class Writer(vtf.File):
         self.dirty_geometry = False
 
     def update_field(self, results, name, pid, kind='scalar', cells=False):
-        nblock, _ = self.geometry_blocks[pid]
+        nblock, eblock = self.geometry_blocks[pid]
         with self.ResultBlock(cells=cells) as rblock:
             rblock.SetResults(results)
-            rblock.BindBlock(nblock)
+            rblock.BindBlock(eblock if cells else nblock)
         if name not in self.field_blocks:
             if kind == 'scalar':
                 fblock = self.ScalarBlock()
