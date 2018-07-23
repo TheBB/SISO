@@ -35,9 +35,9 @@ class Writer(vtf.File):
             self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=lid+1)
         self.dirty_geometry = False
 
-    def update_field(self, results, name, pid, kind='scalar'):
+    def update_field(self, results, name, pid, kind='scalar', cells=False):
         nblock, _ = self.geometry_blocks[pid]
-        with self.ResultBlock() as rblock:
+        with self.ResultBlock(cells=cells) as rblock:
             rblock.SetResults(results)
             rblock.BindBlock(nblock)
         if name not in self.field_blocks:
