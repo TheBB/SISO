@@ -32,7 +32,7 @@ class Writer(vtf.File):
         lid = len(self.times)
         self.times.append(time)
         if self.dirty_geometry:
-            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=lid)
+            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=lid+1)
         self.dirty_geometry = False
 
     def update_field(self, results, name, pid, kind='scalar'):
