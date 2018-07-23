@@ -4,13 +4,13 @@ from io import StringIO
 from itertools import chain, product
 import logging
 import numpy as np
-import splipy.IO
+import splipy.io
 from splipy import SplineObject
 from splipy.SplineModel import ObjectCatalogue
 import splipy.utils
 
 
-class G2Object(splipy.IO.G2):
+class G2Object(splipy.io.G2):
 
     def __init__(self, fstream, mode):
         self.fstream = fstream
@@ -34,7 +34,7 @@ class Reader:
     def __enter__(self):
         self.h5 = h5py.File(self.filename, 'r')
         self.check()
-        self.catalogue = ObjectCatalogue(self.max_pardim, interior=False)
+        self.catalogue = ObjectCatalogue(self.max_pardim)
         return self
 
     def __exit__(self, type_, value, backtrace):
