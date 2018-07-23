@@ -212,5 +212,5 @@ class Reader:
                     if field in self.fields:
                         continue
                     patch = self.patch(lid, basis, 0)
-                    ncomps = len(fgrp['1']) // np.prod([len(k)-1 for k in patch.knots()])
+                    ncomps = len(kgrp['1']) // np.prod([len(k)-1 for k in patch.knots()])
                     self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, False))
