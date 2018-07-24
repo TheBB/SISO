@@ -61,6 +61,11 @@ cdef extern from 'VTFAPI.h':
         void SetName(const char*)
         int AddResultBlock(int, int)
 
+    cdef cppclass VTFADisplacementBlock 'VTFADisplacementBlock' (VTFABlock):
+        VTFADisplacementBlock(int)
+        void SetName(const char*)
+        int AddResultBlock(int, int)
+
     cdef cppclass VTFAStateInfoBlock 'VTFAStateInfoBlock' (VTFABlock):
         VTFAStateInfoBlock()
         int SetStepData(int, const char*, float, int)
@@ -117,6 +122,11 @@ cdef class File:
 
     def VectorBlock(self, *args, **kwargs):
         blk = VectorBlock(self, self.blockid, *args, **kwargs)
+        self.blockid += 1
+        return blk
+
+    def DisplacementBlock(self, *args, **kwargs):
+        blk = DisplacementBlock(self, self.blockid, *args, **kwargs)
         self.blockid += 1
         return blk
 
@@ -262,6 +272,23 @@ cdef class VectorBlock(Block):
             self.vtf().AddResultBlock(blk.GetBlockID(), step)
 
 
+cdef class DisplacementBlock(Block):
+
+    def __init__(self, parent, blockid):
+        self.parent = parent
+        self._vtf = new VTFADisplacementBlock(blockid)
+
+    cdef VTFADisplacementBlock* vtf(self):
+        return <VTFADisplacementBlock*> self._vtf
+
+    def SetName(self, name):
+        self.vtf().SetName(name.encode())
+
+    def BindResultBlocks(self, step, *blocks):
+        for blk in blocks:
+            self.vtf().AddResultBlock(blk.GetBlockID(), step)
+
+
 cdef class StateInfoBlock(Block):
 
     def __init__(self, parent):
@@ -273,3 +300,6 @@ cdef class StateInfoBlock(Block):
 
     def SetStepData(self, step, name, time):
         self.vtf().SetStepData(step, name.encode(), time, 0)
+
+    def SetModeData(self, mode, name, time):
+        self.vtf().SetStepData(mode, name.encode(), time, 1)

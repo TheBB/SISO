@@ -20,8 +20,11 @@ class G2Object(splipy.io.G2):
     def __enter__(self):
         return self
 
+POINTVALUES = 0
+CELLVALUES = 1
+EIGENMODE = 2
 
-Field = namedtuple('Field', ['name', 'basis', 'ncomps', 'points'])
+Field = namedtuple('Field', ['name', 'basis', 'ncomps', 'kind'])
 Basis = namedtuple('Basis', ['name', 'updates'])
 
 
@@ -41,6 +44,14 @@ class Reader:
         self.h5.close()
 
     def write(self, w):
+        if self.modes:
+            for bname, field in self.modes.items():
+                self.write_geometry(w, 0, self.bases[bname])
+                for mid in self.modeids(bname):
+                    logging.debug('Writing mode %d', mid)
+                    self.write_mode(w, mid, field)
+            return
+
         for lid, time, lgrp in self.times():
             logging.debug('Level %d', lid)
             for bname, bgrp in lgrp.items():
@@ -48,51 +59,72 @@ class Reader:
                 if 'basis' in bgrp:
                     logging.debug('Update found for basis %s', basis.name)
                     self.write_geometry(w, lid, basis)
+                w.add_time(time)
                 for fname in chain(bgrp.get('fields', []), bgrp.get('knotspan', [])):
                     field = self.fields[fname]
                     logging.debug('Updating field %s', field.name)
                     self.write_field(w, lid, field)
-            w.add_time(time)
+                if bname in self.modes:
+                    mgrp = bgrp['Eigenmode']
+                    for mid in range(len(mgrp)):
+                        logging.debug('Writing mode %d', mid)
+                        self.write_mode(w, mid, self.modes[bname])
+
+    def _tesselated_patch(self, lid, basis, pid):
+        patch = self.patch(lid, basis, pid).clone()
+        nodeview = self.catalogue.lookup(patch)
+        orig_tesselation = list(nodeview.node.tesselation)
+        for i, f in enumerate(nodeview.orientation.flip):
+            if f:
+                orig_tesselation[i] = orig_tesselation[i][::-1]
+        tesselation = [
+            orig_tesselation[nodeview.orientation.perm_inv[q]]
+            for q in range(len(orig_tesselation))
+        ]
+        return patch, tesselation
+
+    def _tesselate(self, patch, tesselation, coeffs, cells=False, vectorize=False):
+        if cells:
+            # Make a piecewise constant patch
+            bases = [BSplineBasis(1, kts) for kts in patch.knots()]
+            shape = tuple(b.num_functions() for b in bases)
+            coeffs = splipy.utils.reshape(coeffs, shape, order='F')
+            patch = SplineObject(bases, coeffs, False, raw=True)
+            tesselation = [
+                [(a+b)/2 for a, b in zip(t[:-1], t[1:])]
+                for t in tesselation
+            ]
+        else:
+            coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
+            patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
+
+        if patch.dimension == 1 and vectorize:
+            patch.set_dimension(3)
+            patch.controlpoints[...,-1] = patch.controlpoints[...,0].copy()
+            patch.controlpoints[...,0] = 0.0
+        elif patch.dimension > 1:
+            patch.set_dimension(3)
+
+        return patch(*tesselation)
+
+    def write_mode(self, w, mid, field):
+        for pid in range(self.npatches(0, field.basis)):
+            patch, tesselation = self._tesselated_patch(0, field.basis, pid)
+            coeffs, data = self.mode_coeffs(field, mid, pid)
+            raw = self._tesselate(patch, tesselation, coeffs, vectorize=True)
+            results = np.ndarray.flatten(raw)
+            w.update_mode(results, field.name, pid, **data)
 
     def write_field(self, w, lid, field):
         for pid in range(self.npatches(lid, field.basis)):
-            patch = self.patch(lid, field.basis, pid).clone()
-            nodeview = self.catalogue.lookup(patch)
-            orig_tesselation = list(nodeview.node.tesselation)
-            for i, f in enumerate(nodeview.orientation.flip):
-                if f:
-                    orig_tesselation[i] = orig_tesselation[i][::-1]
-            tesselation = [
-                orig_tesselation[nodeview.orientation.perm_inv[q]]
-                for q in range(len(orig_tesselation))
-            ]
+            patch, tesselation = self._tesselated_patch(lid, field.basis, pid)
             coeffs = self.field_coeffs(field, lid, pid)
 
-            if field.points:
-                coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
-                patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
-            else:
-                # Make a piecewise constant patch
-                bases = [BSplineBasis(1, kts) for kts in patch.knots()]
-                shape = tuple(b.num_functions() for b in bases)
-                coeffs = splipy.utils.reshape(coeffs, shape, order='F')
-                patch = SplineObject(bases, coeffs, False, raw=True)
-                tesselation = [
-                    [(a+b)/2 for a, b in zip(t[:-1], t[1:])]
-                    for t in tesselation
-                ]
-
-            if patch.dimension > 1:
-                kind = 'vector'
-                patch.set_dimension(3)
-            else:
-                kind = 'scalar'
-
-            raw = patch(*tesselation)
-
+            raw = self._tesselate(patch, tesselation, coeffs, cells=field.kind==CELLVALUES)
+            kind = 'vector' if raw.shape[-1] > 1 else 'scalar'
             results = np.ndarray.flatten(raw)
-            w.update_field(results, field.name, pid, kind, cells=not field.points)
 
+            w.update_field(results, field.name, pid, kind, cells=field.kind==CELLVALUES)
             if field.ncomps > 1:
                 for i in range(field.ncomps):
                     results = np.ndarray.flatten(raw[...,i])
@@ -154,6 +186,9 @@ class Reader:
             # FIXME: Grab actual time here as second element
             yield level, float(level), self.h5[str(level)]
 
+    def modeids(self, basis):
+        yield from range(len(self.h5['0'][basis]['Eigenmode']))
+
     def basis_level(self, level, basis):
         if not isinstance(basis, Basis):
             basis = self.bases[basis]
@@ -184,8 +219,15 @@ class Reader:
                 self.patch_cache[key] = patch
         return self.patch_cache[key]
 
+    def mode_coeffs(self, field, mid, pid):
+        mgrp = self.h5['0'][field.basis.name]['Eigenmode'][str(mid+1)]
+        coeffs = mgrp[str(pid+1)][:]
+        if 'Value' in mgrp:
+            return coeffs, {'value': mgrp['Value'][0]}
+        return coeffs, {'frequency': mgrp['Frequency'][0]}
+
     def field_coeffs(self, field, lid, pid):
-        sub = 'fields' if field.points else 'knotspan'
+        sub = 'fields' if field.kind == POINTVALUES else 'knotspan'
         return self.h5[str(lid)][field.basis.name][sub][field.name][str(pid+1)][:]
 
     def check(self):
@@ -199,6 +241,7 @@ class Reader:
                 self.max_pardim = max(self.max_pardim, self.patch(lid, basis, 0).pardim)
 
         self.fields = {}
+        self.modes = {}
         basis_iter = ((lid, basis, bgrp) for basis, bgrp in lgrp.items() for lid, _, lgrp in self.times())
         for lid, basis, bgrp in basis_iter:
             if 'fields' in bgrp:
@@ -206,11 +249,14 @@ class Reader:
                     if field in self.fields:
                         continue
                     ncomps = len(fgrp['1']) // len(self.patch(lid, basis, 0))
-                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, True))
+                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, POINTVALUES))
             if 'knotspan' in bgrp:
                 for field, kgrp in bgrp['knotspan'].items():
                     if field in self.fields:
                         continue
                     patch = self.patch(lid, basis, 0)
                     ncomps = len(kgrp['1']) // np.prod([len(k)-1 for k in patch.knots()])
-                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, False))
+                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, CELLVALUES))
+            if 'Eigenmode' in bgrp:
+                patch = self.patch(lid, basis, 0)
+                self.modes[basis] = Field('Mode Shape', self.bases[basis], patch.dimension, EIGENMODE)

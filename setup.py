@@ -16,7 +16,7 @@ setup(
         libraries=['VTFExpressAPI'],
         library_dirs=['/usr/local/lib', '/usr/local/lib64']
     )),
-    py_packages=['ifem_to_vt'],
+    packages=['ifem_to_vt'],
     install_requires=['numpy', 'Splipy', 'h5py'],
     entry_points={
         'console_scripts': [
