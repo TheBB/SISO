@@ -1,5 +1,5 @@
 import h5py
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from io import StringIO
 from itertools import chain, product
 import logging
@@ -25,128 +25,126 @@ CELLVALUES = 1
 EIGENMODE = 2
 
 Field = namedtuple('Field', ['name', 'basis', 'ncomps', 'kind'])
-Basis = namedtuple('Basis', ['name', 'updates'])
 
 
-class Reader:
+class Basis:
 
-    def __init__(self, filename):
-        self.filename = filename
+    def __init__(self, name, reader):
+        self.name = name
+        self.reader = reader
+        self.update_steps = set()
+        self.npatches = 0
         self.patch_cache = {}
 
-    def __enter__(self):
-        self.h5 = h5py.File(self.filename, 'r')
-        self.check()
-        self.catalogue = ObjectCatalogue(self.max_pardim)
-        return self
+    def add_update(self, stepid):
+        self.update_steps.add(stepid)
 
-    def __exit__(self, type_, value, backtrace):
-        self.h5.close()
+    def update_at(self, stepid):
+        return stepid in self.update_steps
 
-    def write(self, w):
-        if self.modes:
-            for bname, field in self.modes.items():
-                self.write_geometry(w, 0, self.bases[bname])
-                for mid in self.modeids(bname):
-                    logging.debug('Writing mode %d', mid)
-                    self.write_mode(w, mid, field)
-            return
+    def patch_at(self, stepid, patchid):
+        while stepid not in self.update_steps:
+            stepid -= 1
+        key = (stepid, patchid)
+        if key not in self.patch_cache:
+            g2data = StringIO(self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes().decode())
+            with G2Object(g2data, 'r') as g:
+                patch = g.read()[0]
+                patch.set_dimension(3)
+                self.patch_cache[key] = patch
+        return self.patch_cache[key]
 
-        for lid, time, lgrp in self.times():
-            logging.debug('Level %d', lid)
-            for bname, bgrp in lgrp.items():
-                basis = self.bases[bname]
-                if 'basis' in bgrp:
-                    logging.debug('Update found for basis %s', basis.name)
-                    self.write_geometry(w, lid, basis)
-                w.add_time(time)
-                for fname in chain(bgrp.get('fields', []), bgrp.get('knotspan', [])):
-                    field = self.fields[fname]
-                    logging.debug('Updating field %s', field.name)
-                    self.write_field(w, lid, field)
-                if bname in self.modes:
-                    mgrp = bgrp['Eigenmode']
-                    for mid in range(len(mgrp)):
-                        logging.debug('Writing mode %d', mid)
-                        self.write_mode(w, mid, self.modes[bname])
 
-    def _tesselated_patch(self, lid, basis, pid):
-        patch = self.patch(lid, basis, pid).clone()
-        nodeview = self.catalogue.lookup(patch)
-        orig_tesselation = list(nodeview.node.tesselation)
-        for i, f in enumerate(nodeview.orientation.flip):
-            if f:
-                orig_tesselation[i] = orig_tesselation[i][::-1]
-        tesselation = [
-            orig_tesselation[nodeview.orientation.perm_inv[q]]
-            for q in range(len(orig_tesselation))
-        ]
-        return patch, tesselation
+class Field:
 
-    def _tesselate(self, patch, tesselation, coeffs, cells=False, vectorize=False):
-        if cells:
+    def __init__(self, name, basis, reader, cells=False, vectorize=False):
+        self.name = name
+        self.basis = basis
+        self.reader = reader
+        self.cells = cells
+        self.vectorize = vectorize
+        self.decompose = True
+        self.update_steps = set()
+
+    def add_update(self, stepid):
+        self.update_steps.add(stepid)
+
+    def update(self, w, stepid):
+        for patchid in range(self.basis.npatches):
+            patch = self.basis.patch_at(stepid, patchid)
+            tess, globpatchid = self.reader.geometry.tesselation(patch)
+            coeffs = self.coeffs(stepid, patchid)
+
+            results = self.tesselate(patch, tess, coeffs)
+            if hasattr(self, 'kind'):
+                kind = self.kind
+            else:
+                kind = 'vector' if results.shape[-1] > 1 else 'scalar'
+            w.update_field(results, self.name, stepid, globpatchid, kind, cells=self.cells)
+
+            if self.decompose and results.shape[-1] > 1:
+                for i in range(results.shape[-1]):
+                    w.update_field(
+                        results[...,i], '{}[{}]'.format(self.name, i+1),
+                        stepid, globpatchid, 'scalar', cells=self.cells,
+                    )
+
+    def coeffs(self, stepid, patchid):
+        sub = 'knotspan' if self.cells else 'fields'
+        return self.reader.h5[str(stepid)][self.basis.name][sub][self.name][str(patchid+1)][:]
+
+    def tesselate(self, patch, tess, coeffs):
+        if self.cells:
             # Make a piecewise constant patch
             bases = [BSplineBasis(1, kts) for kts in patch.knots()]
             shape = tuple(b.num_functions() for b in bases)
             coeffs = splipy.utils.reshape(coeffs, shape, order='F')
             patch = SplineObject(bases, coeffs, False, raw=True)
-            tesselation = [
-                [(a+b)/2 for a, b in zip(t[:-1], t[1:])]
-                for t in tesselation
-            ]
+            tess = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in tess]
         else:
             coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
             patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
 
-        if patch.dimension == 1 and vectorize:
+        if patch.dimension == 1 and self.vectorize:
             patch.set_dimension(3)
             patch.controlpoints[...,-1] = patch.controlpoints[...,0].copy()
             patch.controlpoints[...,0] = 0.0
         elif patch.dimension > 1:
             patch.set_dimension(3)
 
-        return patch(*tesselation)
+        return patch(*tess)
 
-    def write_mode(self, w, mid, field):
-        for pid in range(self.npatches(0, field.basis)):
-            patch, tesselation = self._tesselated_patch(0, field.basis, pid)
-            coeffs, data = self.mode_coeffs(field, mid, pid)
-            raw = self._tesselate(patch, tesselation, coeffs, vectorize=True)
-            results = np.ndarray.flatten(raw)
-            w.update_mode(results, field.name, pid, **data)
 
-    def write_field(self, w, lid, field):
-        for pid in range(self.npatches(lid, field.basis)):
-            patch, tesselation = self._tesselated_patch(lid, field.basis, pid)
-            coeffs = self.field_coeffs(field, lid, pid)
+class GeometryManager:
 
-            raw = self._tesselate(patch, tesselation, coeffs, cells=field.kind==CELLVALUES)
-            kind = 'vector' if raw.shape[-1] > 1 else 'scalar'
-            results = np.ndarray.flatten(raw)
+    def __init__(self, basis, reader):
+        self.basis = basis
+        self.reader = reader
+        self.tesselations = {}
 
-            w.update_field(results, field.name, pid, kind, cells=field.kind==CELLVALUES)
-            if field.ncomps > 1:
-                for i in range(field.ncomps):
-                    results = np.ndarray.flatten(raw[...,i])
-                    w.update_field(results, '{}[{}]'.format(field.name, i+1), pid, kind=kind)
+        logging.debug('Using {} for geometry'.format(basis.name))
 
-    def write_geometry(self, w, lid, basis):
-        for pid in range(self.npatches(lid, basis)):
-            patch = self.patch(lid, basis, pid)
-            node = self.catalogue.add(patch).node
-            if not hasattr(node, 'patchid'):
-                node.patchid = None
-            if not hasattr(node, 'last_written'):
-                node.last_written = -1
+    def tesselation(self, patch):
+        corners = tuple(tuple(patch.controlpoints[idx]) for idx in product((0,-1), repeat=patch.pardim))
+        knots = tuple(tuple(p) for p in patch.knots())
+        key = corners + knots
 
-            if node.last_written >= lid:
-                logging.debug('Skipping patch %d', pid)
-                continue
-            node.last_written = lid
+        if key not in self.tesselations:
+            self.tesselations[key] = (patch.knots(), len(self.tesselations))
+        return self.tesselations[key]
 
-            patch = node.obj
-            node.tesselation = patch.knots()
-            nodes = patch(*node.tesselation)
+    def update(self, w, stepid):
+        if not self.basis.update_at(stepid):
+            return
+
+        logging.debug('Updating geometry')
+
+        # FIXME: Here, all patches are updated whenever any of them are updated.
+        # Maybe overkill.
+        for patchid in range(self.basis.npatches):
+            patch = self.basis.patch_at(stepid, patchid)
+            tess, globpatchid = self.tesselation(patch)
+            nodes = patch(*tess)
 
             # Elements
             ranges = [range(k-1) for k in nodes.shape[:-1]]
@@ -172,19 +170,94 @@ class Reader:
                 eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nodes.shape[:-1])
                 eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nodes.shape[:-1])
 
-            logging.debug('Writing patch %d', pid)
-            node.patchid = w.update_geometry(
-                np.ndarray.flatten(nodes), np.ndarray.flatten(eidxs), len(nidxs), node.patchid
-            )
+            logging.debug('Writing patch {}'.format(globpatchid))
+            w.update_geometry(nodes, eidxs, len(nidxs), globpatchid)
+
+        w.finalize_geometry(stepid)
+
+
+class Reader:
+
+    def __init__(self, h5):
+        self.h5 = h5
+
+    def __enter__(self):
+        self.bases = OrderedDict()
+        self.fields = OrderedDict()
+        self.init_bases()
+        self.init_fields()
+        self.geometry = GeometryManager(next(iter(self.bases.values())), self)
+        return self
+
+    def __exit__(self, type_, value, backtrace):
+        self.h5.close()
 
     @property
-    def ntimes(self):
+    def nsteps(self):
         return len(self.h5)
 
-    def times(self):
-        for level in range(self.ntimes):
+    def steps(self):
+        for stepid in range(self.nsteps):
             # FIXME: Grab actual time here as second element
-            yield level, float(level), self.h5[str(level)]
+            yield stepid, {'time': float(stepid)}, self.h5[str(stepid)]
+
+    def outputsteps(self):
+        for stepid, time, _ in self.steps():
+            yield stepid, time
+
+    def init_bases(self):
+        for stepid, _, stepgrp in self.steps():
+            for basisname in stepgrp:
+                if basisname not in self.bases:
+                    self.bases[basisname] = Basis(basisname, self)
+                basis = self.bases[basisname]
+
+                basis.add_update(stepid)
+                basis.npatches = max(basis.npatches, len(stepgrp[basisname]['basis']))
+
+        for basis in self.bases.values():
+            logging.debug('Basis {} updates at steps {} ({} patches)'.format(
+                basis.name, ', '.join(str(s) for s in sorted(basis.update_steps)), basis.npatches,
+            ))
+
+    def init_fields(self):
+        for stepid, _, stepgrp in self.steps():
+            for basisname, basisgrp in stepgrp.items():
+                fields = basisgrp['fields'] if 'fields' in basisgrp else []
+                kspans = basisgrp['knotspan'] if 'knotspan' in basisgrp else []
+
+                for fieldname in fields:
+                    if fieldname not in self.fields:
+                        self.fields[fieldname] = Field(fieldname, self.bases[basisname], self)
+                    self.fields[fieldname].add_update(stepid)
+                for fieldname in kspans:
+                    if fieldname not in self.fields:
+                        self.fields[fieldname] = Field(fieldname, self.bases[basisname], self, cells=True)
+                    self.fields[fieldname].add_update(stepid)
+
+        for field in self.fields.values():
+            logging.debug('{} "{}" lives on {}'.format(
+                'Knotspan' if field.cells else 'Field', field.name, field.basis.name
+            ))
+
+    def write(self, w):
+        for stepid, time in self.outputsteps():
+            logging.info('Step {}'.format(stepid))
+
+            w.add_step(**time)
+            self.geometry.update(w, stepid)
+
+            for field in self.fields.values():
+                logging.debug('Updating {}'.format(field.name))
+                field.update(w, stepid)
+
+    def write_mode(self, w, mid, field):
+        for pid in range(self.npatches(0, field.basis)):
+            patch, tesselation = self._tesselated_patch(0, field.basis, pid)
+            coeffs, data = self.mode_coeffs(field, mid, pid)
+            raw = self._tesselate(patch, tesselation, coeffs, vectorize=True)
+            results = np.ndarray.flatten(raw)
+            w.update_mode(results, field.name, pid, **data)
 
     def modeids(self, basis):
         yield from range(len(self.h5['0'][basis]['Eigenmode']))
@@ -203,22 +276,6 @@ class Reader:
         level = self.basis_level(level, basis)
         return len(self.h5['{}/{}/basis'.format(str(level), basis.name)])
 
-    def patch(self, lid, basis, index):
-        if not isinstance(basis, Basis):
-            basis = self.bases[basis]
-        lid = self.basis_level(lid, basis)
-        key = (lid, basis.name, index)
-        if key not in self.patch_cache:
-            g2str = self.h5[
-                '{}/{}/basis/{}'.format(str(lid), basis.name, str(index+1))
-            ][:].tobytes().decode()
-            g2data = StringIO(g2str)
-            with G2Object(g2data, 'r') as g:
-                patch = g.read()[0]
-                patch.set_dimension(3)
-                self.patch_cache[key] = patch
-        return self.patch_cache[key]
-
     def mode_coeffs(self, field, mid, pid):
         mgrp = self.h5['0'][field.basis.name]['Eigenmode'][str(mid+1)]
         coeffs = mgrp[str(pid+1)][:]
@@ -226,37 +283,47 @@ class Reader:
             return coeffs, {'value': mgrp['Value'][0]}
         return coeffs, {'frequency': mgrp['Frequency'][0]}
 
-    def field_coeffs(self, field, lid, pid):
-        sub = 'fields' if field.kind == POINTVALUES else 'knotspan'
-        return self.h5[str(lid)][field.basis.name][sub][field.name][str(pid+1)][:]
 
-    def check(self):
-        self.bases = {}
-        self.max_pardim = 0
-        for lid, _, lgrp in self.times():
-            for basis, bgrp in lgrp.items():
-                self.bases.setdefault(basis, Basis(basis, []))
-                if 'basis' in bgrp:
-                    self.bases[basis].updates.append(lid)
-                self.max_pardim = max(self.max_pardim, self.patch(lid, basis, 0).pardim)
+class EigenField(Field):
 
-        self.fields = {}
-        self.modes = {}
-        basis_iter = ((lid, basis, bgrp) for basis, bgrp in lgrp.items() for lid, _, lgrp in self.times())
-        for lid, basis, bgrp in basis_iter:
-            if 'fields' in bgrp:
-                for field, fgrp in bgrp['fields'].items():
-                    if field in self.fields:
-                        continue
-                    ncomps = len(fgrp['1']) // len(self.patch(lid, basis, 0))
-                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, POINTVALUES))
-            if 'knotspan' in bgrp:
-                for field, kgrp in bgrp['knotspan'].items():
-                    if field in self.fields:
-                        continue
-                    patch = self.patch(lid, basis, 0)
-                    ncomps = len(kgrp['1']) // np.prod([len(k)-1 for k in patch.knots()])
-                    self.fields.setdefault(field, Field(field, self.bases[basis], ncomps, CELLVALUES))
-            if 'Eigenmode' in bgrp:
-                patch = self.patch(lid, basis, 0)
-                self.modes[basis] = Field('Mode Shape', self.bases[basis], patch.dimension, EIGENMODE)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.kind = 'displacement'
+        self.decompose = False
+
+    def coeffs(self, stepid, patchid):
+        return self.reader.h5['0'][self.basis.name]['Eigenmode'][str(stepid+1)][str(patchid+1)][:]
+
+
+class EigenReader(Reader):
+
+    @property
+    def basis(self):
+        return next(iter(self.bases.values()))
+
+    @property
+    def nmodes(self):
+        return len(self.h5['0'][self.basis.name]['Eigenmode'])
+
+    def outputsteps(self):
+        for stepid in range(self.nmodes):
+            # FIXME: Grab actual data here as second element
+            grp = self.h5['0'][self.basis.name]['Eigenmode'][str(stepid+1)]
+            if 'Value' in grp:
+                data = {'value': grp['Value'][0]}
+            else:
+                data = {'frequency': grp['Frequency'][0]}
+            yield stepid, data
+
+    def init_fields(self):
+        basis = next(iter(self.bases.values()))
+        self.fields['Mode Shape'] = EigenField('Mode Shape', basis, self, vectorize=True)
+
+
+def get_reader(filename):
+    h5 = h5py.File(filename, 'r')
+    basisname = next(iter(h5['0']))
+    if 'Eigenmode' in h5['0'][basisname]:
+        logging.info('Detected eigenmodes')
+        return EigenReader(h5)
+    return Reader(h5)

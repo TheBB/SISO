@@ -3,7 +3,7 @@ import logging
 from os.path import splitext
 import sys
 
-from ifem_to_vt.reader import Reader
+from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
 
 
@@ -38,12 +38,8 @@ def convert(verbosity, fmt, infile, outfile):
         logging.critical(e)
         sys.exit(1)
 
-    # try:
-    with Reader(infile) as r, Writer(outfile) as w:
+    with get_reader(infile) as r, Writer(outfile) as w:
         r.write(w)
-    # except Exception as e:
-        # logging.critical(e)
-        # sys.exit(2)
 
 
 if __name__ == '__main__':

@@ -64,6 +64,7 @@ cdef extern from 'VTFAPI.h':
     cdef cppclass VTFADisplacementBlock 'VTFADisplacementBlock' (VTFABlock):
         VTFADisplacementBlock(int)
         void SetName(const char*)
+        void SetRelativeDisplacementResults(int)
         int AddResultBlock(int, int)
 
     cdef cppclass VTFAStateInfoBlock 'VTFAStateInfoBlock' (VTFABlock):
@@ -274,9 +275,10 @@ cdef class VectorBlock(Block):
 
 cdef class DisplacementBlock(Block):
 
-    def __init__(self, parent, blockid):
+    def __init__(self, parent, blockid, relative=True):
         self.parent = parent
         self._vtf = new VTFADisplacementBlock(blockid)
+        self.vtf().SetRelativeDisplacementResults(1 if relative else 0)
 
     cdef VTFADisplacementBlock* vtf(self):
         return <VTFADisplacementBlock*> self._vtf
