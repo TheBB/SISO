@@ -158,7 +158,7 @@ class GeometryManager:
         self.reader = reader
         self.tesselations = {}
 
-        logging.debug('Using {} for geometry'.format(basis.name))
+        logging.info('Using {} for geometry'.format(basis.name))
 
     def tesselation(self, patch):
         corners = tuple(tuple(patch.controlpoints[idx]) for idx in product((0,-1), repeat=patch.pardim))
@@ -173,7 +173,7 @@ class GeometryManager:
         if not self.basis.update_at(stepid):
             return
 
-        logging.debug('Updating geometry')
+        logging.info('Updating geometry')
 
         # FIXME: Here, all patches are updated whenever any of them are updated.
         # Maybe overkill.
@@ -321,7 +321,7 @@ class Reader:
             self.geometry.update(w, stepid)
 
             for field in self.fields.values():
-                logging.debug('Updating {}'.format(field.name))
+                logging.info('Updating {}'.format(field.name))
                 field.update(w, stepid)
 
     def write_mode(self, w, mid, field):
