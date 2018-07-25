@@ -346,6 +346,11 @@ class Reader:
             except AssertionError:
                 Log.warning('Unable to combine {} -> {}'.format(', '.join(sourcenames), fname))
 
+        # Reorder fields
+        fields = sorted(self.fields.values(), key=lambda f: f.name)
+        fields = sorted(fields, key=lambda f: f.cells)
+        self.fields = OrderedDict((f.name, f) for f in fields)
+
     def write(self, w):
         for stepid, time in self.outputsteps():
             Log.info('Step {}'.format(stepid))
