@@ -4,6 +4,7 @@ from collections import namedtuple, OrderedDict
 from io import StringIO
 from itertools import chain, product
 import logging
+import lrsplines as lr
 import numpy as np
 import splipy.io
 from splipy import SplineObject, BSplineBasis
@@ -54,6 +55,54 @@ class Log:
         cls._indent -= 4
 
 
+class TensorTesselation:
+
+    def __init__(self, patch):
+        self.knots = patch.knots()
+
+    def __call__(self, patch):
+        return patch(*self.knots)
+
+    def center(self):
+        knots = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in self.knots]
+        obj = TensorTesselation.__new__(TensorTesselation)
+        obj.knots = knots
+        return obj
+
+    def elements(self):
+        nshape = tuple(len(k) for k in self.knots)
+        ranges = [range(k-1) for k in nshape]
+        nidxs = [np.array(q) for q in zip(*product(*ranges))]
+        eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)))
+        if len(nidxs) == 1:
+            eidxs[:,0] = nidxs[0]
+            eidxs[:,1] = nidxs[0] + 1
+        elif len(nidxs) == 2:
+            i, j = nidxs
+            eidxs[:,0] = np.ravel_multi_index((i, j), nshape)
+            eidxs[:,1] = np.ravel_multi_index((i+1, j), nshape)
+            eidxs[:,2] = np.ravel_multi_index((i+1, j+1), nshape)
+            eidxs[:,3] = np.ravel_multi_index((i, j+1), nshape)
+        elif len(nidxs) == 3:
+            i, j, k = nidxs
+            eidxs[:,0] = np.ravel_multi_index((i, j, k), nshape)
+            eidxs[:,1] = np.ravel_multi_index((i+1, j, k), nshape)
+            eidxs[:,2] = np.ravel_multi_index((i+1, j+1, k), nshape)
+            eidxs[:,3] = np.ravel_multi_index((i, j+1, k), nshape)
+            eidxs[:,4] = np.ravel_multi_index((i, j, k+1), nshape)
+            eidxs[:,5] = np.ravel_multi_index((i+1, j, k+1), nshape)
+            eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nshape)
+            eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nshape)
+
+        return len(nidxs), eidxs
+
+
+def get_tesselation(patch):
+    if isinstance(patch, SplineObject):
+        return TensorTesselation(patch)
+    assert False
+
+
 class Basis:
 
     def __init__(self, name, reader):
@@ -74,11 +123,14 @@ class Basis:
             stepid -= 1
         key = (stepid, patchid)
         if key not in self.patch_cache:
-            g2data = StringIO(self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes().decode())
-            with G2Object(g2data, 'r') as g:
-                patch = g.read()[0]
-                patch.set_dimension(3)
-                self.patch_cache[key] = patch
+            g2bytes = self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes()
+            if g2bytes.startswith(b'# LRSPLINE SURFACE'):
+                patch = lr.LRSurface.from_bytes(g2bytes)
+            else:
+                g2data = StringIO(g2bytes.decode())
+                with G2Object(g2data, 'r') as g:
+                    patch = g.read()[0]
+            self.patch_cache[key] = patch
         return self.patch_cache[key]
 
 
@@ -127,7 +179,7 @@ class Field:
             shape = tuple(b.num_functions() for b in bases)
             coeffs = splipy.utils.reshape(coeffs, shape, order='F')
             patch = SplineObject(bases, coeffs, False, raw=True)
-            tess = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in tess]
+            tess = tess.center()
         else:
             coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
             patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
@@ -141,7 +193,7 @@ class Field:
         elif patch.dimension > 1:
             patch.set_dimension(3)
 
-        return patch(*tess)
+        return tess(patch)
 
 
 class CombinedField(Field):
@@ -194,12 +246,9 @@ class GeometryManager:
         Log.info('Using {} for geometry'.format(basis.name))
 
     def tesselation(self, patch):
-        corners = tuple(tuple(patch.controlpoints[idx]) for idx in product((0,-1), repeat=patch.pardim))
-        knots = tuple(tuple(p) for p in patch.knots())
-        key = corners + knots
-
+        key = tuple(tuple(p) for p in patch.corners())
         if key not in self.tesselations:
-            self.tesselations[key] = (patch.knots(), len(self.tesselations))
+            self.tesselations[key] = (get_tesselation(patch), len(self.tesselations))
         return self.tesselations[key]
 
     def update(self, w, stepid):
@@ -213,34 +262,16 @@ class GeometryManager:
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
             tess, globpatchid = self.tesselation(patch)
-            nodes = patch(*tess)
+            nodes = tess(patch)
 
-            # Elements
-            ranges = [range(k-1) for k in nodes.shape[:-1]]
-            nidxs = [np.array(q) for q in zip(*product(*ranges))]
-            eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)))
-            if len(nidxs) == 1:
-                eidxs[:,0] = nidxs[0]
-                eidxs[:,1] = nidxs[0] + 1
-            elif len(nidxs) == 2:
-                i, j = nidxs
-                eidxs[:,0] = np.ravel_multi_index((i, j), nodes.shape[:-1])
-                eidxs[:,1] = np.ravel_multi_index((i+1, j), nodes.shape[:-1])
-                eidxs[:,2] = np.ravel_multi_index((i+1, j+1), nodes.shape[:-1])
-                eidxs[:,3] = np.ravel_multi_index((i, j+1), nodes.shape[:-1])
-            elif len(nidxs) == 3:
-                i, j, k = nidxs
-                eidxs[:,0] = np.ravel_multi_index((i, j, k), nodes.shape[:-1])
-                eidxs[:,1] = np.ravel_multi_index((i+1, j, k), nodes.shape[:-1])
-                eidxs[:,2] = np.ravel_multi_index((i+1, j+1, k), nodes.shape[:-1])
-                eidxs[:,3] = np.ravel_multi_index((i, j+1, k), nodes.shape[:-1])
-                eidxs[:,4] = np.ravel_multi_index((i, j, k+1), nodes.shape[:-1])
-                eidxs[:,5] = np.ravel_multi_index((i+1, j, k+1), nodes.shape[:-1])
-                eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nodes.shape[:-1])
-                eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nodes.shape[:-1])
+            while nodes.shape[-1] < 3:
+                nshape = nodes.shape[:-1] + (1,)
+                nodes = np.concatenate((nodes, np.zeros(nshape)), axis=-1)
+
+            dim, eidxs = tess.elements()
 
             Log.debug('Writing patch {}'.format(globpatchid))
-            w.update_geometry(nodes, eidxs, len(nidxs), globpatchid)
+            w.update_geometry(nodes, eidxs, dim, globpatchid)
 
         w.finalize_geometry(stepid)
 
