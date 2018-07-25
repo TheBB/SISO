@@ -82,10 +82,10 @@ class Field:
                 kind = 'vector' if results.shape[-1] > 1 else 'scalar'
             w.update_field(results, self.name, stepid, globpatchid, kind, cells=self.cells)
 
-            if self.decompose and results.shape[-1] > 1:
-                for i in range(results.shape[-1]):
+            if self.decompose and self.ncomps > 1:
+                for i in range(self.ncomps):
                     w.update_field(
-                        results[...,i], '{}[{}]'.format(self.name, i+1),
+                        results[...,i], '{}_{}'.format(self.name, 'xyz'[i]),
                         stepid, globpatchid, 'scalar', cells=self.cells,
                     )
 
@@ -105,6 +105,8 @@ class Field:
             coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
             patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
 
+        self.ncomps = patch.dimension
+
         if patch.dimension == 1 and self.vectorize:
             patch.set_dimension(3)
             patch.controlpoints[...,-1] = patch.controlpoints[...,0].copy()
@@ -113,6 +115,46 @@ class Field:
             patch.set_dimension(3)
 
         return patch(*tess)
+
+
+class CombinedField(Field):
+
+    def __init__(self, name, sources, reader):
+        assert all(not s.vectorize for s in sources)
+        cells = set(s.cells for s in sources)
+        assert len(cells) == 1
+
+        self.name = name
+        self.reader = reader
+        self.cells = next(iter(cells))
+        self.vectorize = False
+        self.decompose = False
+        self.ncomps = len(sources)
+        self.sources = sources
+
+        self.update_steps = set()
+        for s in sources:
+            self.update_steps |= s.update_steps
+
+    def update(self, w, stepid):
+        # Assume all bases have the same number of patches,
+        # so just grab the indices from the first one
+        for patchid in range(self.sources[0].basis.npatches):
+
+            results = []
+            for src in self.sources:
+                patch = src.basis.patch_at(stepid, patchid)
+                tess, globpatchid = self.reader.geometry.tesselation(patch)
+                coeffs = src.coeffs(stepid, patchid)
+                results.append(src.tesselate(patch, tess, coeffs))
+
+            results = np.concatenate(results, axis=-1)
+
+            if hasattr(self, 'kind'):
+                kind = self.kind
+            else:
+                kind = 'vector'
+            w.update_field(results, self.name, stepid, globpatchid, kind, cells=self.cells)
 
 
 class GeometryManager:
@@ -259,6 +301,23 @@ class Reader:
             logging.debug('{} "{}" lives on {}'.format(
                 'Knotspan' if field.cells else 'Field', field.name, field.basis.name
             ))
+
+        # Detect combined fields, e.g. u_x, u_y, u_z -> u
+        candidates = OrderedDict()
+        for fname in self.fields:
+            if len(fname) > 2 and fname[-2] == '_' and fname[-1] in 'xyz':
+                candidates.setdefault(fname[:-2], []).append(fname)
+
+        for fname, sourcenames in candidates.items():
+            if not (1 < len(sourcenames) < 4):
+                continue
+
+            sources = [self.fields[s] for s in sourcenames]
+            try:
+                self.fields[fname] = CombinedField(fname, sources, self)
+                logging.info('Creating combined field {} -> {}'.format(', '.join(sourcenames), fname))
+            except AssertionError:
+                logging.warning('Unable to combine {} -> {}'.format(', '.join(sourcenames), fname))
 
     def write(self, w):
         for stepid, time in self.outputsteps():
