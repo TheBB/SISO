@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 import vtfwriter as vtf
 
@@ -11,7 +11,7 @@ class Writer(vtf.File):
         self.geometry_blocks = []
 
         self.mode_data = []
-        self.field_blocks = {}
+        self.field_blocks = OrderedDict()
         self.dirty_geometry = False
 
     def __enter__(self):
