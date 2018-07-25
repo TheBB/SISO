@@ -178,16 +178,22 @@ class GeometryManager:
 
 class Reader:
 
-    def __init__(self, h5, bases=()):
+    def __init__(self, h5, bases=(), geometry=None):
         self.h5 = h5
         self.only_bases = bases
+        self.geometry_basis = geometry
 
     def __enter__(self):
         self.bases = OrderedDict()
         self.fields = OrderedDict()
         self.init_bases()
         self.init_fields()
-        self.geometry = GeometryManager(next(iter(self.bases.values())), self)
+
+        if self.geometry_basis:
+            self.geometry = GeometryManager(self.bases[self.geometry_basis], self)
+        else:
+            self.geometry = GeometryManager(next(iter(self.bases.values())), self)
+
         return self
 
     def __exit__(self, type_, value, backtrace):
@@ -216,14 +222,18 @@ class Reader:
 
     def init_bases(self):
         for stepid, _, stepgrp in self.steps():
-            z = self.allowed_bases(stepgrp)
-            for basisname in self.allowed_bases(stepgrp):
+            for basisname in stepgrp:
                 if basisname not in self.bases:
                     self.bases[basisname] = Basis(basisname, self)
                 basis = self.bases[basisname]
 
                 basis.add_update(stepid)
                 basis.npatches = max(basis.npatches, len(stepgrp[basisname]['basis']))
+
+        # Delete the bases we don't need
+        if self.only_bases:
+            keep = self.only_bases + ((self.geometry_basis,) if self.geometry_basis else ())
+            self.bases = OrderedDict((b,v) for b,v in self.bases.items() if b in keep)
 
         for basis in self.bases.values():
             logging.debug('Basis {} updates at steps {} ({} patches)'.format(
@@ -330,10 +340,10 @@ class EigenReader(Reader):
         self.fields['Mode Shape'] = EigenField('Mode Shape', basis, self, vectorize=True)
 
 
-def get_reader(filename, bases=()):
+def get_reader(filename, bases=(), geometry=None):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
         logging.info('Detected eigenmodes')
-        return EigenReader(h5, bases=bases)
-    return Reader(h5, bases=bases)
+        return EigenReader(h5, bases=bases, geometry=geometry)
+    return Reader(h5, bases=bases, geometry=geometry)
