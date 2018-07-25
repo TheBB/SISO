@@ -20,12 +20,6 @@ class G2Object(splipy.io.G2):
     def __enter__(self):
         return self
 
-POINTVALUES = 0
-CELLVALUES = 1
-EIGENMODE = 2
-
-Field = namedtuple('Field', ['name', 'basis', 'ncomps', 'kind'])
-
 
 class Basis:
 
