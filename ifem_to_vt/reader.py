@@ -1,4 +1,5 @@
 import h5py
+from contextlib import contextmanager
 from collections import namedtuple, OrderedDict
 from io import StringIO
 from itertools import chain, product
@@ -19,6 +20,38 @@ class G2Object(splipy.io.G2):
 
     def __enter__(self):
         return self
+
+
+class Log:
+
+    _indent = 0
+
+    @classmethod
+    def debug(cls, s, *args, **kwargs):
+        return logging.debug(' ' * cls._indent + s, *args, **kwargs)
+
+    @classmethod
+    def info(cls, s, *args, **kwargs):
+        return logging.info(' ' * cls._indent + s, *args, **kwargs)
+
+    @classmethod
+    def warning(cls, s, *args, **kwargs):
+        return logging.warning(' ' * cls._indent + s, *args, **kwargs)
+
+    @classmethod
+    def error(cls, s, *args, **kwargs):
+        return logging.error(' ' * cls._indent + s, *args, **kwargs)
+
+    @classmethod
+    def critical(cls, s, *args, **kwargs):
+        return logging.warn(' ' * cls._indent + s, *args, **kwargs)
+
+    @classmethod
+    @contextmanager
+    def indent(cls):
+        cls._indent += 4
+        yield
+        cls._indent -= 4
 
 
 class Basis:
@@ -158,7 +191,7 @@ class GeometryManager:
         self.reader = reader
         self.tesselations = {}
 
-        logging.info('Using {} for geometry'.format(basis.name))
+        Log.info('Using {} for geometry'.format(basis.name))
 
     def tesselation(self, patch):
         corners = tuple(tuple(patch.controlpoints[idx]) for idx in product((0,-1), repeat=patch.pardim))
@@ -173,7 +206,7 @@ class GeometryManager:
         if not self.basis.update_at(stepid):
             return
 
-        logging.info('Updating geometry')
+        Log.info('Updating geometry')
 
         # FIXME: Here, all patches are updated whenever any of them are updated.
         # Maybe overkill.
@@ -206,7 +239,7 @@ class GeometryManager:
                 eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nodes.shape[:-1])
                 eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nodes.shape[:-1])
 
-            logging.debug('Writing patch {}'.format(globpatchid))
+            Log.debug('Writing patch {}'.format(globpatchid))
             w.update_geometry(nodes, eidxs, len(nidxs), globpatchid)
 
         w.finalize_geometry(stepid)
@@ -272,7 +305,7 @@ class Reader:
             self.bases = OrderedDict((b,v) for b,v in self.bases.items() if b in keep)
 
         for basis in self.bases.values():
-            logging.debug('Basis {} updates at steps {} ({} patches)'.format(
+            Log.debug('Basis {} updates at steps {} ({} patches)'.format(
                 basis.name, ', '.join(str(s) for s in sorted(basis.update_steps)), basis.npatches,
             ))
 
@@ -292,7 +325,7 @@ class Reader:
                     self.fields[fieldname].add_update(stepid)
 
         for field in self.fields.values():
-            logging.debug('{} "{}" lives on {}'.format(
+            Log.debug('{} "{}" lives on {}'.format(
                 'Knotspan' if field.cells else 'Field', field.name, field.basis.name
             ))
 
@@ -309,20 +342,21 @@ class Reader:
             sources = [self.fields[s] for s in sourcenames]
             try:
                 self.fields[fname] = CombinedField(fname, sources, self)
-                logging.info('Creating combined field {} -> {}'.format(', '.join(sourcenames), fname))
+                Log.info('Creating combined field {} -> {}'.format(', '.join(sourcenames), fname))
             except AssertionError:
-                logging.warning('Unable to combine {} -> {}'.format(', '.join(sourcenames), fname))
+                Log.warning('Unable to combine {} -> {}'.format(', '.join(sourcenames), fname))
 
     def write(self, w):
         for stepid, time in self.outputsteps():
-            logging.info('Step {}'.format(stepid))
+            Log.info('Step {}'.format(stepid))
 
-            w.add_step(**time)
-            self.geometry.update(w, stepid)
+            with Log.indent():
+                w.add_step(**time)
+                self.geometry.update(w, stepid)
 
-            for field in self.fields.values():
-                logging.info('Updating {}'.format(field.name))
-                field.update(w, stepid)
+                for field in self.fields.values():
+                    Log.info('Updating {}'.format(field.name))
+                    field.update(w, stepid)
 
     def write_mode(self, w, mid, field):
         for pid in range(self.npatches(0, field.basis)):
@@ -397,6 +431,6 @@ def get_reader(filename, bases=(), geometry=None):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
-        logging.info('Detected eigenmodes')
+        Log.info('Detected eigenmodes')
         return EigenReader(h5, bases=bases, geometry=geometry)
     return Reader(h5, bases=bases, geometry=geometry)
