@@ -13,10 +13,11 @@ from ifem_to_vt.writer import get_writer
     type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']),
     default='info'
 )
+@click.option('--basis', '-b', multiple=True)
 @click.option('--fmt', '-f', type=click.Choice(['vtf']), required=False)
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
-def convert(verbosity, fmt, infile, outfile):
+def convert(verbosity, basis, fmt, infile, outfile):
     logging.basicConfig(
         format='{asctime} {levelname: <10} {message}',
         datefmt='%H:%M',
@@ -38,7 +39,7 @@ def convert(verbosity, fmt, infile, outfile):
         logging.critical(e)
         sys.exit(1)
 
-    with get_reader(infile) as r, Writer(outfile) as w:
+    with get_reader(infile, bases=basis) as r, Writer(outfile) as w:
         r.write(w)
 
 

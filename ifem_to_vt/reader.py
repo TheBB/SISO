@@ -178,8 +178,9 @@ class GeometryManager:
 
 class Reader:
 
-    def __init__(self, h5):
+    def __init__(self, h5, bases=()):
         self.h5 = h5
+        self.only_bases = bases
 
     def __enter__(self):
         self.bases = OrderedDict()
@@ -205,9 +206,18 @@ class Reader:
         for stepid, time, _ in self.steps():
             yield stepid, time
 
+    def allowed_bases(self, group, items=False):
+        if not self.only_bases:
+            yield from (group.items() if items else group)
+        elif items:
+            yield from ((b, v) for b, v in group.items() if b in self.only_bases)
+        else:
+            yield from (b for b in group if b in self.only_bases)
+
     def init_bases(self):
         for stepid, _, stepgrp in self.steps():
-            for basisname in stepgrp:
+            z = self.allowed_bases(stepgrp)
+            for basisname in self.allowed_bases(stepgrp):
                 if basisname not in self.bases:
                     self.bases[basisname] = Basis(basisname, self)
                 basis = self.bases[basisname]
@@ -222,7 +232,7 @@ class Reader:
 
     def init_fields(self):
         for stepid, _, stepgrp in self.steps():
-            for basisname, basisgrp in stepgrp.items():
+            for basisname, basisgrp in self.allowed_bases(stepgrp, items=True):
                 fields = basisgrp['fields'] if 'fields' in basisgrp else []
                 kspans = basisgrp['knotspan'] if 'knotspan' in basisgrp else []
 
@@ -320,10 +330,10 @@ class EigenReader(Reader):
         self.fields['Mode Shape'] = EigenField('Mode Shape', basis, self, vectorize=True)
 
 
-def get_reader(filename):
+def get_reader(filename, bases=()):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
         logging.info('Detected eigenmodes')
-        return EigenReader(h5)
-    return Reader(h5)
+        return EigenReader(h5, bases=bases)
+    return Reader(h5, bases=bases)
