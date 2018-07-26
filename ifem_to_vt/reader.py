@@ -266,6 +266,7 @@ class CombinedField(Field):
                 results.append(src.tesselate(patch, tess, coeffs))
 
             results = np.concatenate(results, axis=-1)
+            results = expand_to_dims(results)
 
             if hasattr(self, 'kind'):
                 kind = self.kind
