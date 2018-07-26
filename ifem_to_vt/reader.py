@@ -340,6 +340,7 @@ class Reader:
             if not (1 < len(sourcenames) < 4):
                 continue
 
+            sourcenames = sorted(sourcenames, key=lambda s: s[-1])
             sources = [self.fields[s] for s in sourcenames]
             try:
                 self.fields[fname] = CombinedField(fname, sources, self)
