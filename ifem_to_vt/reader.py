@@ -283,14 +283,22 @@ class GeometryManager:
         self.basis = basis
         self.reader = reader
         self.tesselations = {}
+        self.globids = {}
 
         Log.info('Using {} for geometry'.format(basis.name))
 
     def tesselation(self, patch):
-        key = tuple(tuple(p) for p in patch.corners())
-        if key not in self.tesselations:
-            self.tesselations[key] = (get_tesselation(patch), len(self.tesselations))
-        return self.tesselations[key]
+        corners = tuple(tuple(p) for p in patch.corners())
+        knots = tuple(tuple(k) for k in patch.knots())
+
+        if knots not in self.tesselations:
+            Log.debug('New unique knot vector detected, generating tesselation')
+            self.tesselations[knots] = get_tesselation(patch)
+        if corners not in self.globids:
+            Log.debug('New unique patch detected, generating global ID')
+            self.globids[corners] = len(self.globids)
+
+        return self.tesselations[knots], self.globids[corners]
 
     def update(self, w, stepid):
         if not self.basis.update_at(stepid):
