@@ -296,8 +296,9 @@ class Reader:
                     self.bases[basisname] = Basis(basisname, self)
                 basis = self.bases[basisname]
 
-                basis.add_update(stepid)
-                basis.npatches = max(basis.npatches, len(stepgrp[basisname]['basis']))
+                if 'basis' in stepgrp[basisname]:
+                    basis.add_update(stepid)
+                    basis.npatches = max(basis.npatches, len(stepgrp[basisname]['basis']))
 
         # Delete the bases we don't need
         if self.only_bases:
