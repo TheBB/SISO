@@ -146,7 +146,7 @@ def get_tesselation(patch):
 
 def expand_to_dims(array, dims=3):
     nshape = array.shape[:-1] + (1,)
-    while array.shape[-1] != dims:
+    while array.shape[-1] <= dims:
         array = np.concatenate((array, np.zeros(nshape)), axis=-1)
     return array
 
