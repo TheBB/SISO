@@ -60,14 +60,20 @@ class TensorTesselation:
     def __init__(self, patch):
         self.knots = patch.knots()
 
-    def __call__(self, patch):
-        return patch(*self.knots)
+    def __call__(self, patch, coeffs=None, cells=False):
+        if cells:
+            assert coeffs is not None
+            bases = [BSplineBasis(1, kts) for kts in patch.knots()]
+            shape = tuple(b.num_functions() for b in bases)
+            coeffs = splipy.utils.reshape(coeffs, shape, order='F')
+            patch = SplineObject(bases, coeffs, False, raw=True)
+            knots = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in self.knots]
+            return patch(*knots)
 
-    def center(self):
-        knots = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in self.knots]
-        obj = TensorTesselation.__new__(TensorTesselation)
-        obj.knots = knots
-        return obj
+        if coeffs is not None:
+            coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
+            patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
+        return patch(*self.knots)
 
     def elements(self):
         nshape = tuple(len(k) for k in self.knots)
@@ -97,10 +103,52 @@ class TensorTesselation:
         return len(nidxs), eidxs
 
 
+class LRSurfaceTesselation:
+
+    def __init__(self, patch):
+        nodes, elements = OrderedDict(), []
+        for el in patch.elements():
+            left, bottom = el.start()
+            right, top = el.end()
+
+            sw, se, nw, ne = (left, bottom), (right, bottom), (left, top), (right, top)
+            for pt in (sw, se, nw, ne):
+                nodes.setdefault(pt, len(nodes))
+
+            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
+
+        self._nodes = nodes
+        self._elements = np.array(elements, dtype=int)
+
+    def __call__(self, patch, coeffs=None, cells=False):
+        if cells:
+            assert coeffs is not None
+            ncomps = len(patch) // coeffs.size
+            coeffs = coeffs.reshape((-1, ncomps))
+            return coeffs
+
+        if coeffs is not None:
+            patch = patch.clone()
+            patch.set_controlpoints(coeffs.flatten())
+        return np.array([patch(*node) for node in self._nodes], dtype=float)
+
+    def elements(self):
+        return 2, self._elements
+
+
 def get_tesselation(patch):
     if isinstance(patch, SplineObject):
         return TensorTesselation(patch)
+    if isinstance(patch, lr.LRSurface):
+        return LRSurfaceTesselation(patch)
     assert False
+
+
+def expand_to_dims(array, dims=3):
+    nshape = array.shape[:-1] + (1,)
+    while array.shape[-1] != dims:
+        array = np.concatenate((array, np.zeros(nshape)), axis=-1)
+    return array
 
 
 class Basis:
@@ -173,27 +221,17 @@ class Field:
         return self.reader.h5[str(stepid)][self.basis.name][sub][self.name][str(patchid+1)][:]
 
     def tesselate(self, patch, tess, coeffs):
-        if self.cells:
-            # Make a piecewise constant patch
-            bases = [BSplineBasis(1, kts) for kts in patch.knots()]
-            shape = tuple(b.num_functions() for b in bases)
-            coeffs = splipy.utils.reshape(coeffs, shape, order='F')
-            patch = SplineObject(bases, coeffs, False, raw=True)
-            tess = tess.center()
-        else:
-            coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
-            patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
+        results = tess(patch, coeffs=coeffs, cells=self.cells)
+        self.ncomps = results.shape[-1]
 
-        self.ncomps = patch.dimension
+        if self.ncomps == 1 and self.vectorize:
+            results = expand_to_dims(results)
+            results[...,-1] = results[...,0].copy()
+            results[...,0] = 0.0
+        elif self.ncomps > 1:
+            results = expand_to_dims(results)
 
-        if patch.dimension == 1 and self.vectorize:
-            patch.set_dimension(3)
-            patch.controlpoints[...,-1] = patch.controlpoints[...,0].copy()
-            patch.controlpoints[...,0] = 0.0
-        elif patch.dimension > 1:
-            patch.set_dimension(3)
-
-        return tess(patch)
+        return results
 
 
 class CombinedField(Field):
@@ -233,6 +271,7 @@ class CombinedField(Field):
                 kind = self.kind
             else:
                 kind = 'vector'
+
             w.update_field(results, self.name, stepid, globpatchid, kind, cells=self.cells)
 
 
