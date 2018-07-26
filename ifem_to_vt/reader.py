@@ -333,7 +333,7 @@ class Reader:
         # Detect combined fields, e.g. u_x, u_y, u_z -> u
         candidates = OrderedDict()
         for fname in self.fields:
-            if len(fname) > 2 and fname[-2] == '_' and fname[-1] in 'xyz':
+            if len(fname) > 2 and fname[-2] == '_' and fname[-1] in 'xyz' and fname[:-2] not in self.fields:
                 candidates.setdefault(fname[:-2], []).append(fname)
 
         for fname, sourcenames in candidates.items():
