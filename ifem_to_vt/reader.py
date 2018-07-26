@@ -123,13 +123,14 @@ class LRSurfaceTesselation:
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
             assert coeffs is not None
-            ncomps = len(patch) // coeffs.size
+            ncomps = len(list(patch.elements())) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
             return coeffs
 
         if coeffs is not None:
             patch = patch.clone()
             patch.set_controlpoints(coeffs.flatten())
+
         return np.array([patch(*node) for node in self._nodes], dtype=float)
 
     def elements(self):
