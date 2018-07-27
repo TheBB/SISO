@@ -211,6 +211,9 @@ class Field:
                 ncells = len(list(patch.elements()))
                 self.ncomps = len(coeffs) // ncells
 
+    def update_at(self, stepid):
+        return stepid in self.update_steps
+
     def update(self, w, stepid):
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
@@ -502,8 +505,9 @@ class Reader:
                 self.geometry.update(w, stepid)
 
                 for field in self.fields.values():
-                    Log.info('Updating {}'.format(field.name))
-                    field.update(w, stepid)
+                    if field.update_at(stepid):
+                        Log.info('Updating {}'.format(field.name))
+                        field.update(w, stepid)
 
     def write_mode(self, w, mid, field):
         for pid in range(self.npatches(0, field.basis)):
