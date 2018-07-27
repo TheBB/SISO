@@ -72,6 +72,8 @@ class TensorTesselation:
 
         if coeffs is not None:
             coeffs = splipy.utils.reshape(coeffs, patch.shape, order='F')
+            if patch.rational:
+                coeffs = np.concatenate((coeffs, patch.controlpoints[..., -1, np.newaxis]), axis=-1)
             patch = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
         return patch(*self.knots)
 
