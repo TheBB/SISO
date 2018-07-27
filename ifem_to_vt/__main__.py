@@ -1,6 +1,6 @@
 import click
 import logging
-from os.path import splitext
+from os.path import splitext, basename
 import sys
 
 from ifem_to_vt.reader import get_reader
@@ -31,8 +31,9 @@ def convert(verbosity, basis, geometry, fmt, infile, outfile):
         fmt = fmt[1:].lower()
     elif not outfile:
         fmt = fmt or 'vtf'
-        basename, _ = splitext(infile)
-        outfile = '{}.{}'.format(basename, fmt)
+        filename = basename(infile)
+        base, _ = splitext(filename)
+        outfile = '{}.{}'.format(base, fmt)
 
     try:
         Writer = get_writer(fmt)
