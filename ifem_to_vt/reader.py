@@ -193,9 +193,21 @@ class Field:
         self.vectorize = vectorize
         self.decompose = True
         self.update_steps = set()
+        self.ncomps = None
 
     def add_update(self, stepid):
         self.update_steps.add(stepid)
+        if self.ncomps is None:
+            patch = self.basis.patch_at(stepid, 0)
+            coeffs = self.coeffs(stepid, 0)
+            if not self.cells:
+                self.ncomps = len(coeffs) // len(patch)
+            elif isinstance(patch, SplineObject):
+                ncells = np.prod([len(k)-1 for k in patch.knots()])
+                self.ncomps = len(coeffs) // ncells
+            else:
+                ncells = len(list(patch.elements()))
+                self.ncomps = len(coeffs) // ncells
 
     def update(self, w, stepid):
         for patchid in range(self.basis.npatches):
@@ -223,7 +235,6 @@ class Field:
 
     def tesselate(self, patch, tess, coeffs):
         results = tess(patch, coeffs=coeffs, cells=self.cells)
-        self.ncomps = results.shape[-1]
 
         if self.ncomps == 1 and self.vectorize:
             results = expand_to_dims(results)
@@ -335,8 +346,12 @@ class Reader:
     def __enter__(self):
         self.bases = OrderedDict()
         self.fields = OrderedDict()
+
         self.init_bases()
+
         self.init_fields()
+        self.combine_fields()
+        self.sort_fields()
 
         if self.geometry_basis:
             self.geometry = GeometryManager(self.bases[self.geometry_basis], self)
@@ -406,11 +421,13 @@ class Reader:
                     self.fields[fieldname].add_update(stepid)
 
         for field in self.fields.values():
-            Log.debug('{} "{}" lives on {}'.format(
-                'Knotspan' if field.cells else 'Field', field.name, field.basis.name
+            Log.debug('{} "{}" lives on {} ({} components)'.format(
+                'Knotspan' if field.cells else 'Field', field.name, field.basis.name, field.ncomps
             ))
 
         # Detect combined fields, e.g. u_x, u_y, u_z -> u
+    # Detect combined fields, e.g. u_x, u_y, u_z -> u
+    def combine_fields(self):
         candidates = OrderedDict()
         for fname in self.fields:
             if len(fname) > 2 and fname[-2] == '_' and fname[-1] in 'xyz' and fname[:-2] not in self.fields:
@@ -424,11 +441,11 @@ class Reader:
             sources = [self.fields[s] for s in sourcenames]
             try:
                 self.fields[fname] = CombinedField(fname, sources, self)
-                Log.info('Creating combined field {} -> {}'.format(', '.join(sourcenames), fname))
+                Log.info('Creating combined field {} -> {} ({} components)'.format(', '.join(sourcenames), fname, len(sources)))
             except AssertionError:
                 Log.warning('Unable to combine {} -> {}'.format(', '.join(sourcenames), fname))
 
-        # Reorder fields
+    def sort_fields(self):
         fields = sorted(self.fields.values(), key=lambda f: f.name)
         fields = sorted(fields, key=lambda f: f.cells)
         self.fields = OrderedDict((f.name, f) for f in fields)
@@ -511,7 +528,10 @@ class EigenReader(Reader):
 
     def init_fields(self):
         basis = next(iter(self.bases.values()))
-        self.fields['Mode Shape'] = EigenField('Mode Shape', basis, self, vectorize=True)
+        field = EigenField('Mode Shape', basis, self, vectorize=True)
+        field.add_update(0)     # Trigger detection of ncomps
+        self.fields['Mode Shape'] = field
+        super().log_fields()
 
 
 def get_reader(filename, bases=(), geometry=None):
