@@ -4,5 +4,4 @@
 *.cpp
 *.so
 __pycache__
-*.vtf
 /.pytest_cache
