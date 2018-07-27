@@ -10,7 +10,7 @@ from ifem_to_vt.writer import get_writer
     'Cavity-mixed', 'Cavity3D-compatible',
     'singular-pressure-corner-rec',
     'Square', 'Square-ad', 'Square-LR',
-    'Square-compatible-abd1-B-I-stat',
+    'Square-compatible-abd1-B-I-stat', 'Square-mixed-abd1-B-I-stat',
     'Square-modes', 'Square-modes-freq',
     'Waterfall3D',
 ])
