@@ -17,7 +17,7 @@ setup(
         library_dirs=['/usr/local/lib', '/usr/local/lib64']
     )),
     packages=['ifem_to_vt'],
-    install_requires=['numpy', 'Splipy', 'h5py'],
+    install_requires=['click', 'numpy', 'Splipy', 'h5py'],
     entry_points={
         'console_scripts': [
             'ifem-to-vt=ifem_to_vt.__main__:convert',
