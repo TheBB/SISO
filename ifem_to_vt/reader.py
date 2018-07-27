@@ -288,6 +288,26 @@ class CombinedField(Field):
             w.update_field(results, self.name, stepid, globpatchid, kind, cells=self.cells)
 
 
+class SplitField(Field):
+
+    def __init__(self, name, source, index, reader):
+        self.name = name
+        self.source = source
+        self.basis = source.basis
+        self.index = index
+        self.reader = reader
+        self.cells = source.cells
+        self.vectorize = False
+        self.decompose = False
+        self.ncomps = 1
+        self.update_steps = source.update_steps
+
+    def coeffs(self, stepid, patchid):
+        coeffs = self.source.coeffs(stepid, patchid)
+        coeffs = np.reshape(coeffs, (-1, self.source.ncomps))
+        return coeffs[:, self.index]
+
+
 class GeometryManager:
 
     def __init__(self, basis, reader):
@@ -350,6 +370,8 @@ class Reader:
         self.init_bases()
 
         self.init_fields()
+        self.log_fields()
+        self.split_fields()
         self.combine_fields()
         self.sort_fields()
 
@@ -420,12 +442,31 @@ class Reader:
                         self.fields[fieldname] = Field(fieldname, self.bases[basisname], self, cells=True)
                     self.fields[fieldname].add_update(stepid)
 
+    def log_fields(self):
         for field in self.fields.values():
             Log.debug('{} "{}" lives on {} ({} components)'.format(
                 'Knotspan' if field.cells else 'Field', field.name, field.basis.name, field.ncomps
             ))
 
-        # Detect combined fields, e.g. u_x, u_y, u_z -> u
+    # Detect split fields, e.g. u_y&&T -> u_y, T
+    def split_fields(self):
+        to_add, to_del = [], []
+        for fname in self.fields:
+            if '&&' in fname:
+                splitnames = [s.strip() for s in fname.split('&&')]
+                if any(splitname in self.fields for splitname in splitnames):
+                    Log.warning('Unable to split "{}", some fields already exist'.format(fname))
+                    continue
+                Log.info('Split field "{}" -> {}'.format(fname, ', '.join(splitnames)))
+                for i, splitname in enumerate(splitnames):
+                    to_add.append(SplitField(splitname, self.fields[fname], i, self))
+                to_del.append(fname)
+
+        for fname in to_del:
+            del self.fields[fname]
+        for field in to_add:
+            self.fields[field.name] = field
+
     # Detect combined fields, e.g. u_x, u_y, u_z -> u
     def combine_fields(self):
         candidates = OrderedDict()
