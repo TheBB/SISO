@@ -584,7 +584,8 @@ class EigenReader(Reader):
     def init_fields(self):
         basis = next(iter(self.bases.values()))
         field = EigenField('Mode Shape', basis, self, vectorize=True)
-        field.add_update(0)     # Trigger detection of ncomps
+        for modeid in range(self.nmodes):
+            field.add_update(modeid)
         self.fields['Mode Shape'] = field
 
 
