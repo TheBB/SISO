@@ -578,7 +578,6 @@ class EigenReader(Reader):
         field = EigenField('Mode Shape', basis, self, vectorize=True)
         field.add_update(0)     # Trigger detection of ncomps
         self.fields['Mode Shape'] = field
-        super().log_fields()
 
 
 def get_reader(filename, bases=(), geometry=None):
