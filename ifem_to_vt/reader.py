@@ -10,6 +10,7 @@ import splipy.io
 from splipy import SplineObject, BSplineBasis
 from splipy.SplineModel import ObjectCatalogue
 import splipy.utils
+import sys
 
 
 class G2Object(splipy.io.G2):
@@ -45,7 +46,7 @@ class Log:
 
     @classmethod
     def critical(cls, s, *args, **kwargs):
-        return logging.warn(' ' * cls._indent + s, *args, **kwargs)
+        return logging.critical(' ' * cls._indent + s, *args, **kwargs)
 
     @classmethod
     @contextmanager
@@ -203,13 +204,20 @@ class Field:
             patch = self.basis.patch_at(stepid, 0)
             coeffs = self.coeffs(stepid, 0)
             if not self.cells:
-                self.ncomps = len(coeffs) // len(patch)
+                num, denom = len(coeffs), len(patch)
             elif isinstance(patch, SplineObject):
                 ncells = np.prod([len(k)-1 for k in patch.knots()])
-                self.ncomps = len(coeffs) // ncells
+                num, denom = len(coeffs), ncells
             else:
                 ncells = len(list(patch.elements()))
-                self.ncomps = len(coeffs) // ncells
+                num, denom = len(coeffs), ncells
+
+            if num % denom != 0:
+                Log.critical('Inconsistent dimension in field "{}" ({}/{}); unable to discover number of components'.format(
+                    self.name, num, denom
+                ))
+                sys.exit(2)
+            self.ncomps = num // denom
 
     def update_at(self, stepid):
         return stepid in self.update_steps
