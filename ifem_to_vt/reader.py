@@ -430,6 +430,10 @@ class Reader:
                     basis.add_update(stepid)
                     basis.npatches = max(basis.npatches, len(stepgrp[basisname]['basis']))
 
+        # Delete timeinfo, if present
+        if 'timeinfo' in self.bases:
+            del self.bases['timeinfo']
+
         # Delete the bases we don't need
         if self.only_bases:
             keep = self.only_bases + ((self.geometry_basis,) if self.geometry_basis else ())
