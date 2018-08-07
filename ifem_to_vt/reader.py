@@ -434,10 +434,19 @@ class Reader:
         if 'timeinfo' in self.bases:
             del self.bases['timeinfo']
 
+        # Delete bases that don't have any patch data
+        to_del = [name for name, basis in self.bases.items() if not basis.update_steps]
+        for basisname in to_del:
+            Log.debug('Basis {} has no updates, removed'.format(basisname))
+            del self.bases[basisname]
+
         # Delete the bases we don't need
         if self.only_bases:
+            self.only_bases = set(self.bases) & self.only_bases
             keep = self.only_bases + ((self.geometry_basis,) if self.geometry_basis else ())
             self.bases = OrderedDict((b,v) for b,v in self.bases.items() if b in keep)
+        else:
+            self.only_bases = set(self.bases)
 
         for basis in self.bases.values():
             Log.debug('Basis {} updates at steps {} ({} patches)'.format(
