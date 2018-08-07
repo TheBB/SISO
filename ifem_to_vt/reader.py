@@ -198,6 +198,10 @@ class Field:
         self.update_steps = set()
         self.ncomps = None
 
+    @property
+    def basisname(self):
+        return self.basis.name
+
     def add_update(self, stepid):
         self.update_steps.add(stepid)
         if self.ncomps is None:
@@ -277,6 +281,10 @@ class CombinedField(Field):
         self.update_steps = set()
         for s in sources:
             self.update_steps |= s.update_steps
+
+    @property
+    def basisname(self):
+        return ','.join(source.basis.name for source in self.sources)
 
     def update(self, w, stepid):
         # Assume all bases have the same number of patches,
@@ -527,7 +535,7 @@ class Reader:
 
                 for field in self.fields.values():
                     if field.update_at(stepid):
-                        Log.info('Updating {}'.format(field.name))
+                        Log.info('Updating {} ({})'.format(field.name, field.basisname))
                         field.update(w, stepid)
 
     def write_mode(self, w, mid, field):
