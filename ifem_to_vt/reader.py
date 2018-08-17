@@ -488,6 +488,12 @@ class Reader:
         for fname in self.fields:
             if '&&' in fname:
                 splitnames = [s.strip() for s in fname.split('&&')]
+
+                # Check if the first name has a prefix, if so apply it to all the names
+                if ' ' in splitnames[0]:
+                    prefix, splitnames[0] = splitnames[0].split(' ', 1)
+                    splitnames = ['{} {}'.format(prefix, name) for name in splitnames]
+
                 if any(splitname in self.fields for splitname in splitnames):
                     Log.warning('Unable to split "{}", some fields already exist'.format(fname))
                     continue
