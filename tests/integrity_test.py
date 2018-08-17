@@ -9,6 +9,7 @@ from ifem_to_vt.writer import get_writer
 @pytest.fixture(params=[
     'Annulus',
     'Cavity-mixed', 'Cavity3D-compatible',
+    'Cyl2D-VMSFSI-weak',
     'singular-pressure-corner-rec',
     'Square', 'Square-ad', 'Square-LR',
     'Square-compatible-abd1-B-I-stat', 'Square-mixed-abd1-B-I-stat',

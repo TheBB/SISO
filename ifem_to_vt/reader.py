@@ -229,7 +229,11 @@ class Field:
     def update(self, w, stepid):
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
-            tess, globpatchid = self.reader.geometry.tesselation(patch)
+            tess = self.reader.geometry.tesselation(patch)
+            globpatchid = self.reader.geometry.findid(patch)
+            if globpatchid is None:
+                continue
+
             coeffs = self.coeffs(stepid, patchid)
 
             results = self.tesselate(patch, tess, coeffs)
@@ -294,9 +298,13 @@ class CombinedField(Field):
             results = []
             for src in self.sources:
                 patch = src.basis.patch_at(stepid, patchid)
-                tess, globpatchid = self.reader.geometry.tesselation(patch)
+                tess = self.reader.geometry.tesselation(patch)
+                globpatchid = self.reader.geometry.findid(patch)
                 coeffs = src.coeffs(stepid, patchid)
                 results.append(src.tesselate(patch, tess, coeffs))
+
+            if globpatchid is None:
+                continue
 
             results = np.concatenate(results, axis=-1)
             results = expand_to_dims(results)
@@ -334,23 +342,35 @@ class GeometryManager:
     def __init__(self, basis, reader):
         self.basis = basis
         self.reader = reader
+
+        # Map knot vector -> evaluation points
         self.tesselations = {}
+
+        # Map basisname x patchid ->
         self.globids = {}
+
+        # Map corner tuple -> basisname x patchid
+        self.corners = {}
 
         Log.info('Using {} for geometry'.format(basis.name))
 
     def tesselation(self, patch):
-        corners = tuple(tuple(p) for p in patch.corners())
         knots = tuple(tuple(k) for k in patch.knots())
 
         if knots not in self.tesselations:
             Log.debug('New unique knot vector detected, generating tesselation')
             self.tesselations[knots] = get_tesselation(patch)
-        if corners not in self.globids:
-            Log.debug('New unique patch detected, generating global ID')
-            self.globids[corners] = len(self.globids)
+        return self.tesselations[knots]
 
-        return self.tesselations[knots], self.globids[corners]
+    def findid(self, patch):
+        corners = tuple(tuple(p) for p in patch.corners())
+        # print(corners, list(self.corners))
+
+        if corners not in self.corners:
+            Log.error('Unable to find corresponding geometry patch')
+            return None
+
+        return self.globids[self.corners[corners]]
 
     def update(self, w, stepid):
         if not self.basis.update_at(stepid):
@@ -362,7 +382,17 @@ class GeometryManager:
         # Maybe overkill.
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
-            tess, globpatchid = self.tesselation(patch)
+            key = (self.basis.name, patchid)
+
+            if key not in self.globids:
+                self.globids[key] = len(self.globids)
+                Log.debug('New unique patch detected, generating global ID')
+
+            # FIXME: This leaves behind invalidated corner IDs, which we should probably delete.
+            self.corners[tuple(tuple(p) for p in patch.corners())] = key
+            globpatchid = self.globids[(self.basis.name, patchid)]
+
+            tess = self.tesselation(patch)
             nodes = tess(patch)
 
             while nodes.shape[-1] < 3:
