@@ -331,13 +331,13 @@ class SplitField(Field):
 
 class GeometryManager:
 
-    def __init__(self, basis, reader):
-        self.basis = basis
+    def __init__(self, bases, reader):
+        self.bases = bases
         self.reader = reader
         self.tesselations = {}
         self.globids = {}
 
-        Log.info('Using {} for geometry'.format(basis.name))
+        Log.info('Using {} for geometry'.format(','.join(basis.name for basis in bases)))
 
     def tesselation(self, patch):
         corners = tuple(tuple(p) for p in patch.corners())
@@ -353,36 +353,42 @@ class GeometryManager:
         return self.tesselations[knots], self.globids[corners]
 
     def update(self, w, stepid):
-        if not self.basis.update_at(stepid):
-            return
+        globids = set()
 
-        Log.info('Updating geometry')
+        for basis in self.bases:
+            if not basis.update_at(stepid):
+                continue
+            Log.info('Updating geometry on {}'.format(basis.name))
 
-        # FIXME: Here, all patches are updated whenever any of them are updated.
-        # Maybe overkill.
-        for patchid in range(self.basis.npatches):
-            patch = self.basis.patch_at(stepid, patchid)
-            tess, globpatchid = self.tesselation(patch)
-            nodes = tess(patch)
+            # FIXME: Here, all patches are updated whenever any of them are updated.
+            # Maybe overkill.
+            for patchid in range(basis.npatches):
+                patch = basis.patch_at(stepid, patchid)
+                tess, globpatchid = self.tesselation(patch)
+                if globpatchid in globids:
+                    continue
 
-            while nodes.shape[-1] < 3:
-                nshape = nodes.shape[:-1] + (1,)
-                nodes = np.concatenate((nodes, np.zeros(nshape)), axis=-1)
+                nodes = tess(patch)
 
-            dim, eidxs = tess.elements()
+                while nodes.shape[-1] < 3:
+                    nshape = nodes.shape[:-1] + (1,)
+                    nodes = np.concatenate((nodes, np.zeros(nshape)), axis=-1)
 
-            Log.debug('Writing patch {}'.format(globpatchid))
-            w.update_geometry(nodes, eidxs, dim, globpatchid)
+                dim, eidxs = tess.elements()
+
+                Log.debug('Writing patch {}'.format(globpatchid))
+                w.update_geometry(nodes, eidxs, dim, globpatchid)
+                globids.add(globpatchid)
 
         w.finalize_geometry(stepid)
 
 
 class Reader:
 
-    def __init__(self, h5, bases=(), geometry=None):
+    def __init__(self, h5, bases=(), geometry=()):
         self.h5 = h5
         self.only_bases = bases
-        self.geometry_basis = geometry
+        self.geometry_bases = geometry
 
     def __enter__(self):
         self.bases = OrderedDict()
@@ -396,10 +402,10 @@ class Reader:
         self.combine_fields()
         self.sort_fields()
 
-        if self.geometry_basis:
-            self.geometry = GeometryManager(self.bases[self.geometry_basis], self)
+        if self.geometry_bases:
+            self.geometry = GeometryManager([self.bases[name] for name in self.geometry_bases], self)
         else:
-            self.geometry = GeometryManager(next(iter(self.bases.values())), self)
+            self.geometry = GeometryManager(list(self.bases.values()), self)
 
         return self
 

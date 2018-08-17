@@ -14,7 +14,7 @@ from ifem_to_vt.writer import get_writer
     default='info'
 )
 @click.option('--basis', '-b', multiple=True)
-@click.option('--geometry', '-g', default=None)
+@click.option('--geometry', '-g', multiple=True)
 @click.option('--fmt', '-f', type=click.Choice(['vtf']), required=False)
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
