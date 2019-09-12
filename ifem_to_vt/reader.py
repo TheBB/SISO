@@ -574,6 +574,8 @@ class Reader:
                         Log.info('Updating {} ({})'.format(field.name, field.basisname))
                         field.update(w, stepid)
 
+                w.finalize_step()
+
     def write_mode(self, w, mid, field):
         for pid in range(self.npatches(0, field.basis)):
             patch, tesselation = self._tesselated_patch(0, field.basis, pid)

@@ -42,6 +42,9 @@ class Writer(vtf.File):
     def add_step(self, **data):
         self.steps.append(data)
 
+    def finalize_step(self):
+        pass
+
     def update_geometry(self, nodes, elements, dim, patchid):
         if len(self.geometry_blocks) <= patchid:
             self.geometry_blocks.extend([None] * (patchid - len(self.geometry_blocks) + 1))
