@@ -3,6 +3,7 @@
 from setuptools import setup
 from distutils.extension import Extension
 from Cython.Build import cythonize
+import numpy as np
 
 setup(
     name='IFEM-to-VT',
@@ -14,7 +15,8 @@ setup(
         'vtfwriter',
         ['vtfwriter.pyx'],
         libraries=['VTFExpressAPI'],
-        library_dirs=['/usr/local/lib', '/usr/local/lib64']
+        library_dirs=['/usr/local/lib', '/usr/local/lib64'],
+        include_dirs=[np.get_include()],
     )),
     packages=['ifem_to_vt'],
     install_requires=['click', 'numpy', 'Splipy', 'h5py'],
