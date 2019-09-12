@@ -1,9 +1,14 @@
 from os.path import dirname, join
 import pytest
 import tempfile
+import re
+import numpy as np
 
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
+
+
+NUM = re.compile(r'-?\d+[ +\-e.\d]*\n')
 
 
 @pytest.fixture(params=[
@@ -32,5 +37,11 @@ def test_integrity(filenames):
             r.write(w)
         with open(outfile, 'r') as out, open(checkfile, 'r') as ref:
             for outline, refline in zip(out, ref):
-                if not 'EXPORT_DATE' in outline:
+                if 'EXPORT_DATE' in outline:
+                    continue
+                if NUM.match(refline):
+                    out = list(map(float, outline.split()))
+                    ref = list(map(float, refline.split()))
+                    np.testing.assert_array_almost_equal(out, ref)
+                else:
                     assert outline == refline
