@@ -82,7 +82,7 @@ class TensorTesselation:
         nshape = tuple(len(k) for k in self.knots)
         ranges = [range(k-1) for k in nshape]
         nidxs = [np.array(q) for q in zip(*product(*ranges))]
-        eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)))
+        eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)), dtype=int)
         if len(nidxs) == 1:
             eidxs[:,0] = nidxs[0]
             eidxs[:,1] = nidxs[0] + 1
