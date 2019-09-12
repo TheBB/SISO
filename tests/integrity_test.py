@@ -66,7 +66,7 @@ def test_vtk_integrity(vtk_filenames):
     infile, checkfile, outfile = vtk_filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        with get_reader(infile) as r, get_writer('vtk')(outfile) as w:
+        with get_reader(infile) as r, get_writer('vtk', binary=False)(outfile) as w:
             nsteps = r.nsteps
             r.write(w)
         for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):

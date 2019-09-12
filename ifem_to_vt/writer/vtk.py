@@ -11,8 +11,9 @@ Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
 
 class Writer:
 
-    def __init__(self, filename):
+    def __init__(self, filename, binary=True):
         self.filename = filename
+        self.binary = binary
 
     def __enter__(self):
         self.patches = OrderedDict()
@@ -82,7 +83,10 @@ class Writer:
         fn, ext = splitext(self.filename)
         filename = '{}-{}{}'.format(fn, self.stepid, ext)
         writer = vtk.vtkUnstructuredGridWriter()
-        writer.SetFileTypeToASCII()
+        if not self.binary:
+            writer.SetFileTypeToASCII()
+        else:
+            writer.SetFileTypeToBinary()
         writer.SetFileName(filename)
         writer.SetInputData(grid)
         writer.Write()
