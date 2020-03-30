@@ -9,11 +9,13 @@ Patch = namedtuple('Patch', ['nodes', 'elements', 'dim'])
 Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
 
 
-class Writer:
+class AbstractVTKWriter:
 
-    def __init__(self, filename, binary=True):
+    def __init__(self, filename, mode='binary'):
+        self.mode = mode
         self.filename = filename
-        self.binary = binary
+
+        self.validate_mode()
 
     def __enter__(self):
         self.patches = OrderedDict()
@@ -23,6 +25,9 @@ class Writer:
 
     def __exit__(self, type_, value, backtrace):
         pass
+
+    def writer(self):
+        raise NotImplementedError
 
     def add_step(self, **data):
         self.stepid += 1
@@ -82,11 +87,22 @@ class Writer:
 
         fn, ext = splitext(self.filename)
         filename = '{}-{}{}'.format(fn, self.stepid, ext)
-        writer = vtk.vtkUnstructuredGridWriter()
-        if not self.binary:
-            writer.SetFileTypeToASCII()
-        else:
-            writer.SetFileTypeToBinary()
+        writer = self.writer()
         writer.SetFileName(filename)
         writer.SetInputData(grid)
         writer.Write()
+
+
+class Writer(AbstractVTKWriter):
+
+    def validate_mode(self):
+        if not self.mode in ('ascii', 'binary'):
+            raise ValueError("VTK format does not support '{}' mode".format(self.mode))
+
+    def writer(self):
+        writer = vtk.vtkUnstructuredGridWriter()
+        if self.mode == 'ascii':
+            writer.SetFileTypeToASCII()
+        else:
+            writer.SetFileTypeToBinary()
+        return writer

@@ -63,7 +63,7 @@ def test_vtf_integrity(vtf_filenames):
     infile, checkfile, outfile = vtf_filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        with get_reader(infile) as r, get_writer('vtf')(outfile) as w:
+        with get_reader(infile) as r, get_writer('vtf', mode='ascii')(outfile) as w:
             r.write(w)
         with open(outfile, 'r') as out, open(checkfile, 'r') as ref:
             compare_files(out, ref)
@@ -73,7 +73,7 @@ def test_vtk_integrity(vtk_filenames):
     infile, checkfile, outfile = vtk_filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        with get_reader(infile) as r, get_writer('vtk', binary=False)(outfile) as w:
+        with get_reader(infile) as r, get_writer('vtk', mode='ascii')(outfile) as w:
             nsteps = r.nsteps
             r.write(w)
         for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
