@@ -7,6 +7,12 @@ import numpy as np
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
 
+try:
+    import vtfwriter
+    has_vtf = True
+except ImportError:
+    has_vtf = False
+
 
 NUM = re.compile(r'-?\d+[ +\-e.\d]*\n')
 TESTDATA_DIR = join(dirname(__file__), 'testdata')
@@ -52,6 +58,7 @@ def compare_files(out, ref):
             assert outline == refline
 
 
+@pytest.mark.skipif(not has_vtf, reason="VTF tests not runnable without vtfwriter")
 def test_vtf_integrity(vtf_filenames):
     infile, checkfile, outfile = vtf_filenames
     with tempfile.TemporaryDirectory() as tempdir:
