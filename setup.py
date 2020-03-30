@@ -2,8 +2,6 @@
 
 from setuptools import setup
 from distutils.extension import Extension
-from Cython.Build import cythonize
-import numpy as np
 
 setup(
     name='IFEM-to-VT',
@@ -11,15 +9,11 @@ setup(
     description='Converts IFEM result files to VT* formats.',
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
-    ext_modules=cythonize(Extension(
-        'vtfwriter',
-        ['vtfwriter.pyx'],
-        libraries=['VTFExpressAPI'],
-        library_dirs=['/usr/local/lib', '/usr/local/lib64'],
-        include_dirs=[np.get_include()],
-    )),
     packages=['ifem_to_vt', 'ifem_to_vt.writer'],
     install_requires=['click', 'numpy', 'Splipy', 'h5py'],
+    extras_require={
+        'VTF': ['vtfwriter'],
+    },
     entry_points={
         'console_scripts': [
             'ifem-to-vt=ifem_to_vt.__main__:convert',
