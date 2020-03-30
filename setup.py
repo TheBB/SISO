@@ -18,7 +18,7 @@ setup(
         library_dirs=['/usr/local/lib', '/usr/local/lib64'],
         include_dirs=[np.get_include()],
     )),
-    packages=['ifem_to_vt'],
+    packages=['ifem_to_vt', 'ifem_to_vt.writer'],
     install_requires=['click', 'numpy', 'Splipy', 'h5py'],
     entry_points={
         'console_scripts': [

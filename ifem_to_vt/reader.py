@@ -4,7 +4,7 @@ from collections import namedtuple, OrderedDict
 from io import StringIO
 from itertools import chain, product
 import logging
-import lrsplines as lr
+import lrspline as lr
 import numpy as np
 import splipy.io
 from splipy import SplineObject, BSplineBasis
@@ -110,7 +110,7 @@ class LRSurfaceTesselation:
 
     def __init__(self, patch):
         nodes, elements = OrderedDict(), []
-        for el in patch.elements():
+        for el in patch.elements:
             left, bottom = el.start()
             right, top = el.end()
 
@@ -126,13 +126,13 @@ class LRSurfaceTesselation:
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
             assert coeffs is not None
-            ncomps = len(list(patch.elements())) // coeffs.size
+            ncomps = len(patch.elements) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
             return coeffs
 
         if coeffs is not None:
             patch = patch.clone()
-            patch.set_controlpoints(coeffs.flatten())
+            patch.controlpoints = coeffs.reshape((len(patch.basis), -1))
 
         return np.array([patch(*node) for node in self._nodes], dtype=float)
 
@@ -143,7 +143,7 @@ class LRSurfaceTesselation:
 def get_tesselation(patch):
     if isinstance(patch, SplineObject):
         return TensorTesselation(patch)
-    if isinstance(patch, lr.LRSurface):
+    if isinstance(patch, lr.LRSplineSurface):
         return LRSurfaceTesselation(patch)
     assert False
 
@@ -177,7 +177,7 @@ class Basis:
         if key not in self.patch_cache:
             g2bytes = self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes()
             if g2bytes.startswith(b'# LRSPLINE SURFACE'):
-                patch = lr.LRSurface.from_bytes(g2bytes)
+                patch = lr.LRSplineSurface(g2bytes)
             else:
                 g2data = StringIO(g2bytes.decode())
                 with G2Object(g2data, 'r') as g:
@@ -213,7 +213,7 @@ class Field:
                 ncells = np.prod([len(k)-1 for k in patch.knots()])
                 num, denom = len(coeffs), ncells
             else:
-                ncells = len(list(patch.elements()))
+                ncells = len(patch.elements)
                 num, denom = len(coeffs), ncells
 
             if num % denom != 0:
@@ -363,7 +363,15 @@ class GeometryManager:
         return self.tesselations[knots]
 
     def findid(self, patch):
-        corners = tuple(tuple(p) for p in patch.corners())
+        if isinstance(patch, lr.LRSplineSurface):
+            corners = (
+                tuple(next(patch.basis.edge('south', 'west')).controlpoint),
+                tuple(next(patch.basis.edge('south', 'east')).controlpoint),
+                tuple(next(patch.basis.edge('north', 'west')).controlpoint),
+                tuple(next(patch.basis.edge('north', 'east')).controlpoint),
+            )
+        else:
+            corners = tuple(tuple(p) for p in patch.corners())
         # print(corners, list(self.corners))
 
         if corners not in self.corners:
@@ -389,7 +397,16 @@ class GeometryManager:
                 Log.debug('New unique patch detected, generating global ID')
 
             # FIXME: This leaves behind invalidated corner IDs, which we should probably delete.
-            self.corners[tuple(tuple(p) for p in patch.corners())] = key
+            if isinstance(patch, lr.LRSplineSurface):
+                 corners = (
+                     tuple(next(patch.basis.edge('south', 'west')).controlpoint),
+                     tuple(next(patch.basis.edge('south', 'east')).controlpoint),
+                     tuple(next(patch.basis.edge('north', 'west')).controlpoint),
+                     tuple(next(patch.basis.edge('north', 'east')).controlpoint),
+                 )
+            else:
+                corners = tuple(tuple(p) for p in patch.corners())
+            self.corners[corners] = key
             globpatchid = self.globids[(self.basis.name, patchid)]
 
             tess = self.tesselation(patch)

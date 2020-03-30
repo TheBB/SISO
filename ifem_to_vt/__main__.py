@@ -15,7 +15,7 @@ from ifem_to_vt.writer import get_writer
 )
 @click.option('--basis', '-b', multiple=True)
 @click.option('--geometry', '-g', default=None)
-@click.option('--fmt', '-f', type=click.Choice(['vtf']), required=False)
+@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk']), required=False)
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
 def convert(verbosity, basis, geometry, fmt, infile, outfile):
