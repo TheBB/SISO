@@ -40,6 +40,12 @@ def vtk_filenames(request):
     return join(TESTDATA_DIR, fmt('{}.hdf5')), join(TESTDATA_DIR, fmt('{}.vtk')), fmt('{}.vtk')
 
 
+@pytest.fixture(params=FILES)
+def vtu_filenames(request):
+    fmt = lambda x: x.format(request.param)
+    return join(TESTDATA_DIR, fmt('{}.hdf5')), join(TESTDATA_DIR, fmt('{}.vtu')), fmt('{}.vtu')
+
+
 def step_filenames(n, base):
     basename, ext = splitext(base)
     for i in range(1, n+1):
@@ -74,6 +80,18 @@ def test_vtk_integrity(vtk_filenames):
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
         with get_reader(infile) as r, get_writer('vtk', mode='ascii')(outfile) as w:
+            nsteps = r.nsteps
+            r.write(w)
+        for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
+            with open(outfn, 'r') as out, open(checkfn, 'r') as ref:
+                compare_files(out, ref)
+
+
+def test_vtu_integrity(vtu_filenames):
+    infile, checkfile, outfile = vtu_filenames
+    with tempfile.TemporaryDirectory() as tempdir:
+        outfile = join(tempdir, outfile)
+        with get_reader(infile) as r, get_writer('vtu', mode='ascii')(outfile) as w:
             nsteps = r.nsteps
             r.write(w)
         for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):

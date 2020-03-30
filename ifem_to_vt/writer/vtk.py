@@ -70,7 +70,7 @@ class AbstractVTKWriter:
         elements = np.vstack([patch.elements + off for patch, off in zip(self.patches.values(), offset)])
         elements = np.hstack([npts * np.ones((elements.shape[0],1), dtype=int), elements])
         cells = vtk.vtkCellArray()
-        cells.SetCells(len(elements), vnp.numpy_to_vtkIdTypeArray(elements))
+        cells.SetCells(len(elements), vnp.numpy_to_vtkIdTypeArray(elements.ravel(), deep=True))
         grid.SetCells(celltype, cells)
 
         pointdata = grid.GetPointData()
