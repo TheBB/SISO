@@ -610,7 +610,7 @@ class Reader:
         try:
             return next(l for l in basis.updates[::-1] if l <= level)
         except StopIteration:
-            raise ValueError('Geometry for basis {} unavailable at timestep {}'.format(basis, index))
+            raise ValueError('Geometry for basis {} unavailable at timestep {}'.format(basis, level))
 
     def npatches(self, level, basis):
         if not isinstance(basis, Basis):
