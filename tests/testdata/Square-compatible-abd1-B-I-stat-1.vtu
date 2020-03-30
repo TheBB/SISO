@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <UnstructuredGrid>
+    <Piece NumberOfPoints="25" NumberOfCells="16">
+      <PointData>
+        <DataArray type="Float64" Name="T" format="ascii" RangeMin="0" RangeMax="0.0625">
+          0 0 0 0 0 0
+          0.019775390625 0.03515625 0.019775390625 0 0 0.03515625
+          0.0625 0.03515625 0 0 0.019775390625 0.03515625
+          0.019775390625 0 0 0 0 0
+          0
+        </DataArray>
+        <DataArray type="Float64" Name="p" format="ascii" RangeMin="-0.5625" RangeMax="0.5625">
+          0 1.4860152266e-15 -5.0271458682e-16 -6.1377152125e-16 0 -6.2012500394e-16
+          0.5625 -7.2373841316e-16 -0.5625 2.7038899897e-15 -7.4600514232e-16 -4.4023426879e-16
+          2.0474020284e-16 -5.8595104077e-17 2.9360087762e-16 5.1173419376e-16 -0.5625 4.4734984749e-16
+          0.5625 -1.0629262589e-15 0 -2.4841352195e-16 9.4297209564e-16 -1.5087254121e-15
+          0
+        </DataArray>
+        <DataArray type="Float64" Name="u" NumberOfComponents="3" format="ascii" RangeMin="0" RangeMax="0.1875">
+          0 0 0 0 0 0
+          0 0 0 0 0 0
+          0 0 0 0 0 0
+          0.10546875 -0.10546875 0 8.9046974641e-18 -0.1875 0
+          -0.10546875 -0.10546875 0 0 0 0
+          0 0 0 0.1875 -2.6069038903e-17 0
+          -7.5938769447e-19 -2.3129646346e-17 0 -0.1875 3.1321396094e-18 0
+          0 0 0 0 0 0
+          0.10546875 0.10546875 0 7.7731387599e-18 0.1875 0
+          -0.10546875 0.10546875 0 0 0 0
+          0 0 0 0 0 0
+          0 0 0 0 0 0
+          0 0 0
+        </DataArray>
+        <DataArray type="Float64" Name="u_x" format="ascii" RangeMin="-0.1875" RangeMax="0.1875">
+          0 0 0 0 0 0
+          0.10546875 8.9046974641e-18 -0.10546875 0 0 0.1875
+          -7.5938769447e-19 -0.1875 0 0 0.10546875 7.7731387599e-18
+          -0.10546875 0 0 0 0 0
+          0
+        </DataArray>
+        <DataArray type="Float64" Name="u_y" format="ascii" RangeMin="-0.1875" RangeMax="0.1875">
+          0 0 0 0 0 0
+          -0.10546875 -0.1875 -0.10546875 0 0 -2.6069038903e-17
+          -2.3129646346e-17 3.1321396094e-18 0 0 0.10546875 0.1875
+          0.10546875 0 0 0 0 0
+          0
+        </DataArray>
+      </PointData>
+      <CellData>
+      </CellData>
+      <Points>
+        <DataArray type="Float64" Name="Points" NumberOfComponents="3" format="ascii" RangeMin="0" RangeMax="1.4142135624">
+          0 0 0 0 0.25 0
+          0 0.5 0 0 0.75 0
+          0 1 0 0.25 0 0
+          0.25 0.25 0 0.25 0.5 0
+          0.25 0.75 0 0.25 1 0
+          0.5 0 0 0.5 0.25 0
+          0.5 0.5 0 0.5 0.75 0
+          0.5 1 0 0.75 0 0
+          0.75 0.25 0 0.75 0.5 0
+          0.75 0.75 0 0.75 1 0
+          1 0 0 1 0.25 0
+          1 0.5 0 1 0.75 0
+          1 1 0
+        </DataArray>
+      </Points>
+      <Cells>
+        <DataArray type="Int64" Name="connectivity" format="ascii" RangeMin="0" RangeMax="24">
+          0 5 6 1 1 6
+          7 2 2 7 8 3
+          3 8 9 4 5 10
+          11 6 6 11 12 7
+          7 12 13 8 8 13
+          14 9 10 15 16 11
+          11 16 17 12 12 17
+          18 13 13 18 19 14
+          15 20 21 16 16 21
+          22 17 17 22 23 18
+          18 23 24 19
+        </DataArray>
+        <DataArray type="Int64" Name="offsets" format="ascii" RangeMin="4" RangeMax="64">
+          4 8 12 16 20 24
+          28 32 36 40 44 48
+          52 56 60 64
+        </DataArray>
+        <DataArray type="UInt8" Name="types" format="ascii" RangeMin="9" RangeMax="9">
+          9 9 9 9 9 9
+          9 9 9 9 9 9
+          9 9 9 9
+        </DataArray>
+      </Cells>
+    </Piece>
+  </UnstructuredGrid>
+</VTKFile>
