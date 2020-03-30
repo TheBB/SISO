@@ -15,10 +15,11 @@ from ifem_to_vt.writer import get_writer
 )
 @click.option('--basis', '-b', multiple=True)
 @click.option('--geometry', '-g', default=None)
-@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk']), required=False)
+@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu']), required=False)
+@click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary')
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
-def convert(verbosity, basis, geometry, fmt, infile, outfile):
+def convert(verbosity, basis, geometry, fmt, mode, infile, outfile):
     logging.basicConfig(
         format='{asctime} {levelname: <10} {message}',
         datefmt='%H:%M',
@@ -36,7 +37,7 @@ def convert(verbosity, basis, geometry, fmt, infile, outfile):
         outfile = '{}.{}'.format(base, fmt)
 
     try:
-        Writer = get_writer(fmt)
+        Writer = get_writer(fmt, mode=mode)
     except ValueError as e:
         logging.critical(e)
         sys.exit(1)
