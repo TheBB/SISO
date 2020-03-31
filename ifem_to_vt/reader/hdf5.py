@@ -140,11 +140,49 @@ class LRSurfaceTesselation:
         return 2, self._elements
 
 
+class LRVolumeTesselation:
+
+    def __init__(self, patch):
+        nodes, elements = OrderedDict(), []
+        for el in patch.elements:
+            umin, vmin, wmin = el.start()
+            umax, vmax, wmax = el.end()
+
+            bsw, bse, bnw, bne = (umin, vmin, wmin), (umax, vmin, wmin), (umin, vmax, wmin), (umax, vmax, wmin)
+            tsw, tse, tnw, tne = (umin, vmin, wmax), (umax, vmin, wmax), (umin, vmax, wmax), (umax, vmax, wmax)
+            for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
+                nodes.setdefault(pt, len(nodes))
+
+            elements.append([nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
+                             nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
+
+        self._nodes = nodes
+        self._elements = np.array(elements, dtype=int)
+
+    def __call__(self, patch, coeffs=None, cells=False):
+        if cells:
+            assert coeffs is not None
+            ncomps = len(patch.elements) // coeffs.size
+            coeffs = coeffs.reshape((-1, ncomps))
+            return coeffs
+
+        if coeffs is not None:
+            patch = patch.clone()
+            patch.controlpoints = coeffs.reshape((len(patch.basis), -1))
+
+        return np.array([patch(*node) for node in self._nodes], dtype=float)
+
+    def elements(self):
+        return 3, self._elements
+
+
 def get_tesselation(patch):
     if isinstance(patch, SplineObject):
         return TensorTesselation(patch)
     if isinstance(patch, lr.LRSplineSurface):
         return LRSurfaceTesselation(patch)
+    if isinstance(patch, lr.LRSplineVolume):
+        return LRVolumeTesselation(patch)
     assert False
 
 
@@ -397,12 +435,23 @@ class GeometryManager:
 
             # FIXME: This leaves behind invalidated corner IDs, which we should probably delete.
             if isinstance(patch, lr.LRSplineSurface):
-                 corners = (
-                     tuple(next(patch.basis.edge('south', 'west')).controlpoint),
-                     tuple(next(patch.basis.edge('south', 'east')).controlpoint),
-                     tuple(next(patch.basis.edge('north', 'west')).controlpoint),
-                     tuple(next(patch.basis.edge('north', 'east')).controlpoint),
-                 )
+                corners = (
+                    tuple(next(patch.basis.edge('south', 'west')).controlpoint),
+                    tuple(next(patch.basis.edge('south', 'east')).controlpoint),
+                    tuple(next(patch.basis.edge('north', 'west')).controlpoint),
+                    tuple(next(patch.basis.edge('north', 'east')).controlpoint),
+                )
+            elif isinstance(patch, lr.LRSplineVolume):
+                corners = (
+                    tuple(next(patch.basis.edge('bottom', 'south', 'west')).controlpoint),
+                    tuple(next(patch.basis.edge('bottom', 'south', 'east')).controlpoint),
+                    tuple(next(patch.basis.edge('bottom', 'north', 'west')).controlpoint),
+                    tuple(next(patch.basis.edge('bottom', 'north', 'east')).controlpoint),
+                    tuple(next(patch.basis.edge('top', 'south', 'west')).controlpoint),
+                    tuple(next(patch.basis.edge('top', 'south', 'east')).controlpoint),
+                    tuple(next(patch.basis.edge('top', 'north', 'west')).controlpoint),
+                    tuple(next(patch.basis.edge('top', 'north', 'east')).controlpoint),
+                )
             else:
                 corners = tuple(tuple(p) for p in patch.corners())
             self.corners[corners] = key
