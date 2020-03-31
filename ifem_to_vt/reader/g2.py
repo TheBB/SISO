@@ -36,7 +36,7 @@ class Reader:
         pass
 
     def write(self, w):
-        w.add_step()
+        w.add_step(time=0.0)
         geometry = GeometryManager(self.basis, self)
         geometry.update(w, 0)
         w.finalize_step()
