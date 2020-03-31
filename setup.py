@@ -9,7 +9,7 @@ setup(
     description='Converts IFEM result files to VT* formats.',
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
-    packages=['ifem_to_vt', 'ifem_to_vt.writer'],
+    packages=['ifem_to_vt', 'ifem_to_vt.writer', 'ifem_to_vt.reader'],
     install_requires=['click', 'numpy', 'Splipy>=1.4', 'lrsplines>=1.5', 'h5py', 'vtk'],
     extras_require={
         'VTF': ['vtfwriter'],
