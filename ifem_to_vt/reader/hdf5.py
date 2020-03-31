@@ -401,20 +401,10 @@ class GeometryManager:
         return self.tesselations[knots]
 
     def findid(self, patch):
-        if isinstance(patch, lr.LRSplineSurface):
-            corners = (
-                tuple(next(patch.basis.edge('south', 'west')).controlpoint),
-                tuple(next(patch.basis.edge('south', 'east')).controlpoint),
-                tuple(next(patch.basis.edge('north', 'west')).controlpoint),
-                tuple(next(patch.basis.edge('north', 'east')).controlpoint),
-            )
-        else:
-            corners = tuple(tuple(p) for p in patch.corners())
-
+        corners = tuple(tuple(p) for p in patch.corners())
         if corners not in self.corners:
             Log.error('Unable to find corresponding geometry patch')
             return None
-
         return self.globids[self.corners[corners]]
 
     def update(self, w, stepid):
@@ -434,26 +424,7 @@ class GeometryManager:
                 Log.debug('New unique patch detected, generating global ID')
 
             # FIXME: This leaves behind invalidated corner IDs, which we should probably delete.
-            if isinstance(patch, lr.LRSplineSurface):
-                corners = (
-                    tuple(next(patch.basis.edge('south', 'west')).controlpoint),
-                    tuple(next(patch.basis.edge('south', 'east')).controlpoint),
-                    tuple(next(patch.basis.edge('north', 'west')).controlpoint),
-                    tuple(next(patch.basis.edge('north', 'east')).controlpoint),
-                )
-            elif isinstance(patch, lr.LRSplineVolume):
-                corners = (
-                    tuple(next(patch.basis.edge('bottom', 'south', 'west')).controlpoint),
-                    tuple(next(patch.basis.edge('bottom', 'south', 'east')).controlpoint),
-                    tuple(next(patch.basis.edge('bottom', 'north', 'west')).controlpoint),
-                    tuple(next(patch.basis.edge('bottom', 'north', 'east')).controlpoint),
-                    tuple(next(patch.basis.edge('top', 'south', 'west')).controlpoint),
-                    tuple(next(patch.basis.edge('top', 'south', 'east')).controlpoint),
-                    tuple(next(patch.basis.edge('top', 'north', 'west')).controlpoint),
-                    tuple(next(patch.basis.edge('top', 'north', 'east')).controlpoint),
-                )
-            else:
-                corners = tuple(tuple(p) for p in patch.corners())
+            corners = tuple(tuple(p) for p in patch.corners())
             self.corners[corners] = key
             globpatchid = self.globids[(self.basis.name, patchid)]
 
