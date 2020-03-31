@@ -1,10 +1,21 @@
+from functools import wraps
 import click
 import logging
 from os.path import splitext, basename
 import sys
+import warnings
 
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
+
+
+def suppress_warnings(func):
+    @wraps(func)
+    def inner(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', r'Conversion of the second argument of issubdtype')
+            return func(*args, **kwargs)
+    return inner
 
 
 @click.command()
@@ -19,6 +30,7 @@ from ifem_to_vt.writer import get_writer
 @click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary')
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
+@suppress_warnings
 def convert(verbosity, basis, geometry, fmt, mode, infile, outfile):
     logging.basicConfig(
         format='{asctime} {levelname: <10} {message}',
