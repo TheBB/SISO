@@ -372,7 +372,6 @@ class GeometryManager:
             )
         else:
             corners = tuple(tuple(p) for p in patch.corners())
-        # print(corners, list(self.corners))
 
         if corners not in self.corners:
             Log.error('Unable to find corresponding geometry patch')
@@ -665,7 +664,7 @@ class EigenReader(Reader):
         self.fields['Mode Shape'] = field
 
 
-def get_reader(filename, bases=(), geometry=None):
+def get_reader(filename, bases=(), geometry=None, **kwargs):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
