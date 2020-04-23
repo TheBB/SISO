@@ -216,6 +216,8 @@ class Basis:
             g2bytes = self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes()
             if g2bytes.startswith(b'# LRSPLINE SURFACE'):
                 patch = lr.LRSplineSurface(g2bytes)
+            elif g2bytes.startswith(b'# LRSPLINE VOLUME'):
+                patch = lr.LRSplineVolume(g2bytes)
             else:
                 g2data = StringIO(g2bytes.decode())
                 with G2Object(g2data, 'r') as g:
