@@ -64,7 +64,7 @@ class Writer(vtf.File):
 
     def finalize_geometry(self, stepid):
         if self.dirty_geometry:
-            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=stepid)
+            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=stepid+1)
         self.dirty_geometry = False
 
     def update_field(self, results, name, stepid, patchid, kind='scalar', cells=False):
