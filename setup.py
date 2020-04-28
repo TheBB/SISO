@@ -3,10 +3,15 @@
 from setuptools import setup
 from distutils.extension import Extension
 
+with open(Path(__file__).parent / 'README.rst') as f:
+    desc = f.read()
+
 setup(
     name='IFEM-to-VT',
     version='1.0.0',
     description='Converts IFEM result files to VT* formats.',
+    long_description_content_type='text/x-rst',
+    long_description=desc,
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
     packages=['ifem_to_vt', 'ifem_to_vt.writer', 'ifem_to_vt.reader'],
