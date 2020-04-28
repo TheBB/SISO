@@ -82,4 +82,4 @@ class Writer(vtf.File):
             }[kind]
             self.field_blocks[name] = {'cons': cons, 'steps': {}}
         steps = self.field_blocks[name]['steps']
-        steps.setdefault(stepid, []).append(rblock)
+        steps.setdefault(stepid+1, []).append(rblock)
