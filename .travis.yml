@@ -11,7 +11,6 @@ env:
 
 os:
   - linux
-  - osx
 
 stages:
   - test
@@ -41,16 +40,6 @@ jobs:
     - stage: deploy
       name: Build and deploy Linux wheels
       services: docker
-      script: python -m cibuildwheel --output-dir wheelhouse
-      after_success: python -m twine upload --skip-existing wheelhouse/*.whl
-    - stage: deploy
-      name: Build and deploy OSX wheels
-      os: osx
-      script: python -m cibuildwheel --output-dir wheelhouse
-      after_success: python -m twine upload --skip-existing wheelhouse/*.whl
-    - stage: deploy
-      name: Build and deploy Windows wheels
-      os: windows
       script: python -m cibuildwheel --output-dir wheelhouse
       after_success: python -m twine upload --skip-existing wheelhouse/*.whl
 
