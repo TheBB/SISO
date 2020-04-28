@@ -3,6 +3,7 @@ import pytest
 import tempfile
 import re
 import numpy as np
+import xml.etree.ElementTree as ElementTree
 
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
@@ -14,7 +15,7 @@ except ImportError:
     has_vtf = False
 
 
-NUM = re.compile(r'-?\d+[ +\-e.\d]*\n')
+NUM = re.compile(r'-?\d+[ +\-e.\d]*\n?$')
 TESTDATA_DIR = join(dirname(__file__), 'testdata')
 FILES = [
     'Annulus',
@@ -52,6 +53,31 @@ def step_filenames(n, base):
         yield '{}-{}{}'.format(basename, i, ext)
 
 
+def compare_xml_elements(out, ref):
+    assert out.tag == ref.tag
+    assert len(out) >= len(ref)
+    if out.tag == 'DataArray':
+        outd = list(map(float, out.text.split()))
+        refd = list(map(float, ref.text.split()))
+        np.testing.assert_allclose(outd, refd, atol=1e-10)
+    assert set(out.attrib) == set(ref.attrib)
+    for key in out.attrib:
+        if NUM.match(out.attrib[key]):
+            outv = list(map(float, out.attrib[key].split()))
+            refv = list(map(float, ref.attrib[key].split()))
+            np.testing.assert_allclose(outv, refv, atol=1e-10)
+        else:
+            assert out.attrib[key] == ref.attrib[key]
+    for outc, refc in zip(out, ref):
+        compare_xml_elements(outc, refc)
+
+
+def compare_xml_files(out, ref):
+    out = ElementTree.fromstring(out.read())
+    ref = ElementTree.fromstring(ref.read())
+    compare_xml_elements(out, ref)
+
+
 def compare_files(out, ref):
     for outline, refline in zip(out, ref):
         if 'EXPORT_DATE' in outline:
@@ -59,7 +85,7 @@ def compare_files(out, ref):
         if NUM.match(refline):
             out = list(map(float, outline.split()))
             ref = list(map(float, refline.split()))
-            np.testing.assert_array_almost_equal(out, ref)
+            np.testing.assert_allclose(out, ref, atol=1e-10)
         else:
             assert outline == refline
 
@@ -96,4 +122,4 @@ def test_vtu_integrity(vtu_filenames):
             r.write(w)
         for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
             with open(outfn, 'r') as out, open(checkfn, 'r') as ref:
-                compare_files(out, ref)
+                compare_xml_files(out, ref)
