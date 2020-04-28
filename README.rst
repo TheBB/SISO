@@ -2,6 +2,13 @@
 IFEM-to-VT
 ==========
 
+.. image:: https://badge.fury.io/py/IFEM-to-VT.svg
+   :target: https://badge.fury.io/py/IFEM-to-VT
+
+.. image:: https://travis-ci.org/TheBB/IFEM-to-VT.svg?branch=master
+   :target: https://travis-ci.org/TheBB/IFEM-to-VT
+
+
 IFEM-to-VT is a tool for converting IFEM_ simulation results to other
 formats more suitable for visualization:
 
