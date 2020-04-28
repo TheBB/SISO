@@ -57,7 +57,7 @@ class Writer(vtf.File):
         with self.ElementBlock() as eblock:
             eblock.AddElements(elements.flat, dim)
             eblock.SetPartName('Patch {}'.format(patchid+1))
-            eblock.BindNodeBlock(nblock)
+            eblock.BindNodeBlock(nblock, patchid+1)
 
         self.geometry_blocks[patchid] = (nblock, eblock)
         self.dirty_geometry = True
