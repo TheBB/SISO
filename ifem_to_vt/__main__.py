@@ -43,7 +43,7 @@ def convert(verbosity, basis, geometry, fmt, mode, infile, outfile):
         _, fmt = splitext(outfile)
         fmt = fmt[1:].lower()
     elif not outfile:
-        fmt = fmt or 'vtf'
+        fmt = fmt or 'vtu'
         filename = basename(infile)
         base, _ = splitext(filename)
         outfile = '{}.{}'.format(base, fmt)
