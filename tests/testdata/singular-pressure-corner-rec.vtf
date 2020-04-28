@@ -4,7 +4,7 @@
 VTF Writer Version info:
  APP_INFO: GLview Express Writer: 1.1-12
  GLVIEW_API_VER: 2.1-22
- EXPORT_DATE: 2018-07-27 10:43:32
+ EXPORT_DATE: 2020-04-28 14:16:33
 
 *NODES 1
 0 0 0
@@ -11531,7 +11531,7 @@ VTF Writer Version info:
 %NAME "Patch 1"
 %NO_ID
 %MAP_NODE_INDICES
-%PART_ID 42
+%PART_ID 1
 %QUADS
 1 2 4 3 
 5 6 8 7 
@@ -23957,7 +23957,7 @@ VTF Writer Version info:
 %NAME "Patch 1"
 %NO_ID
 %MAP_NODE_INDICES
-%PART_ID 83
+%PART_ID 1
 %QUADS
 1 2 4 3 
 5 6 8 7 
@@ -37187,366 +37187,366 @@ VTF Writer Version info:
 
 *GLVIEWSCALAR 124
 %NAME "Continuous global L2-projection p-rec"
-%STEP 0
-3
 %STEP 1
-44
+3
 %STEP 2
+44
+%STEP 3
 85
 
 *GLVIEWSCALAR 125
 %NAME "Continuous global L2-projection u_x,x"
-%STEP 0
-4
 %STEP 1
-45
+4
 %STEP 2
+45
+%STEP 3
 86
 
 *GLVIEWSCALAR 126
 %NAME "Continuous global L2-projection u_x,y"
-%STEP 0
-5
 %STEP 1
-46
+5
 %STEP 2
+46
+%STEP 3
 87
 
 *GLVIEWSCALAR 127
 %NAME "Continuous global L2-projection u_y,x"
-%STEP 0
-6
 %STEP 1
-47
+6
 %STEP 2
+47
+%STEP 3
 88
 
 *GLVIEWSCALAR 128
 %NAME "Continuous global L2-projection u_y,y"
-%STEP 0
-7
 %STEP 1
-48
+7
 %STEP 2
+48
+%STEP 3
 89
 
 *GLVIEWSCALAR 129
 %NAME "p"
-%STEP 0
-8
 %STEP 1
-49
+8
 %STEP 2
+49
+%STEP 3
 90
 
 *GLVIEWSCALAR 130
 %NAME "p-rec"
-%STEP 0
-9
 %STEP 1
-50
+9
 %STEP 2
+50
+%STEP 3
 91
 
 *GLVIEWVECTOR 131
 %NAME "u"
-%STEP 0
-10
 %STEP 1
-51
+10
 %STEP 2
+51
+%STEP 3
 92
 
 *GLVIEWSCALAR 132
 %NAME "u_x"
-%STEP 0
-11
 %STEP 1
-52
+11
 %STEP 2
+52
+%STEP 3
 93
 
 *GLVIEWSCALAR 133
 %NAME "u_y"
-%STEP 0
-12
 %STEP 1
-53
+12
 %STEP 2
+53
+%STEP 3
 94
 
 *GLVIEWSCALAR 134
 %NAME "u_x,x"
-%STEP 0
-13
 %STEP 1
-54
+13
 %STEP 2
+54
+%STEP 3
 95
 
 *GLVIEWSCALAR 135
 %NAME "u_x,y"
-%STEP 0
-14
 %STEP 1
-55
+14
 %STEP 2
+55
+%STEP 3
 96
 
 *GLVIEWSCALAR 136
 %NAME "u_y,x"
-%STEP 0
-15
 %STEP 1
-56
+15
 %STEP 2
+56
+%STEP 3
 97
 
 *GLVIEWSCALAR 137
 %NAME "u_y,y"
-%STEP 0
-16
 %STEP 1
-57
+16
 %STEP 2
+57
+%STEP 3
 98
 
 *GLVIEWSCALAR 138
 %NAME "Continuous global L2-projection (u^*,p^*)-(u,p)|"
-%STEP 0
-17
 %STEP 1
-58
+17
 %STEP 2
+58
+%STEP 3
 99
 
 *GLVIEWSCALAR 139
 %NAME "Continuous global L2-projection eta^rec"
-%STEP 0
-18
 %STEP 1
-59
+18
 %STEP 2
+59
+%STEP 3
 100
 
 *GLVIEWSCALAR 140
 %NAME "Continuous global L2-projection |(u^*,p^*)-(u^h,p^h)|"
-%STEP 0
-19
 %STEP 1
-60
+19
 %STEP 2
+60
+%STEP 3
 101
 
 *GLVIEWSCALAR 141
 %NAME "Continuous global L2-projection |div u^*|_L2"
-%STEP 0
-20
 %STEP 1
-61
+20
 %STEP 2
+61
+%STEP 3
 102
 
 *GLVIEWSCALAR 142
 %NAME "Continuous global L2-projection |p^*-p^h|_L2"
-%STEP 0
-21
 %STEP 1
-62
+21
 %STEP 2
+62
+%STEP 3
 103
 
 *GLVIEWSCALAR 143
 %NAME "Continuous global L2-projection |p^*-p|_L2"
-%STEP 0
-22
 %STEP 1
-63
+22
 %STEP 2
+63
+%STEP 3
 104
 
 *GLVIEWSCALAR 144
 %NAME "Continuous global L2-projection |u^*-u^h|_H1"
-%STEP 0
-23
 %STEP 1
-64
+23
 %STEP 2
+64
+%STEP 3
 105
 
 *GLVIEWSCALAR 145
 %NAME "Continuous global L2-projection |u^*-u|_H1"
-%STEP 0
-24
 %STEP 1
-65
+24
 %STEP 2
+65
+%STEP 3
 106
 
 *GLVIEWSCALAR 146
 %NAME "area"
-%STEP 0
-25
 %STEP 1
-66
+25
 %STEP 2
+66
+%STEP 3
 107
 
 *GLVIEWSCALAR 147
 %NAME "int p"
-%STEP 0
-26
 %STEP 1
-67
+26
 %STEP 2
+67
+%STEP 3
 108
 
 *GLVIEWSCALAR 148
 %NAME "|div u^h|_L2"
-%STEP 0
-27
 %STEP 1
-68
+27
 %STEP 2
+68
+%STEP 3
 109
 
 *GLVIEWSCALAR 149
 %NAME "|div u|_L2|"
-%STEP 0
-28
 %STEP 1
-69
+28
 %STEP 2
+69
+%STEP 3
 110
 
 *GLVIEWSCALAR 150
 %NAME "|e_u|_H1 + |e_p|_L2"
-%STEP 0
-29
 %STEP 1
-70
+29
 %STEP 2
+70
+%STEP 3
 111
 
 *GLVIEWSCALAR 151
 %NAME "|e|_H1, e=p-p^h"
-%STEP 0
-30
 %STEP 1
-71
+30
 %STEP 2
+71
+%STEP 3
 112
 
 *GLVIEWSCALAR 152
 %NAME "|e|_H1, e=u-u^h"
-%STEP 0
-31
 %STEP 1
-72
+31
 %STEP 2
+72
+%STEP 3
 113
 
 *GLVIEWSCALAR 153
 %NAME "|e|_L2, e=p-p^h"
-%STEP 0
-32
 %STEP 1
-73
+32
 %STEP 2
+73
+%STEP 3
 114
 
 *GLVIEWSCALAR 154
 %NAME "|e|_L2, e=u-u^h"
-%STEP 0
-33
 %STEP 1
-74
+33
 %STEP 2
+74
+%STEP 3
 115
 
 *GLVIEWSCALAR 155
 %NAME "|p^h|_H1"
-%STEP 0
-34
 %STEP 1
-75
+34
 %STEP 2
+75
+%STEP 3
 116
 
 *GLVIEWSCALAR 156
 %NAME "|p^h|_L2"
-%STEP 0
-35
 %STEP 1
-76
+35
 %STEP 2
+76
+%STEP 3
 117
 
 *GLVIEWSCALAR 157
 %NAME "|p|_H1"
-%STEP 0
-36
 %STEP 1
-77
+36
 %STEP 2
+77
+%STEP 3
 118
 
 *GLVIEWSCALAR 158
 %NAME "|p|_L2"
-%STEP 0
-37
 %STEP 1
-78
+37
 %STEP 2
+78
+%STEP 3
 119
 
 *GLVIEWSCALAR 159
 %NAME "|u^h|_H1"
-%STEP 0
-38
 %STEP 1
-79
+38
 %STEP 2
+79
+%STEP 3
 120
 
 *GLVIEWSCALAR 160
 %NAME "|u^h|_L2"
-%STEP 0
-39
 %STEP 1
-80
+39
 %STEP 2
+80
+%STEP 3
 121
 
 *GLVIEWSCALAR 161
 %NAME "|u|_H1"
-%STEP 0
-40
 %STEP 1
-81
+40
 %STEP 2
+81
+%STEP 3
 122
 
 *GLVIEWSCALAR 162
 %NAME "|u|_L2|"
-%STEP 0
-41
 %STEP 1
-82
+41
 %STEP 2
+82
+%STEP 3
 123
 
 *GLVIEWGEOMETRY 1
-%STEP 0
-%GEOMETRY_ID 0
-%ELEMENTS
-2
 %STEP 1
 %GEOMETRY_ID 1
 %ELEMENTS
-43
+2
 %STEP 2
 %GEOMETRY_ID 2
+%ELEMENTS
+43
+%STEP 3
+%GEOMETRY_ID 3
 %ELEMENTS
 84
 
