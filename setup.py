@@ -9,7 +9,7 @@ with open(Path(__file__).parent / 'README.rst') as f:
 
 setup(
     name='IFEM-to-VT',
-    version='1.0.1',
+    version='1.0.2',
     description='Converts IFEM result files to VT* formats.',
     long_description_content_type='text/x-rst',
     long_description=desc,
