@@ -5,7 +5,7 @@ from distutils.extension import Extension
 
 setup(
     name='IFEM-to-VT',
-    version='0.0.1',
+    version='1.0.0',
     description='Converts IFEM result files to VT* formats.',
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
