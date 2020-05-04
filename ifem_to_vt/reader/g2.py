@@ -22,9 +22,10 @@ class SimpleBasis:
 
 class Reader:
 
-    def __init__(self, filename, **kwargs):
+    def __init__(self, filename, nvis=1, **kwargs):
         self.basis = None
         self.filename = filename
+        self.nvis = nvis
 
     def __enter__(self):
         with G2(self.filename) as g2:
@@ -37,6 +38,6 @@ class Reader:
 
     def write(self, w):
         w.add_step(time=0.0)
-        geometry = GeometryManager(self.basis, self)
+        geometry = GeometryManager(self.basis, self.nvis)
         geometry.update(w, 0)
         w.finalize_step()

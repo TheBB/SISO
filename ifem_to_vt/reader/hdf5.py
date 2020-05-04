@@ -56,10 +56,50 @@ class Log:
         cls._indent -= 4
 
 
+def subdivide_linear(knots, nvis):
+    out = []
+    for left, right in zip(knots[:-1], knots[1:]):
+        out.extend(np.linspace(left, right, num=nvis, endpoint=False))
+    out.append(knots[-1])
+    return out
+
+
+def subdivide_face(el, nodes, elements, nvis):
+    left, bottom = el.start()
+    right, top = el.end()
+    xs = subdivide_linear((left, right), nvis)
+    ys = subdivide_linear((bottom, top), nvis)
+
+    for (l, r) in zip(xs[:-1], xs[1:]):
+        for (b, t) in zip(ys[:-1], ys[1:]):
+            sw, se, nw, ne = (l, b), (r, b), (l, t), (r, t)
+            for pt in (sw, se, nw, ne):
+                nodes.setdefault(pt, len(nodes))
+            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
+
+
+def subdivide_volume(el, nodes, elements, nvis):
+    umin, vmin, wmin = el.start()
+    umax, vmax, wmax = el.end()
+    us = subdivide_linear((umin, umax), nvis)
+    vs = subdivide_linear((vmin, vmax), nvis)
+    ws = subdivide_linear((wmin, wmax), nvis)
+
+    for (ul, ur) in zip(us[:-1], us[1:]):
+        for (vl, vr) in zip(vs[:-1], vs[1:]):
+            for (wl, wr) in zip(ws[:-1], ws[1:]):
+                bsw, bse, bnw, bne = (ul, vl, wl), (ur, vl, wl), (ul, vr, wl), (ur, vr, wl)
+                tsw, tse, tnw, tne = (ul, vl, wr), (ur, vl, wr), (ul, vr, wr), (ur, vr, wr)
+                for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
+                    nodes.setdefault(pt, len(nodes))
+                elements.append([nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
+                                 nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
+
+
 class TensorTesselation:
 
-    def __init__(self, patch):
-        self.knots = patch.knots()
+    def __init__(self, patch, nvis=1):
+        self.knots = tuple(subdivide_linear(knots, nvis) for knots in patch.knots())
 
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
@@ -108,26 +148,21 @@ class TensorTesselation:
 
 class LRSurfaceTesselation:
 
-    def __init__(self, patch):
+    def __init__(self, patch, nvis=1):
         nodes, elements = OrderedDict(), []
         for el in patch.elements:
-            left, bottom = el.start()
-            right, top = el.end()
-
-            sw, se, nw, ne = (left, bottom), (right, bottom), (left, top), (right, top)
-            for pt in (sw, se, nw, ne):
-                nodes.setdefault(pt, len(nodes))
-
-            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
+            subdivide_face(el, nodes, elements, nvis)
 
         self._nodes = nodes
         self._elements = np.array(elements, dtype=int)
+        self.nvis = nvis
 
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
             assert coeffs is not None
             ncomps = len(patch.elements) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
+            coeffs = np.repeat(coeffs, self.nvis**2, axis=0)
             return coeffs
 
         if coeffs is not None:
@@ -142,28 +177,21 @@ class LRSurfaceTesselation:
 
 class LRVolumeTesselation:
 
-    def __init__(self, patch):
+    def __init__(self, patch, nvis=1):
         nodes, elements = OrderedDict(), []
         for el in patch.elements:
-            umin, vmin, wmin = el.start()
-            umax, vmax, wmax = el.end()
-
-            bsw, bse, bnw, bne = (umin, vmin, wmin), (umax, vmin, wmin), (umin, vmax, wmin), (umax, vmax, wmin)
-            tsw, tse, tnw, tne = (umin, vmin, wmax), (umax, vmin, wmax), (umin, vmax, wmax), (umax, vmax, wmax)
-            for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
-                nodes.setdefault(pt, len(nodes))
-
-            elements.append([nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
-                             nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
+            subdivide_volume(el, nodes, elements, nvis)
 
         self._nodes = nodes
         self._elements = np.array(elements, dtype=int)
+        self.nvis = nvis
 
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
             assert coeffs is not None
             ncomps = len(patch.elements) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
+            coeffs = np.repeat(coeffs, self.nvis**3, axis=0)
             return coeffs
 
         if coeffs is not None:
@@ -176,13 +204,13 @@ class LRVolumeTesselation:
         return 3, self._elements
 
 
-def get_tesselation(patch):
+def get_tesselation(patch, nvis=1):
     if isinstance(patch, SplineObject):
-        return TensorTesselation(patch)
+        return TensorTesselation(patch, nvis=nvis)
     if isinstance(patch, lr.LRSplineSurface):
-        return LRSurfaceTesselation(patch)
+        return LRSurfaceTesselation(patch, nvis=nvis)
     if isinstance(patch, lr.LRSplineVolume):
-        return LRVolumeTesselation(patch)
+        return LRVolumeTesselation(patch, nvis=nvis)
     assert False
 
 
@@ -379,9 +407,9 @@ class SplitField(Field):
 
 class GeometryManager:
 
-    def __init__(self, basis, reader):
+    def __init__(self, basis, nvis):
         self.basis = basis
-        self.reader = reader
+        self.nvis = nvis
 
         # Map knot vector -> evaluation points
         self.tesselations = {}
@@ -399,7 +427,7 @@ class GeometryManager:
 
         if knots not in self.tesselations:
             Log.debug('New unique knot vector detected, generating tesselation')
-            self.tesselations[knots] = get_tesselation(patch)
+            self.tesselations[knots] = get_tesselation(patch, nvis=self.nvis)
         return self.tesselations[knots]
 
     def findid(self, patch):
@@ -447,10 +475,11 @@ class GeometryManager:
 
 class Reader:
 
-    def __init__(self, h5, bases=(), geometry=None):
+    def __init__(self, h5, bases=(), geometry=None, nvis=1):
         self.h5 = h5
         self.only_bases = bases
         self.geometry_basis = geometry
+        self.nvis = nvis
 
     def __enter__(self):
         self.bases = OrderedDict()
@@ -465,9 +494,9 @@ class Reader:
         self.sort_fields()
 
         if self.geometry_basis:
-            self.geometry = GeometryManager(self.bases[self.geometry_basis], self)
+            self.geometry = GeometryManager(self.bases[self.geometry_basis], self.nvis)
         else:
-            self.geometry = GeometryManager(next(iter(self.bases.values())), self)
+            self.geometry = GeometryManager(next(iter(self.bases.values())), self.nvis)
 
         return self
 
@@ -686,10 +715,10 @@ class EigenReader(Reader):
         self.fields['Mode Shape'] = field
 
 
-def get_reader(filename, bases=(), geometry=None, **kwargs):
+def get_reader(filename, bases=(), geometry=None, nvis=1, **kwargs):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
         Log.info('Detected eigenmodes')
-        return EigenReader(h5, bases=bases, geometry=geometry)
-    return Reader(h5, bases=bases, geometry=geometry)
+        return EigenReader(h5, bases=bases, geometry=geometry, nvis=nvis)
+    return Reader(h5, bases=bases, geometry=geometry, nvis=nvis)
