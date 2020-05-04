@@ -83,6 +83,14 @@ geometry.  To override this, use the ``-g`` or ``--geometry`` option::
   ifem-to-vt --geometry NavierStokes-1 INFILE.hdf5
 
 
+To increase resolution beyond linear interpolation between element
+vertices, use the ``-n`` or ``--nvis`` option.  A value of e.g. 3
+indicates that each element should be subdivided into three per axis,
+creating a 9-fold increase in data amount for 2D results::
+
+  ifem-to-vt --nvis 3 INFILE.hdf5
+
+
 Both VTF, VTK and VTU formats support ASCII and binary modes.  By
 default, IFEM-to-VT writes binary files.  To override this, use the
 ``-m`` or ``--mode`` option, with value ``ascii``, ``binary`` or

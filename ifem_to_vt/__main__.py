@@ -26,12 +26,13 @@ def suppress_warnings(func):
 )
 @click.option('--basis', '-b', multiple=True)
 @click.option('--geometry', '-g', default=None)
+@click.option('--nvis', '-n', default=1)
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu']), required=False)
 @click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary')
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
 @suppress_warnings
-def convert(verbosity, basis, geometry, fmt, mode, infile, outfile):
+def convert(verbosity, basis, geometry, nvis, fmt, mode, infile, outfile):
     logging.basicConfig(
         format='{asctime} {levelname: <10} {message}',
         datefmt='%H:%M',
@@ -54,7 +55,12 @@ def convert(verbosity, basis, geometry, fmt, mode, infile, outfile):
         logging.critical(e)
         sys.exit(1)
 
-    with get_reader(infile, bases=basis, geometry=geometry) as r, Writer(outfile) as w:
+    reader_kwargs = {
+        'bases': basis,
+        'geometry': geometry,
+        'nvis': nvis,
+    }
+    with get_reader(infile, **reader_kwargs) as r, Writer(outfile) as w:
         r.write(w)
 
 
