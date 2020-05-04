@@ -23,18 +23,28 @@ Installation
 
 It is recommended to install with PIP::
 
+  pip install --user IFEM-to-VT
+
+
+To install from source::
+
   pip install --user .
 
 
 IFEM-to-VT requires Python 3.  It is possible that, on your system,
 *pip* refers to Python 2.  In this case, do::
 
+  pip3 install --user IFEM-to-VT
+
+
+or::
+
   pip3 install --user .
 
 
 IFEM-to-VT requires the numpy_, H5Py_, VTK_ and LRSplines_ libraries, all
 of which contain compiled components.  In ideal circumstances, they
-should be installed automatically from PyPi with the above command,
+should be installed automatically from PyPi with the above commands,
 but circumstances are not always ideal.  For example, VTK is, as of
 the time of writing, not available for Python 3.8 on PyPi.  If
 dependencies fail to install, please consult the relevant
