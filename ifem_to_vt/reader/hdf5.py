@@ -477,7 +477,7 @@ class Reader:
 
     def __init__(self, h5, bases=(), geometry=None, nvis=1):
         self.h5 = h5
-        self.only_bases = set(bases)
+        self.only_bases = bases
         self.geometry_basis = geometry
         self.nvis = nvis
 
@@ -547,11 +547,11 @@ class Reader:
 
         # Delete the bases we don't need
         if self.only_bases:
-            self.only_bases = set(self.bases) & self.only_bases
+            self.only_bases = tuple(set(self.bases) & set(self.only_bases))
             keep = self.only_bases + ((self.geometry_basis,) if self.geometry_basis else ())
             self.bases = OrderedDict((b,v) for b,v in self.bases.items() if b in keep)
         else:
-            self.only_bases = set(self.bases)
+            self.only_bases = self.bases
 
         for basis in self.bases.values():
             Log.debug('Basis {} updates at steps {} ({} patches)'.format(
