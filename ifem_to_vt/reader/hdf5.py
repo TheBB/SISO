@@ -477,7 +477,7 @@ class Reader:
 
     def __init__(self, h5, bases=(), geometry=None, nvis=1):
         self.h5 = h5
-        self.only_bases = bases
+        self.only_bases = set(bases)
         self.geometry_basis = geometry
         self.nvis = nvis
 
