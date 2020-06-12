@@ -475,11 +475,12 @@ class GeometryManager:
 
 class Reader:
 
-    def __init__(self, h5, bases=(), geometry=None, nvis=1):
+    def __init__(self, h5, bases=(), geometry=None, nvis=1, last=False, **kwargs):
         self.h5 = h5
         self.only_bases = bases
         self.geometry_basis = geometry
         self.nvis = nvis
+        self.last = last
 
     def __enter__(self):
         self.bases = OrderedDict()
@@ -513,8 +514,13 @@ class Reader:
             yield stepid, {'time': float(stepid)}, self.h5[str(stepid)]
 
     def outputsteps(self):
-        for stepid, time, _ in self.steps():
+        if self.last:
+            for stepid, time, _ in self.steps():
+                pass
             yield stepid, time
+        else:
+            for stepid, time, _ in self.steps():
+                yield stepid, time
 
     def allowed_bases(self, group, items=False):
         if not self.only_bases:
@@ -715,10 +721,10 @@ class EigenReader(Reader):
         self.fields['Mode Shape'] = field
 
 
-def get_reader(filename, bases=(), geometry=None, nvis=1, **kwargs):
+def get_reader(filename, **kwargs):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
         Log.info('Detected eigenmodes')
-        return EigenReader(h5, bases=bases, geometry=geometry, nvis=nvis)
-    return Reader(h5, bases=bases, geometry=geometry, nvis=nvis)
+        return EigenReader(h5, **kwargs)
+    return Reader(h5, **kwargs)

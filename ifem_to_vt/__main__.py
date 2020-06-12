@@ -29,10 +29,11 @@ def suppress_warnings(func):
 @click.option('--nvis', '-n', default=1)
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu']), required=False)
 @click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary')
+@click.option('--last', is_flag=True)
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
 @suppress_warnings
-def convert(verbosity, basis, geometry, nvis, fmt, mode, infile, outfile):
+def convert(verbosity, basis, geometry, nvis, fmt, mode, last, infile, outfile):
     logging.basicConfig(
         format='{asctime} {levelname: <10} {message}',
         datefmt='%H:%M',
@@ -50,7 +51,7 @@ def convert(verbosity, basis, geometry, nvis, fmt, mode, infile, outfile):
         outfile = '{}.{}'.format(base, fmt)
 
     try:
-        Writer = get_writer(fmt, mode=mode)
+        Writer = get_writer(fmt)
     except ValueError as e:
         logging.critical(e)
         sys.exit(1)
@@ -59,8 +60,15 @@ def convert(verbosity, basis, geometry, nvis, fmt, mode, infile, outfile):
         'bases': basis,
         'geometry': geometry,
         'nvis': nvis,
+        'last': last,
     }
-    with get_reader(infile, **reader_kwargs) as r, Writer(outfile) as w:
+
+    writer_kwargs = {
+        'last': last,
+        'mode': mode,
+    }
+
+    with get_reader(infile, **reader_kwargs) as r, Writer(outfile, **writer_kwargs) as w:
         r.write(w)
 
 
