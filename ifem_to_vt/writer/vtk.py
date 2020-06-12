@@ -11,9 +11,10 @@ Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
 
 class AbstractVTKWriter:
 
-    def __init__(self, filename, mode='binary'):
+    def __init__(self, filename, mode='binary', last=False, **kwargs):
         self.mode = mode
         self.filename = filename
+        self.last = last
 
         self.validate_mode()
 
@@ -85,8 +86,11 @@ class AbstractVTKWriter:
             else:
                 pointdata.AddArray(array)
 
-        fn, ext = splitext(self.filename)
-        filename = '{}-{}{}'.format(fn, self.stepid, ext)
+        if self.last:
+            filename = self.filename
+        else:
+            fn, ext = splitext(self.filename)
+            filename = '{}-{}{}'.format(fn, self.stepid, ext)
         writer = self.writer()
         writer.SetFileName(filename)
         writer.SetInputData(grid)
