@@ -410,6 +410,7 @@ class GeometryManager:
     def __init__(self, basis, nvis):
         self.basis = basis
         self.nvis = nvis
+        self.has_updated = False
 
         # Map knot vector -> evaluation points
         self.tesselations = {}
@@ -438,8 +439,9 @@ class GeometryManager:
         return self.globids[self.corners[corners]]
 
     def update(self, w, stepid):
-        if not self.basis.update_at(stepid):
+        if self.has_updated and not self.basis.update_at(stepid):
             return
+        self.has_updated = True
 
         Log.info('Updating geometry')
 
