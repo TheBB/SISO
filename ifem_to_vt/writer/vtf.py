@@ -11,6 +11,7 @@ class Writer(vtf.File):
         super(Writer, self).__init__(filename, 'w' if mode == 'ascii' else 'wb')
         self.steps = []
         self.geometry_blocks = []
+        self.internal_stepid = dict()
 
         self.mode_data = []
         self.field_blocks = OrderedDict()
@@ -41,6 +42,9 @@ class Writer(vtf.File):
                 desc = {'value': 'Eigenvalue', 'frequency': 'Frequency', 'time': 'Time'}[key]
                 func(stepid+1, '{} {:.2f}'.format(desc, value), value)
 
+    def get_stepid(self, stepid):
+        return self.internal_stepid.setdefault(stepid, len(self.internal_stepid) + 1)
+
     def add_step(self, **data):
         self.steps.append(data)
 
@@ -63,11 +67,13 @@ class Writer(vtf.File):
         self.dirty_geometry = True
 
     def finalize_geometry(self, stepid):
+        stepid = self.get_stepid(stepid)
         if self.dirty_geometry:
-            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=stepid+1)
+            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=stepid)
         self.dirty_geometry = False
 
     def update_field(self, results, name, stepid, patchid, kind='scalar', cells=False):
+        stepid = self.get_stepid(stepid)
         nblock, eblock = self.geometry_blocks[patchid]
         vector = kind in ('vector', 'displacement')
         with self.ResultBlock(cells=cells, vector=vector) as rblock:
@@ -82,4 +88,4 @@ class Writer(vtf.File):
             }[kind]
             self.field_blocks[name] = {'cons': cons, 'steps': {}}
         steps = self.field_blocks[name]['steps']
-        steps.setdefault(stepid+1, []).append(rblock)
+        steps.setdefault(stepid, []).append(rblock)
