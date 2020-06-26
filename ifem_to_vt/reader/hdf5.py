@@ -512,8 +512,11 @@ class Reader:
 
     def steps(self):
         for stepid in range(self.nsteps):
-            # FIXME: Grab actual time here as second element
-            yield stepid, {'time': float(stepid)}, self.h5[str(stepid)]
+            try:
+                time = self.h5[str(stepid)]['timeinfo']['level'][0]
+            except KeyError:
+                time = float(stepid)
+            yield stepid, {'time': time}, self.h5[str(stepid)]
 
     def outputsteps(self):
         if self.last:

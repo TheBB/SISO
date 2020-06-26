@@ -40,7 +40,7 @@ class Writer(vtf.File):
                 key, value = next(iter(data.items()))
                 func = states.SetStepData if key == 'time' else states.SetModeData
                 desc = {'value': 'Eigenvalue', 'frequency': 'Frequency', 'time': 'Time'}[key]
-                func(stepid+1, '{} {:.2f}'.format(desc, value), value)
+                func(stepid+1, '{} {:.4f}'.format(desc, value), value)
 
     def get_stepid(self, stepid):
         return self.internal_stepid.setdefault(stepid, len(self.internal_stepid) + 1)
