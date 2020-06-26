@@ -27,7 +27,7 @@ def suppress_warnings(func):
 @click.option('--basis', '-b', multiple=True, help='Include fields in this basis.')
 @click.option('--geometry', '-g', default=None, help='Use this basis to provide geometry.')
 @click.option('--nvis', '-n', default=1, help='Extra sampling points per element.')
-@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu']), required=False, help='Output format.')
+@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd']), required=False, help='Output format.')
 @click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary', help='Output mode.')
 @click.option('--last', is_flag=True, help='Read only the last step.')
 @click.argument('infile', type=str, required=True)

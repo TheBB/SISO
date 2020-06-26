@@ -27,7 +27,16 @@ class AbstractVTKWriter:
     def __exit__(self, type_, value, backtrace):
         pass
 
+    def make_filename(self):
+        if self.last:
+            return self.filename
+        fn, ext = splitext(self.filename)
+        return '{}-{}{}'.format(fn, self.stepid, ext)
+
     def writer(self):
+        raise NotImplementedError
+
+    def validate_mode(self):
         raise NotImplementedError
 
     def add_step(self, **data):
@@ -86,11 +95,7 @@ class AbstractVTKWriter:
             else:
                 pointdata.AddArray(array)
 
-        if self.last:
-            filename = self.filename
-        else:
-            fn, ext = splitext(self.filename)
-            filename = '{}-{}{}'.format(fn, self.stepid, ext)
+        filename = self.make_filename()
         writer = self.writer()
         writer.SetFileName(filename)
         writer.SetInputData(grid)
