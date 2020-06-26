@@ -12,10 +12,10 @@ IFEM-to-VT
 IFEM-to-VT is a tool for converting IFEM_ simulation results to other
 formats more suitable for visualization:
 
-- VTU/VTK: for use with Paraview_
+- PVD/VTU/VTK: for use with Paraview_
 - VTF: for use with GLView_
 
-So named because all supported formats to date start with "VT".
+So named because all initially supported formats started with "VT".
 
 
 Installation
