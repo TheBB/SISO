@@ -30,10 +30,11 @@ def suppress_warnings(func):
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd']), required=False, help='Output format.')
 @click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary', help='Output mode.')
 @click.option('--last', is_flag=True, help='Read only the last step.')
+@click.option('--endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
 @suppress_warnings
-def convert(verbosity, basis, geometry, nvis, fmt, mode, last, infile, outfile):
+def convert(verbosity, basis, geometry, nvis, fmt, mode, last, endianness, infile, outfile):
     logging.basicConfig(
         format='{asctime} {levelname: <10} {message}',
         datefmt='%H:%M',
@@ -61,6 +62,7 @@ def convert(verbosity, basis, geometry, nvis, fmt, mode, last, infile, outfile):
         'geometry': geometry,
         'nvis': nvis,
         'last': last,
+        'endianness': endianness,
     }
 
     writer_kwargs = {
