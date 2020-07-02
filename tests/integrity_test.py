@@ -15,6 +15,10 @@ except ImportError:
     has_vtf = False
 
 
+from vtk import vtkVersion
+has_vtk_9 = vtkVersion().GetVTKMajorVersion() >= 9
+
+
 NUM = re.compile(r'-?\d+[ +\-e.\d]*\n?$')
 TESTDATA_DIR = join(dirname(__file__), 'testdata')
 FILES = [
@@ -101,6 +105,7 @@ def test_vtf_integrity(vtf_filenames):
             compare_files(out, ref)
 
 
+@pytest.mark.skipif(not has_vtk_9, reason="VTK tests only work on VTK>=9")
 def test_vtk_integrity(vtk_filenames):
     infile, checkfile, outfile = vtk_filenames
     with tempfile.TemporaryDirectory() as tempdir:
