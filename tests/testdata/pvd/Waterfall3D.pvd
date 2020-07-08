@@ -1,0 +1,5 @@
+<VTKFile type="Collection">
+  <Collection>
+    <DataSet timestep="0.0" part="0" file="Waterfall3D/data-1.vtu" />
+  </Collection>
+</VTKFile>
