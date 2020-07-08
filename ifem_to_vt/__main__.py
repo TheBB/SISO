@@ -6,6 +6,7 @@ import warnings
 
 import treelog as log
 
+from . import Config
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
 
@@ -87,10 +88,11 @@ def convert(
         log.error(e)
         sys.exit(1)
 
+    Config.nvis = nvis
+
     reader_kwargs = {
         'bases': basis,
         'geometry': geometry,
-        'nvis': nvis,
         'last': last,
         'endianness': endianness,
     }

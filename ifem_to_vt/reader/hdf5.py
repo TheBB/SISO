@@ -11,6 +11,7 @@ import splipy.utils
 import sys
 import treelog as log
 
+from .. import Config
 from ..geometry import SplinePatch
 
 
@@ -56,21 +57,20 @@ def subdivide_volume(el, nodes, elements, nvis):
 
 class LRSurfaceTesselation:
 
-    def __init__(self, patch, nvis=1):
+    def __init__(self, patch):
         nodes, elements = OrderedDict(), []
         for el in patch.elements:
             subdivide_face(el, nodes, elements, nvis)
 
         self._nodes = nodes
         self._elements = np.array(elements, dtype=int)
-        self.nvis = nvis
 
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
             assert coeffs is not None
             ncomps = len(patch.elements) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
-            coeffs = np.repeat(coeffs, self.nvis**2, axis=0)
+            coeffs = np.repeat(coeffs, Config.nvis**2, axis=0)
             return coeffs
 
         if coeffs is not None:
@@ -85,21 +85,20 @@ class LRSurfaceTesselation:
 
 class LRVolumeTesselation:
 
-    def __init__(self, patch, nvis=1):
+    def __init__(self, patch):
         nodes, elements = OrderedDict(), []
         for el in patch.elements:
             subdivide_volume(el, nodes, elements, nvis)
 
         self._nodes = nodes
         self._elements = np.array(elements, dtype=int)
-        self.nvis = nvis
 
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
             assert coeffs is not None
             ncomps = len(patch.elements) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
-            coeffs = np.repeat(coeffs, self.nvis**3, axis=0)
+            coeffs = np.repeat(coeffs, Config.nvis**3, axis=0)
             return coeffs
 
         if coeffs is not None:
@@ -223,8 +222,7 @@ class Field:
         return self.reader.h5[str(stepid)][self.basis.name][sub][self.name][str(patchid+1)][:]
 
     def tesselate(self, patch, coeffs):
-        # TODO: nvis
-        results = patch.tesselate_coeffs(coeffs, cells=self.cells, nvis=1)
+        results = patch.tesselate_coeffs(coeffs, cells=self.cells)
 
         if self.ncomps == 1 and self.vectorize:
             results = expand_to_dims(results)
@@ -307,9 +305,8 @@ class SplitField(Field):
 
 class GeometryManager:
 
-    def __init__(self, basis, nvis):
+    def __init__(self, basis):
         self.basis = basis
-        self.nvis = nvis
         self.has_updated = False
 
         # Map knot vector -> evaluation points
@@ -351,7 +348,7 @@ class GeometryManager:
             self.corners[patch.key] = key
             globpatchid = self.globids[(self.basis.name, patchid)]
 
-            tess = patch.tesselate(nvis=self.nvis)
+            tess = patch.tesselate()
             nodes = tess.nodes
             dim = 2 if tess.cells.shape[-1] == 4 else 3
             eidxs = tess.cells
@@ -368,11 +365,10 @@ class GeometryManager:
 
 class Reader:
 
-    def __init__(self, h5, bases=(), geometry=None, nvis=1, last=False, **kwargs):
+    def __init__(self, h5, bases=(), geometry=None, last=False, **kwargs):
         self.h5 = h5
         self.only_bases = bases
         self.geometry_basis = geometry
-        self.nvis = nvis
         self.last = last
 
     def __enter__(self):
@@ -388,9 +384,9 @@ class Reader:
         self.sort_fields()
 
         if self.geometry_basis:
-            self.geometry = GeometryManager(self.bases[self.geometry_basis], self.nvis)
+            self.geometry = GeometryManager(self.bases[self.geometry_basis])
         else:
-            self.geometry = GeometryManager(next(iter(self.bases.values())), self.nvis)
+            self.geometry = GeometryManager(next(iter(self.bases.values())))
 
         return self
 

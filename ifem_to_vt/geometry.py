@@ -6,6 +6,7 @@ import numpy as np
 import splipy.io
 from splipy import SplineObject, BSplineBasis
 
+from . import Config
 from .util import prod
 
 
@@ -19,8 +20,8 @@ def subdivide_linear(knots, nvis):
 
 class TensorTesselation:
 
-    def __init__(self, patch, nvis=1):
-        self.knots = tuple(subdivide_linear(knots, nvis) for knots in patch.knots())
+    def __init__(self, patch):
+        self.knots = tuple(subdivide_linear(knots, Config.nvis) for knots in patch.knots())
 
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:
@@ -122,15 +123,15 @@ class SplinePatch(Patch):
     def num_cells(self):
         return prod(len(k) - 1 for k in self.obj.knots())
 
-    def tesselate(self, nvis=1):
-        tess = TensorTesselation(self.obj, nvis=nvis)
+    def tesselate(self):
+        tess = TensorTesselation(self.obj)
         nodes = tess(self.obj)
         nodes = nodes.reshape((-1, nodes.shape[-1]))
         _, cells = tess.elements()
         return UnstructuredPatch(nodes, cells)
 
-    def tesselate_coeffs(self, coeffs, cells=False, nvis=1):
-        tess = TensorTesselation(self.obj, nvis=nvis)
+    def tesselate_coeffs(self, coeffs, cells=False):
+        tess = TensorTesselation(self.obj)
         results = tess(self.obj, coeffs=coeffs, cells=cells)
         if results.ndim > 1:
             results = results.reshape((-1, results.shape[-1]))

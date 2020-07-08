@@ -22,10 +22,9 @@ class SimpleBasis:
 
 class Reader:
 
-    def __init__(self, filename, nvis=1, **kwargs):
+    def __init__(self, filename, **kwargs):
         self.basis = None
         self.filename = filename
-        self.nvis = nvis
 
     def __enter__(self):
         with open(self.filename, 'rb') as f:
