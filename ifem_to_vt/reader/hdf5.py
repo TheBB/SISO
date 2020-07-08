@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from collections import namedtuple, OrderedDict
 from io import StringIO
 from itertools import chain, product
-import logging
 import lrspline as lr
 import numpy as np
 import splipy.io
@@ -11,6 +10,7 @@ from splipy import SplineObject, BSplineBasis
 from splipy.SplineModel import ObjectCatalogue
 import splipy.utils
 import sys
+import treelog as log
 
 
 class G2Object(splipy.io.G2):
@@ -22,38 +22,6 @@ class G2Object(splipy.io.G2):
 
     def __enter__(self):
         return self
-
-
-class Log:
-
-    _indent = 0
-
-    @classmethod
-    def debug(cls, s, *args, **kwargs):
-        return logging.debug(' ' * cls._indent + s, *args, **kwargs)
-
-    @classmethod
-    def info(cls, s, *args, **kwargs):
-        return logging.info(' ' * cls._indent + s, *args, **kwargs)
-
-    @classmethod
-    def warning(cls, s, *args, **kwargs):
-        return logging.warning(' ' * cls._indent + s, *args, **kwargs)
-
-    @classmethod
-    def error(cls, s, *args, **kwargs):
-        return logging.error(' ' * cls._indent + s, *args, **kwargs)
-
-    @classmethod
-    def critical(cls, s, *args, **kwargs):
-        return logging.critical(' ' * cls._indent + s, *args, **kwargs)
-
-    @classmethod
-    @contextmanager
-    def indent(cls):
-        cls._indent += 4
-        yield
-        cls._indent -= 4
 
 
 def subdivide_linear(knots, nvis):
@@ -285,7 +253,7 @@ class Field:
                 num, denom = len(coeffs), ncells
 
             if num % denom != 0:
-                Log.critical('Inconsistent dimension in field "{}" ({}/{}); unable to discover number of components'.format(
+                log.error('Inconsistent dimension in field "{}" ({}/{}); unable to discover number of components'.format(
                     self.name, num, denom
                 ))
                 sys.exit(2)
@@ -421,20 +389,20 @@ class GeometryManager:
         # Map corner tuple -> basisname x patchid
         self.corners = {}
 
-        Log.info('Using {} for geometry'.format(basis.name))
+        log.info('Using {} for geometry'.format(basis.name))
 
     def tesselation(self, patch):
         knots = tuple(tuple(k) for k in patch.knots())
 
         if knots not in self.tesselations:
-            Log.debug('New unique knot vector detected, generating tesselation')
+            log.debug('New unique knot vector detected, generating tesselation')
             self.tesselations[knots] = get_tesselation(patch, nvis=self.nvis)
         return self.tesselations[knots]
 
     def findid(self, patch):
         corners = tuple(tuple(p) for p in patch.corners())
         if corners not in self.corners:
-            Log.error('Unable to find corresponding geometry patch')
+            log.error('Unable to find corresponding geometry patch')
             return None
         return self.globids[self.corners[corners]]
 
@@ -443,7 +411,7 @@ class GeometryManager:
             return
         self.has_updated = True
 
-        Log.info('Updating geometry')
+        log.info('Updating geometry')
 
         # FIXME: Here, all patches are updated whenever any of them are updated.
         # Maybe overkill.
@@ -453,7 +421,7 @@ class GeometryManager:
 
             if key not in self.globids:
                 self.globids[key] = len(self.globids)
-                Log.debug('New unique patch detected, generating global ID')
+                log.debug('New unique patch detected, generating global ID')
 
             # FIXME: This leaves behind invalidated corner IDs, which we should probably delete.
             corners = tuple(tuple(p) for p in patch.corners())
@@ -469,7 +437,7 @@ class GeometryManager:
 
             dim, eidxs = tess.elements()
 
-            Log.debug('Writing patch {}'.format(globpatchid))
+            log.debug('Writing patch {}'.format(globpatchid))
             w.update_geometry(nodes, eidxs, dim, globpatchid)
 
         w.finalize_geometry(stepid)
@@ -553,7 +521,7 @@ class Reader:
         # Delete bases that don't have any patch data
         to_del = [name for name, basis in self.bases.items() if not basis.update_steps]
         for basisname in to_del:
-            Log.debug('Basis {} has no updates, removed'.format(basisname))
+            log.debug('Basis {} has no updates, removed'.format(basisname))
             del self.bases[basisname]
 
         # Delete the bases we don't need
@@ -565,7 +533,7 @@ class Reader:
             self.only_bases = self.bases
 
         for basis in self.bases.values():
-            Log.debug('Basis {} updates at steps {} ({} patches)'.format(
+            log.debug('Basis {} updates at steps {} ({} patches)'.format(
                 basis.name, ', '.join(str(s) for s in sorted(basis.update_steps)), basis.npatches,
             ))
 
@@ -586,7 +554,7 @@ class Reader:
 
     def log_fields(self):
         for field in self.fields.values():
-            Log.debug('{} "{}" lives on {} ({} components)'.format(
+            log.debug('{} "{}" lives on {} ({} components)'.format(
                 'Knotspan' if field.cells else 'Field', field.name, field.basis.name, field.ncomps
             ))
 
@@ -603,9 +571,9 @@ class Reader:
                     splitnames = ['{} {}'.format(prefix, name) for name in splitnames]
 
                 if any(splitname in self.fields for splitname in splitnames):
-                    Log.warning('Unable to split "{}", some fields already exist'.format(fname))
+                    log.warning('Unable to split "{}", some fields already exist'.format(fname))
                     continue
-                Log.info('Split field "{}" -> {}'.format(fname, ', '.join(splitnames)))
+                log.info('Split field "{}" -> {}'.format(fname, ', '.join(splitnames)))
                 for i, splitname in enumerate(splitnames):
                     to_add.append(SplitField(splitname, self.fields[fname], i, self))
                 to_del.append(fname)
@@ -630,9 +598,9 @@ class Reader:
             sources = [self.fields[s] for s in sourcenames]
             try:
                 self.fields[fname] = CombinedField(fname, sources, self)
-                Log.info('Creating combined field {} -> {} ({} components)'.format(', '.join(sourcenames), fname, len(sources)))
+                log.info('Creating combined field {} -> {} ({} components)'.format(', '.join(sourcenames), fname, len(sources)))
             except AssertionError:
-                Log.warning('Unable to combine {} -> {}'.format(', '.join(sourcenames), fname))
+                log.warning('Unable to combine {} -> {}'.format(', '.join(sourcenames), fname))
 
     def sort_fields(self):
         fields = sorted(self.fields.values(), key=lambda f: f.name)
@@ -640,19 +608,16 @@ class Reader:
         self.fields = OrderedDict((f.name, f) for f in fields)
 
     def write(self, w):
-        for stepid, time in self.outputsteps():
-            Log.info('Step {}'.format(stepid))
+        for stepid, time in log.iter.plain('Step', self.outputsteps()):
+            w.add_step(**time)
+            self.geometry.update(w, stepid)
 
-            with Log.indent():
-                w.add_step(**time)
-                self.geometry.update(w, stepid)
+            for field in self.fields.values():
+                if field.update_at(stepid):
+                    log.info('Updating {} ({})'.format(field.name, field.basisname))
+                    field.update(w, stepid)
 
-                for field in self.fields.values():
-                    if field.update_at(stepid):
-                        Log.info('Updating {} ({})'.format(field.name, field.basisname))
-                        field.update(w, stepid)
-
-                w.finalize_step()
+            w.finalize_step()
 
     def write_mode(self, w, mid, field):
         for pid in range(self.npatches(0, field.basis)):
@@ -730,6 +695,6 @@ def get_reader(filename, **kwargs):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
-        Log.info('Detected eigenmodes')
+        log.info('Detected eigenmodes')
         return EigenReader(h5, **kwargs)
     return Reader(h5, **kwargs)

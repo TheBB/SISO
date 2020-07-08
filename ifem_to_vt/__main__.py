@@ -1,9 +1,10 @@
 from functools import wraps
 import click
-import logging
 from os.path import splitext, basename
 import sys
 import warnings
+
+import treelog as log
 
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
@@ -18,12 +19,18 @@ def suppress_warnings(func):
     return inner
 
 
+class RichOutputLog(log.RichOutputLog):
+
+    def __init__(self, stream):
+        super().__init__()
+        self.stream = stream
+
+    def write(self, text, level):
+        message = ''.join([self._cmap[level.value], text, '\033[0m\n', self._current])
+        click.echo(message, file=self.stream, nl=False)
+
+
 @click.command()
-@click.option(
-    '--verbosity', '-v',
-    type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']),
-    default='info'
-)
 @click.option('--basis', '-b', multiple=True, help='Include fields in this basis.')
 @click.option('--geometry', '-g', default=None, help='Use this basis to provide geometry.')
 @click.option('--nvis', '-n', default=1, help='Extra sampling points per element.')
@@ -31,17 +38,40 @@ def suppress_warnings(func):
 @click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary', help='Output mode.')
 @click.option('--last', is_flag=True, help='Read only the last step.')
 @click.option('--endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@click.option('--debug', 'verbosity', flag_value='debug')
+@click.option('--info', 'verbosity', flag_value='info', default=True)
+@click.option('--user', 'verbosity', flag_value='user')
+@click.option('--warning', 'verbosity', flag_value='warning')
+@click.option('--error', 'verbosity', flag_value='error')
+@click.option('--rich/--no-rich', default=True)
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
 @suppress_warnings
-def convert(verbosity, basis, geometry, nvis, fmt, mode, last, endianness, infile, outfile):
-    logging.basicConfig(
-        format='{asctime} {levelname: <10} {message}',
-        datefmt='%H:%M',
-        style='{',
-        level=verbosity.upper(),
-    )
+def convert(
+        # Logging options
+        verbosity, rich,
 
+        # Input format options
+        endianness, infile,
+
+        # Conversion options
+        basis, geometry, nvis, last,
+
+        # Output format options
+        fmt, mode, outfile,
+    ):
+
+    # Set up logging
+    if rich:
+        logger = RichOutputLog(sys.stdout)
+    else:
+        logger = log.TeeLog(
+            log.FilterLog(log.StdoutLog(), maxlevel=log.proto.Level.user),
+            log.FilterLog(log.StderrLog(), minlevel=log.proto.Level.warning),
+        )
+    log.current = log.FilterLog(logger, minlevel=getattr(log.proto.Level, verbosity))
+
+    # Determine filename of output
     if outfile and not fmt:
         _, fmt = splitext(outfile)
         fmt = fmt[1:].lower()
@@ -54,7 +84,7 @@ def convert(verbosity, basis, geometry, nvis, fmt, mode, last, endianness, infil
     try:
         Writer = get_writer(fmt)
     except ValueError as e:
-        logging.critical(e)
+        log.error(e)
         sys.exit(1)
 
     reader_kwargs = {
