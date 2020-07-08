@@ -40,6 +40,7 @@ class AbstractVTKWriter:
         raise NotImplementedError
 
     def add_step(self, **data):
+        self.step_data = data
         self.stepid += 1
 
     def update_geometry(self, nodes, elements, dim, patchid):

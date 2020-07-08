@@ -29,4 +29,8 @@ class Writer(AbstractVTUWriter):
     def finalize_step(self):
         super().finalize_step()
         filename = self.make_filename()
-        self.pvd.write('    <DataSet timestep="{}" part="0" file="{}" />\n'.format(self.stepid - 1, filename))
+        if self.step_data:
+            timestep = next(iter(self.step_data.values()))
+        else:
+            timestep = self.stepid - 1
+        self.pvd.write('    <DataSet timestep="{}" part="0" file="{}" />\n'.format(timestep, filename))

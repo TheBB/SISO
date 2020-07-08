@@ -9,13 +9,23 @@ IFEM-to-VT
    :target: https://travis-ci.org/TheBB/IFEM-to-VT
 
 
-IFEM-to-VT is a tool for converting IFEM_ simulation results to other
-formats more suitable for visualization:
+IFEM-to-VT is a tool for converting between various data formats used
+for storing simulation results.
+
+Supported readers:
+
+- IFEM_ HDF5 files (.hdf5)
+- LRSpline geometries (.lr)
+- GoTools (B-Spline) geometries (.g2)
+- SIMRA result files (.res)
+
+Supported writers:
 
 - PVD/VTU/VTK: for use with Paraview_
 - VTF: for use with GLView_
 
-So named because all initially supported formats started with "VT".
+The tool is so named because it was initially designed for IFEM, and
+only for output formats that started with "VT".
 
 
 Installation
