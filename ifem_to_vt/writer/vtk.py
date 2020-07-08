@@ -76,6 +76,8 @@ class AbstractVTKWriter:
         elif all(p.dim == 3 for p in self.patches.values()):
             npts = 8
             celltype = vtk.VTK_HEXAHEDRON
+        else:
+            assert False
 
         offset = np.hstack([[0], np.cumsum([len(p.nodes) for p in self.patches.values()])])
         elements = np.vstack([patch.elements + off for patch, off in zip(self.patches.values(), offset)])
