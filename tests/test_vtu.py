@@ -42,7 +42,10 @@ def test_vtu_integrity(filenames):
         outfile = join(tempdir, outfile)
         cfg = Config(mode='ascii')
         with get_reader(infile, cfg) as r, get_writer('vtu')(outfile, cfg) as w:
-            nsteps = r.nsteps
+            nsteps = getattr(r, 'nsteps', 0)
             r.write(w)
-        for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
-            compare_vtu(outfn, checkfn)
+        if cfg.last:
+            compare_vtu(outfile, checkfile)
+        else:
+            for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
+                compare_vtu(outfn, checkfn)

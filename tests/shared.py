@@ -22,6 +22,8 @@ FILES = [
     ('hdf5', 'Square-modes.hdf5'),
     ('hdf5', 'Square-modes-freq.hdf5'),
     ('hdf5', 'Waterfall3D.hdf5'),
+    ('g2', 'Backstep2D.g2'),
+    ('g2', 'annulus3D.g2'),
 ]
 
 
