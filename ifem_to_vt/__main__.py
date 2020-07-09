@@ -48,19 +48,7 @@ class RichOutputLog(log.RichOutputLog):
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
 @suppress_warnings
-def convert(
-        # Logging options
-        verbosity, rich,
-
-        # Input format options
-        endianness, infile,
-
-        # Conversion options
-        basis, geometry, nvis, last,
-
-        # Output format options
-        fmt, mode, outfile,
-    ):
+def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
 
     # Set up logging
     if rich:
@@ -88,21 +76,8 @@ def convert(
         log.error(e)
         sys.exit(1)
 
-    Config.nvis = nvis
-
-    reader_kwargs = {
-        'bases': basis,
-        'geometry': geometry,
-        'last': last,
-        'endianness': endianness,
-    }
-
-    writer_kwargs = {
-        'last': last,
-        'mode': mode,
-    }
-
-    with get_reader(infile, **reader_kwargs) as r, Writer(outfile, **writer_kwargs) as w:
+    config = Config(**kwargs)
+    with get_reader(infile, config) as r, Writer(outfile, config) as w:
         r.write(w)
 
 

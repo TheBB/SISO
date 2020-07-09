@@ -11,10 +11,9 @@ Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
 
 class AbstractVTKWriter:
 
-    def __init__(self, filename, mode='binary', last=False, **kwargs):
-        self.mode = mode
+    def __init__(self, filename, config):
         self.filename = filename
-        self.last = last
+        self.config = config
 
         self.validate_mode()
 
@@ -28,7 +27,7 @@ class AbstractVTKWriter:
         pass
 
     def make_filename(self):
-        if self.last:
+        if self.config.last:
             return self.filename
         fn, ext = splitext(self.filename)
         return '{}-{}{}'.format(fn, self.stepid, ext)
@@ -108,12 +107,12 @@ class AbstractVTKWriter:
 class Writer(AbstractVTKWriter):
 
     def validate_mode(self):
-        if not self.mode in ('ascii', 'binary'):
-            raise ValueError("VTK format does not support '{}' mode".format(self.mode))
+        if not self.config.mode in ('ascii', 'binary'):
+            raise ValueError("VTK format does not support '{}' mode".format(self.config.mode))
 
     def writer(self):
         writer = vtk.vtkUnstructuredGridWriter()
-        if self.mode == 'ascii':
+        if self.config.mode == 'ascii':
             writer.SetFileTypeToASCII()
         else:
             writer.SetFileTypeToBinary()

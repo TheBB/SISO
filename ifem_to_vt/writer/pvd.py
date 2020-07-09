@@ -22,7 +22,7 @@ class Writer(AbstractVTUWriter):
         fn, ext = splitext(self.filename)
         root = join(fn, 'data')
         makedirs(root, mode=0o775, exist_ok=True)
-        if self.last:
+        if self.config.last:
             return root + '.vtu'
         return '{}-{}.vtu'.format(root, self.stepid)
 

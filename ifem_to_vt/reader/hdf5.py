@@ -365,11 +365,9 @@ class GeometryManager:
 
 class Reader:
 
-    def __init__(self, h5, bases=(), geometry=None, last=False, **kwargs):
+    def __init__(self, h5, config):
         self.h5 = h5
-        self.only_bases = bases
-        self.geometry_basis = geometry
-        self.last = last
+        self.config = config
 
     def __enter__(self):
         self.bases = OrderedDict()
@@ -383,8 +381,8 @@ class Reader:
         self.combine_fields()
         self.sort_fields()
 
-        if self.geometry_basis:
-            self.geometry = GeometryManager(self.bases[self.geometry_basis])
+        if self.config.geometry:
+            self.geometry = GeometryManager(self.bases[self.config.geometry])
         else:
             self.geometry = GeometryManager(next(iter(self.bases.values())))
 
@@ -406,7 +404,7 @@ class Reader:
             yield stepid, {'time': time}, self.h5[str(stepid)]
 
     def outputsteps(self):
-        if self.last:
+        if self.config.last:
             for stepid, time, _ in self.steps():
                 pass
             yield stepid, time
@@ -415,12 +413,12 @@ class Reader:
                 yield stepid, time
 
     def allowed_bases(self, group, items=False):
-        if not self.only_bases:
+        if not self.config.basis:
             yield from (group.items() if items else group)
         elif items:
-            yield from ((b, v) for b, v in group.items() if b in self.only_bases)
+            yield from ((b, v) for b, v in group.items() if b in self.config.basis)
         else:
-            yield from (b for b in group if b in self.only_bases)
+            yield from (b for b in group if b in self.config.basis)
 
     def init_bases(self):
         for stepid, _, stepgrp in self.steps():
@@ -444,12 +442,12 @@ class Reader:
             del self.bases[basisname]
 
         # Delete the bases we don't need
-        if self.only_bases:
-            self.only_bases = tuple(set(self.bases) & set(self.only_bases))
-            keep = self.only_bases + ((self.geometry_basis,) if self.geometry_basis else ())
+        if self.config.basis:
+            self.config.require(basis=tuple(set(self.bases) & set(self.only_bases)))
+            keep = self.config.only_bases + ((self.config.geometry,) if self.config.geometry else ())
             self.bases = OrderedDict((b,v) for b,v in self.bases.items() if b in keep)
         else:
-            self.only_bases = self.bases
+            self.config.require(basis=tuple(self.bases.keys()))
 
         for basis in self.bases.values():
             log.debug('Basis {} updates at steps {} ({} patches)'.format(
@@ -610,10 +608,10 @@ class EigenReader(Reader):
         self.fields['Mode Shape'] = field
 
 
-def get_reader(filename, **kwargs):
+def get_reader(filename, config):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
         log.info('Detected eigenmodes')
-        return EigenReader(h5, **kwargs)
-    return Reader(h5, **kwargs)
+        return EigenReader(h5, config)
+    return Reader(h5, config)

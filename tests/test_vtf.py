@@ -7,6 +7,7 @@ import numpy as np
 
 from .shared import TESTDATA_DIR, FILES
 
+from ifem_to_vt import Config
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
 
@@ -55,7 +56,8 @@ def test_vtf_integrity(filenames):
     infile, checkfile, outfile = filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        with get_reader(infile) as r, get_writer('vtf')(outfile, mode='ascii') as w:
+        cfg = Config(mode='ascii')
+        with get_reader(infile, cfg) as r, get_writer('vtf')(outfile, cfg) as w:
             r.write(w)
         with open(outfile, 'r') as out, open(checkfile, 'r') as ref:
             compare_vtf(out, ref)
