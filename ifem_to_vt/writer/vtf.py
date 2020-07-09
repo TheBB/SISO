@@ -1,11 +1,12 @@
 from collections import defaultdict, OrderedDict
 
+from .. import config
 import vtfwriter as vtf
 
 
 class Writer(vtf.File):
 
-    def __init__(self, filename, config):
+    def __init__(self, filename):
         if config.mode not in ('ascii', 'binary'):
             raise ValueError("VTF format does not support '{}' mode".format(config.mode))
         super(Writer, self).__init__(filename, 'w' if config.mode == 'ascii' else 'wb')

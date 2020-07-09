@@ -4,6 +4,8 @@ import numpy as np
 from os.path import splitext
 from collections import namedtuple, OrderedDict
 
+from .. import config
+
 
 Patch = namedtuple('Patch', ['nodes', 'elements', 'dim'])
 Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
@@ -11,9 +13,8 @@ Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
 
 class AbstractVTKWriter:
 
-    def __init__(self, filename, config):
+    def __init__(self, filename):
         self.filename = filename
-        self.config = config
 
         self.validate_mode()
 
@@ -27,7 +28,7 @@ class AbstractVTKWriter:
         pass
 
     def make_filename(self):
-        if self.config.last:
+        if config.last:
             return self.filename
         fn, ext = splitext(self.filename)
         return '{}-{}{}'.format(fn, self.stepid, ext)
@@ -107,12 +108,12 @@ class AbstractVTKWriter:
 class Writer(AbstractVTKWriter):
 
     def validate_mode(self):
-        if not self.config.mode in ('ascii', 'binary'):
-            raise ValueError("VTK format does not support '{}' mode".format(self.config.mode))
+        if not config.mode in ('ascii', 'binary'):
+            raise ValueError("VTK format does not support '{}' mode".format(config.mode))
 
     def writer(self):
         writer = vtk.vtkUnstructuredGridWriter()
-        if self.config.mode == 'ascii':
+        if config.mode == 'ascii':
             writer.SetFileTypeToASCII()
         else:
             writer.SetFileTypeToBinary()

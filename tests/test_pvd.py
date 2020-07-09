@@ -7,7 +7,7 @@ import numpy as np
 
 from .shared import TESTDATA_DIR, FILES, step_filenames, compare_vtk_unstructured
 
-from ifem_to_vt import Config
+from ifem_to_vt import config
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
 
@@ -63,7 +63,6 @@ def test_pvd_integrity(filenames):
     infile, checkfile, outfile = filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        cfg = Config(mode='ascii')
-        with get_reader(infile, cfg) as r, get_writer('pvd')(outfile, cfg) as w:
+        with config(mode='ascii'), get_reader(infile) as r, get_writer('pvd')(outfile) as w:
             r.write(w)
         compare_pvd(outfile, checkfile)

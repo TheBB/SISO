@@ -4,7 +4,7 @@ import tempfile
 
 from .shared import TESTDATA_DIR, FILES, step_filenames, compare_vtk_unstructured
 
-from ifem_to_vt import Config
+from ifem_to_vt import config
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
 
@@ -40,12 +40,12 @@ def test_vtk_integrity(filenames):
     infile, checkfile, outfile = filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        cfg = Config(mode='ascii')
-        with get_reader(infile, cfg) as r, get_writer('vtk')(outfile, cfg) as w:
-            nsteps = getattr(r, 'nsteps', 0)
-            r.write(w)
-        if cfg.last:
-            compare_vtk(outfile, checkfile)
-        else:
-            for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
-                compare_vtk(outfn, checkfn)
+        with config(mode='ascii'):
+            with get_reader(infile) as r, get_writer('vtk')(outfile) as w:
+                nsteps = getattr(r, 'nsteps', 0)
+                r.write(w)
+            if config.last:
+                compare_vtk(outfile, checkfile)
+            else:
+                for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
+                    compare_vtk(outfn, checkfn)

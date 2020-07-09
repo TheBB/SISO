@@ -6,7 +6,7 @@ import warnings
 
 import treelog as log
 
-from . import Config
+from . import config
 from ifem_to_vt.reader import get_reader
 from ifem_to_vt.writer import get_writer
 
@@ -76,8 +76,7 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
         log.error(e)
         sys.exit(1)
 
-    config = Config(**kwargs)
-    with get_reader(infile, config) as r, Writer(outfile, config) as w:
+    with config(**kwargs), get_reader(infile) as r, Writer(outfile) as w:
         r.write(w)
 
 

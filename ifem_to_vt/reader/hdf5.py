@@ -11,8 +11,8 @@ import splipy.utils
 import sys
 import treelog as log
 
-from .. import Config
 from ..geometry import SplinePatch
+from .. import config
 
 
 def subdivide_linear(knots, nvis):
@@ -70,7 +70,7 @@ class LRSurfaceTesselation:
             assert coeffs is not None
             ncomps = len(patch.elements) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
-            coeffs = np.repeat(coeffs, Config.nvis**2, axis=0)
+            coeffs = np.repeat(coeffs, config.nvis**2, axis=0)
             return coeffs
 
         if coeffs is not None:
@@ -98,7 +98,7 @@ class LRVolumeTesselation:
             assert coeffs is not None
             ncomps = len(patch.elements) // coeffs.size
             coeffs = coeffs.reshape((-1, ncomps))
-            coeffs = np.repeat(coeffs, Config.nvis**3, axis=0)
+            coeffs = np.repeat(coeffs, config.nvis**3, axis=0)
             return coeffs
 
         if coeffs is not None:
@@ -365,9 +365,8 @@ class GeometryManager:
 
 class Reader:
 
-    def __init__(self, h5, config):
+    def __init__(self, h5):
         self.h5 = h5
-        self.config = config
 
     def __enter__(self):
         self.bases = OrderedDict()
@@ -381,8 +380,8 @@ class Reader:
         self.combine_fields()
         self.sort_fields()
 
-        if self.config.geometry:
-            self.geometry = GeometryManager(self.bases[self.config.geometry])
+        if config.geometry:
+            self.geometry = GeometryManager(self.bases[config.geometry])
         else:
             self.geometry = GeometryManager(next(iter(self.bases.values())))
 
@@ -404,7 +403,7 @@ class Reader:
             yield stepid, {'time': time}, self.h5[str(stepid)]
 
     def outputsteps(self):
-        if self.config.last:
+        if config.last:
             for stepid, time, _ in self.steps():
                 pass
             yield stepid, time
@@ -413,12 +412,12 @@ class Reader:
                 yield stepid, time
 
     def allowed_bases(self, group, items=False):
-        if not self.config.basis:
+        if not config.basis:
             yield from (group.items() if items else group)
         elif items:
-            yield from ((b, v) for b, v in group.items() if b in self.config.basis)
+            yield from ((b, v) for b, v in group.items() if b in config.basis)
         else:
-            yield from (b for b in group if b in self.config.basis)
+            yield from (b for b in group if b in config.basis)
 
     def init_bases(self):
         for stepid, _, stepgrp in self.steps():
@@ -442,12 +441,13 @@ class Reader:
             del self.bases[basisname]
 
         # Delete the bases we don't need
-        if self.config.basis:
-            self.config.require(basis=tuple(set(self.bases) & set(self.only_bases)))
-            keep = self.config.only_bases + ((self.config.geometry,) if self.config.geometry else ())
+        # TODO: Don't do it this way, though
+        if config.basis:
+            config.require(basis=tuple(set(self.bases) & set(config.basis)))
+            keep = config.only_bases + ((config.geometry,) if config.geometry else ())
             self.bases = OrderedDict((b,v) for b,v in self.bases.items() if b in keep)
         else:
-            self.config.require(basis=tuple(self.bases.keys()))
+            config.require(basis=tuple(self.bases.keys()))
 
         for basis in self.bases.values():
             log.debug('Basis {} updates at steps {} ({} patches)'.format(
@@ -608,10 +608,10 @@ class EigenReader(Reader):
         self.fields['Mode Shape'] = field
 
 
-def get_reader(filename, config):
+def get_reader(filename):
     h5 = h5py.File(filename, 'r')
     basisname = next(iter(h5['0']))
     if 'Eigenmode' in h5['0'][basisname]:
         log.info('Detected eigenmodes')
-        return EigenReader(h5, config)
-    return Reader(h5, config)
+        return EigenReader(h5)
+    return Reader(h5)

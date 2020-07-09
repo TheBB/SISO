@@ -6,7 +6,7 @@ import numpy as np
 import splipy.io
 from splipy import SplineObject, BSplineBasis
 
-from . import Config
+from . import config
 from .util import prod
 
 
@@ -21,7 +21,7 @@ def subdivide_linear(knots, nvis):
 class TensorTesselation:
 
     def __init__(self, patch):
-        self.knots = tuple(subdivide_linear(knots, Config.nvis) for knots in patch.knots())
+        self.knots = tuple(subdivide_linear(knots, config.nvis) for knots in patch.knots())
 
     def __call__(self, patch, coeffs=None, cells=False):
         if cells:

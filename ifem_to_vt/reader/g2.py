@@ -1,5 +1,6 @@
 from splipy.io import G2
 
+from .. import config
 from ..geometry import SplinePatch
 from .hdf5 import GeometryManager
 
@@ -23,9 +24,8 @@ class SimpleBasis:
 
 class Reader:
 
-    def __init__(self, filename, config):
+    def __init__(self, filename):
         self.filename = filename
-        self.config = config
         config.require(last=True)
 
     def __enter__(self):
