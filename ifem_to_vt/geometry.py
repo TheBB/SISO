@@ -8,8 +8,14 @@ import numpy as np
 import splipy.io
 from splipy import SplineObject, BSplineBasis
 
+from typing import Tuple, Any, Union, IO
+from nptyping import NDArray, Float
+
 from . import config
 from .util import prod
+
+
+Array2D = NDArray[Any, Any]
 
 
 def subdivide_linear(knots, nvis):
@@ -160,12 +166,12 @@ class LRVolumeTesselation:
 
 class G2Object(splipy.io.G2):
 
-    def __init__(self, fstream, mode):
+    def __init__(self, fstream: IO, mode: str):
         self.fstream = fstream
         self.onlywrite = mode == 'w'
         super(G2Object, self).__init__('')
 
-    def __enter__(self):
+    def __enter__(self) -> 'G2Object':
         return self
 
 
@@ -173,43 +179,43 @@ class Patch(ABC):
 
     @property
     @abstractmethod
-    def num_physdim(self):
+    def num_physdim(self) -> int:
         """Number of physical dimensions."""
         pass
 
     @property
     @abstractmethod
-    def num_pardim(self):
+    def num_pardim(self) -> int:
         """Number of parametric dimensions."""
         pass
 
     @property
     @abstractmethod
-    def num_nodes(self):
+    def num_nodes(self) -> int:
         """Number of nodes."""
         pass
 
     @property
     @abstractmethod
-    def num_cells(self):
+    def num_cells(self) -> int:
         """Number of cells."""
         pass
 
     @property
     @abstractmethod
-    def bounding_box(self):
+    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
         """Hashable bounding box."""
         pass
 
     @abstractmethod
-    def tesselate(self):
+    def tesselate(self) -> 'Patch':
         """Convert to a suitable discrete representation.
-        Currently a UnstructuredPatch.
+        Currently an UnstructuredPatch.
         """
         pass
 
     @abstractmethod
-    def tesselate_field(self, coeffs, cells=False):
+    def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         """Convert a nodal or cell field to the same representation as
         returned by tesselate.
         """
@@ -218,13 +224,13 @@ class Patch(ABC):
 
 class UnstructuredPatch(Patch):
 
-    def __init__(self, nodes, cells):
+    def __init__(self, nodes: Array2D, cells: Array2D):
         assert nodes.ndim == cells.ndim == 2
         self.nodes = nodes
         self.cells = cells
 
     @classmethod
-    def from_lagrangian(cls, data):
+    def from_lagrangian(cls, data: Union[bytes, str]) -> 'UnstructuredPatch':
         if isinstance(data, bytes):
             data = data.decode()
         assert isinstance(data, str)
@@ -257,36 +263,36 @@ class UnstructuredPatch(Patch):
         return cls(nodes, cells)
 
     @property
-    def num_physdim(self):
+    def num_physdim(self) -> int:
         return self.nodes.shape[-1]
 
     @property
-    def num_pardim(self):
+    def num_pardim(self) -> int:
         return {
             (4, 8): 3
         }[self.num_physidm, self.cells.shape[-1]]
 
     @property
-    def bounding_box(self):
+    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
         return tuple(
             (np.min(self.nodes[:,i]), np.max(self.nodes[:,i]))
             for i in range(self.num_physdim)
         )
 
     @property
-    def num_nodes(self):
+    def num_nodes(self) -> int:
         return len(self.nodes)
 
     @property
-    def num_cells(self):
+    def num_cells(self) -> int:
         return len(self.cells)
 
-    def tesselate(self):
+    def tesselate(self) -> Patch:
         if config.nvis != 1:
             raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
         return self
 
-    def tesselate_field(self, coeffs, cells=False):
+    def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         if config.nvis != 1:
             raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
         if cells:
@@ -296,7 +302,7 @@ class UnstructuredPatch(Patch):
 
 class LRPatch(Patch):
 
-    def __init__(self, obj):
+    def __init__(self, obj: Union[bytes, str, lr.LRSplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -308,26 +314,26 @@ class LRPatch(Patch):
         self.obj = obj
 
     @property
-    def num_physdim(self):
+    def num_physdim(self) -> int:
         return self.obj.dimension
 
     @property
-    def num_pardim(self):
+    def num_pardim(self) -> int:
         return self.obj.pardim
 
     @property
-    def bounding_box(self):
+    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
         return tuple(
             (np.min(self.obj.controlpoints[:,i]), np.max(self.obj.controlpoints[:,i]))
             for i in range(self.num_physdim)
         )
 
     @property
-    def num_nodes(self):
+    def num_nodes(self) -> int:
         return len(self.obj)
 
     @property
-    def num_cells(self):
+    def num_cells(self) -> int:
         return len(self.obj.elements)
 
     @property
@@ -336,14 +342,14 @@ class LRPatch(Patch):
             return LRSurfaceTesselation
         return LRVolumeTesselation
 
-    def tesselate(self):
+    def tesselate(self) -> Patch:
         tess = self.tesselator(self.obj)
         nodes = tess(self.obj)
         nodes = nodes.reshape((-1, nodes.shape[-1]))
         _, cells = tess.elements()
         return UnstructuredPatch(nodes, cells)
 
-    def tesselate_field(self, coeffs, cells=False):
+    def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         tess = self.tesselator(self.obj)
         results = tess(self.obj, coeffs=coeffs, cells=cells)
         results = results.reshape((-1, results.shape[-1]))
@@ -352,7 +358,7 @@ class LRPatch(Patch):
 
 class SplinePatch(Patch):
 
-    def __init__(self, obj):
+    def __init__(self, obj: Union[bytes, str, SplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -363,36 +369,36 @@ class SplinePatch(Patch):
         self.obj = obj
 
     @property
-    def num_physdim(self):
+    def num_physdim(self) -> int:
         return self.obj.dimension
 
     @property
-    def num_pardim(self):
+    def num_pardim(self) -> int:
         return self.obj.pardim
 
     @property
-    def bounding_box(self):
+    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
         return tuple(
             (np.min(self.obj.controlpoints[...,i]), np.max(self.obj.controlpoints[...,i]))
             for i in range(self.num_physdim)
         )
 
     @property
-    def num_nodes(self):
+    def num_nodes(self) -> int:
         return len(self.obj)
 
     @property
-    def num_cells(self):
+    def num_cells(self) -> int:
         return prod(len(k) - 1 for k in self.obj.knots())
 
-    def tesselate(self):
+    def tesselate(self) -> Patch:
         tess = TensorTesselation(self.obj)
         nodes = tess(self.obj)
         nodes = nodes.reshape((-1, nodes.shape[-1]))
         _, cells = tess.elements()
         return UnstructuredPatch(nodes, cells)
 
-    def tesselate_field(self, coeffs, cells=False):
+    def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         tess = TensorTesselation(self.obj)
         results = tess(self.obj, coeffs=coeffs, cells=cells)
         results = results.reshape((-1, results.shape[-1]))

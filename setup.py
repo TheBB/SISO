@@ -24,6 +24,7 @@ setup(
         'h5py',
         'vtk',
         'netcdf4',
+        'nptyping',
         'treelog',
     ],
     extras_require={
