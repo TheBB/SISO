@@ -283,8 +283,7 @@ class LRPatch(Patch):
     def tesselate_coeffs(self, coeffs, cells=False):
         tess = self.tesselator(self.obj)
         results = tess(self.obj, coeffs=coeffs, cells=cells)
-        if results.ndim > 1:
-            results = results.reshape((-1, results.shape[-1]))
+        results = results.reshape((-1, results.shape[-1]))
         return results
 
 
@@ -322,6 +321,5 @@ class SplinePatch(Patch):
     def tesselate_coeffs(self, coeffs, cells=False):
         tess = TensorTesselation(self.obj)
         results = tess(self.obj, coeffs=coeffs, cells=cells)
-        if results.ndim > 1:
-            results = results.reshape((-1, results.shape[-1]))
+        results = results.reshape((-1, results.shape[-1]))
         return results
