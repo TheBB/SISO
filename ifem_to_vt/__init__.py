@@ -35,9 +35,11 @@ class Config:
         prev_required = set(self._required_keys)
         for key, value in kwargs.items():
             self.assign(key, value)
-        yield
-        self.__dict__ = prev
-        self._required_keys = prev_required
+        try:
+            yield
+        finally:
+            self.__dict__ = prev
+            self._required_keys = prev_required
 
 
 config = Config()
