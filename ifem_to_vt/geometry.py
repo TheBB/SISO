@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from io import StringIO
 from itertools import product
 
+import lrspline as lr
 import numpy as np
 import splipy.io
 from splipy import SplineObject, BSplineBasis
@@ -16,6 +18,38 @@ def subdivide_linear(knots, nvis):
         out.extend(np.linspace(left, right, num=nvis, endpoint=False))
     out.append(knots[-1])
     return out
+
+
+def subdivide_face(el, nodes, elements, nvis):
+    left, bottom = el.start()
+    right, top = el.end()
+    xs = subdivide_linear((left, right), nvis)
+    ys = subdivide_linear((bottom, top), nvis)
+
+    for (l, r) in zip(xs[:-1], xs[1:]):
+        for (b, t) in zip(ys[:-1], ys[1:]):
+            sw, se, nw, ne = (l, b), (r, b), (l, t), (r, t)
+            for pt in (sw, se, nw, ne):
+                nodes.setdefault(pt, len(nodes))
+            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
+
+
+def subdivide_volume(el, nodes, elements, nvis):
+    umin, vmin, wmin = el.start()
+    umax, vmax, wmax = el.end()
+    us = subdivide_linear((umin, umax), nvis)
+    vs = subdivide_linear((vmin, vmax), nvis)
+    ws = subdivide_linear((wmin, wmax), nvis)
+
+    for (ul, ur) in zip(us[:-1], us[1:]):
+        for (vl, vr) in zip(vs[:-1], vs[1:]):
+            for (wl, wr) in zip(ws[:-1], ws[1:]):
+                bsw, bse, bnw, bne = (ul, vl, wl), (ur, vl, wl), (ul, vr, wl), (ur, vr, wl)
+                tsw, tse, tnw, tne = (ul, vl, wr), (ur, vl, wr), (ul, vr, wr), (ur, vr, wr)
+                for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
+                    nodes.setdefault(pt, len(nodes))
+                elements.append([nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
+                                 nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
 
 
 class TensorTesselation:
@@ -68,6 +102,62 @@ class TensorTesselation:
         return len(nidxs), eidxs
 
 
+class LRSurfaceTesselation:
+
+    def __init__(self, patch):
+        nodes, elements = OrderedDict(), []
+        for el in patch.elements:
+            subdivide_face(el, nodes, elements, config.nvis)
+
+        self._nodes = nodes
+        self._elements = np.array(elements, dtype=int)
+
+    def __call__(self, patch, coeffs=None, cells=False):
+        if cells:
+            assert coeffs is not None
+            ncomps = len(patch.elements) // coeffs.size
+            coeffs = coeffs.reshape((-1, ncomps))
+            coeffs = np.repeat(coeffs, config.nvis**2, axis=0)
+            return coeffs
+
+        if coeffs is not None:
+            patch = patch.clone()
+            patch.controlpoints = coeffs.reshape((len(patch.basis), -1))
+
+        return np.array([patch(*node) for node in self._nodes], dtype=float)
+
+    def elements(self):
+        return 2, self._elements
+
+
+class LRVolumeTesselation:
+
+    def __init__(self, patch):
+        nodes, elements = OrderedDict(), []
+        for el in patch.elements:
+            subdivide_volume(el, nodes, elements, config.nvis)
+
+        self._nodes = nodes
+        self._elements = np.array(elements, dtype=int)
+
+    def __call__(self, patch, coeffs=None, cells=False):
+        if cells:
+            assert coeffs is not None
+            ncomps = len(patch.elements) // coeffs.size
+            coeffs = coeffs.reshape((-1, ncomps))
+            coeffs = np.repeat(coeffs, config.nvis**3, axis=0)
+            return coeffs
+
+        if coeffs is not None:
+            patch = patch.clone()
+            patch.controlpoints = coeffs.reshape((len(patch.basis), -1))
+
+        return np.array([patch(*node) for node in self._nodes], dtype=float)
+
+    def elements(self):
+        return 3, self._elements
+
+
 class G2Object(splipy.io.G2):
 
     def __init__(self, fstream, mode):
@@ -97,6 +187,52 @@ class UnstructuredPatch(Patch):
     @property
     def num_cells(self):
         return len(self.cells)
+
+
+class LRPatch(Patch):
+
+    def __init__(self, obj):
+        if isinstance(obj, bytes):
+            obj = obj.decode()
+        if isinstance(obj, str):
+            if obj.startswith('# LRSPLINE SURFACE'):
+                obj = lr.LRSplineSurface(obj)
+            elif obj.startswith('# LRSPLINE VOLUME'):
+                obj = lr.LRSplineVolume(obj)
+        assert isinstance(obj, lr.LRSplineObject)
+        self.obj = obj
+
+    @property
+    def key(self):
+        return tuple(tuple(p) for p in self.obj.corners())
+
+    @property
+    def num_nodes(self):
+        return len(self.obj)
+
+    @property
+    def num_cells(self):
+        return len(self.obj.elements)
+
+    @property
+    def tesselator(self):
+        if isinstance(self.obj, lr.LRSplineSurface):
+            return LRSurfaceTesselation
+        return LRVolumeTesselation
+
+    def tesselate(self):
+        tess = self.tesselator(self.obj)
+        nodes = tess(self.obj)
+        nodes = nodes.reshape((-1, nodes.shape[-1]))
+        _, cells = tess.elements()
+        return UnstructuredPatch(nodes, cells)
+
+    def tesselate_coeffs(self, coeffs, cells=False):
+        tess = self.tesselator(self.obj)
+        results = tess(self.obj, coeffs=coeffs, cells=cells)
+        if results.ndim > 1:
+            results = results.reshape((-1, results.shape[-1]))
+        return results
 
 
 class SplinePatch(Patch):
