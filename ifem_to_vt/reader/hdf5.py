@@ -116,7 +116,7 @@ class Field:
         return self.reader.h5[str(stepid)][self.basis.name][sub][self.name][str(patchid+1)][:]
 
     def tesselate(self, patch, coeffs):
-        results = patch.tesselate_coeffs(coeffs, cells=self.cells)
+        results = patch.tesselate_field(coeffs, cells=self.cells)
 
         if self.ncomps == 1 and self.vectorize:
             results = expand_to_dims(results)
@@ -215,7 +215,7 @@ class GeometryManager:
         log.info('Using {} for geometry'.format(basis.name))
 
     def findid(self, patch):
-        corners = patch.key
+        corners = patch.bounding_box
         if corners not in self.corners:
             log.error('Unable to find corresponding geometry patch')
             return None
@@ -239,7 +239,7 @@ class GeometryManager:
                 log.debug('New unique patch detected, generating global ID')
 
             # FIXME: This leaves behind invalidated corner IDs, which we should probably delete.
-            self.corners[patch.key] = key
+            self.corners[patch.bounding_box] = key
             globpatchid = self.globids[(self.basis.name, patchid)]
 
             tess = patch.tesselate()

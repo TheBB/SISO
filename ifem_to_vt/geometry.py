@@ -170,7 +170,50 @@ class G2Object(splipy.io.G2):
 
 
 class Patch(ABC):
-    pass
+
+    @property
+    @abstractmethod
+    def num_physdim(self):
+        """Number of physical dimensions."""
+        pass
+
+    @property
+    @abstractmethod
+    def num_pardim(self):
+        """Number of parametric dimensions."""
+        pass
+
+    @property
+    @abstractmethod
+    def num_nodes(self):
+        """Number of nodes."""
+        pass
+
+    @property
+    @abstractmethod
+    def num_cells(self):
+        """Number of cells."""
+        pass
+
+    @property
+    @abstractmethod
+    def bounding_box(self):
+        """Hashable bounding box."""
+        pass
+
+    @abstractmethod
+    def tesselate(self):
+        """Convert to a suitable discrete representation.
+        Currently a UnstructuredPatch.
+        """
+        pass
+
+    @abstractmethod
+    def tesselate_field(self, coeffs, cells=False):
+        """Convert a nodal or cell field to the same representation as
+        returned by tesselate.
+        """
+        pass
 
 
 class UnstructuredPatch(Patch):
@@ -214,11 +257,20 @@ class UnstructuredPatch(Patch):
         return cls(nodes, cells)
 
     @property
-    def key(self):
-        return (
-            (np.min(self.nodes[:,0]), np.max(self.nodes[:,0])),
-            (np.min(self.nodes[:,1]), np.max(self.nodes[:,1])),
-            (np.min(self.nodes[:,2]), np.max(self.nodes[:,2])),
+    def num_physdim(self):
+        return self.nodes.shape[-1]
+
+    @property
+    def num_pardim(self):
+        return {
+            (4, 8): 3
+        }[self.num_physidm, self.cells.shape[-1]]
+
+    @property
+    def bounding_box(self):
+        return tuple(
+            (np.min(self.nodes[:,i]), np.max(self.nodes[:,i]))
+            for i in range(self.num_physdim)
         )
 
     @property
@@ -234,7 +286,7 @@ class UnstructuredPatch(Patch):
             raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
         return self
 
-    def tesselate_coeffs(self, coeffs, cells=False):
+    def tesselate_field(self, coeffs, cells=False):
         if config.nvis != 1:
             raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
         if cells:
@@ -256,8 +308,19 @@ class LRPatch(Patch):
         self.obj = obj
 
     @property
-    def key(self):
-        return tuple(tuple(p) for p in self.obj.corners())
+    def num_physdim(self):
+        return self.obj.dimension
+
+    @property
+    def num_pardim(self):
+        return self.obj.pardim
+
+    @property
+    def bounding_box(self):
+        return tuple(
+            (np.min(self.obj.controlpoints[:,i]), np.max(self.obj.controlpoints[:,i]))
+            for i in range(self.num_physdim)
+        )
 
     @property
     def num_nodes(self):
@@ -280,7 +343,7 @@ class LRPatch(Patch):
         _, cells = tess.elements()
         return UnstructuredPatch(nodes, cells)
 
-    def tesselate_coeffs(self, coeffs, cells=False):
+    def tesselate_field(self, coeffs, cells=False):
         tess = self.tesselator(self.obj)
         results = tess(self.obj, coeffs=coeffs, cells=cells)
         results = results.reshape((-1, results.shape[-1]))
@@ -300,8 +363,19 @@ class SplinePatch(Patch):
         self.obj = obj
 
     @property
-    def key(self):
-        return tuple(tuple(p) for p in self.obj.corners())
+    def num_physdim(self):
+        return self.obj.dimension
+
+    @property
+    def num_pardim(self):
+        return self.obj.pardim
+
+    @property
+    def bounding_box(self):
+        return tuple(
+            (np.min(self.obj.controlpoints[...,i]), np.max(self.obj.controlpoints[...,i]))
+            for i in range(self.num_physdim)
+        )
 
     @property
     def num_nodes(self):
@@ -318,7 +392,7 @@ class SplinePatch(Patch):
         _, cells = tess.elements()
         return UnstructuredPatch(nodes, cells)
 
-    def tesselate_coeffs(self, coeffs, cells=False):
+    def tesselate_field(self, coeffs, cells=False):
         tess = TensorTesselation(self.obj)
         results = tess(self.obj, coeffs=coeffs, cells=cells)
         results = results.reshape((-1, results.shape[-1]))
