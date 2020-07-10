@@ -6,6 +6,9 @@ from .. import config
 
 class Writer(AbstractVTKWriter):
 
+    def nan_filter(self, results):
+        return results
+
     def validate_mode(self):
         if not config.mode in ('appended', 'ascii', 'binary'):
             raise ValueError("VTU format does not support '{}' mode".format(self.config.mode))

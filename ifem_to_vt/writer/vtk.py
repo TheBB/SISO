@@ -4,6 +4,8 @@ import numpy as np
 from os.path import splitext
 from collections import namedtuple, OrderedDict
 
+import treelog as log
+
 from .. import config
 
 
@@ -39,6 +41,13 @@ class AbstractVTKWriter:
     def validate_mode(self):
         raise NotImplementedError
 
+    def nan_filter(self, results):
+        I, J = np.where(np.isnan(results))
+        if len(I) > 0 and config.mode == 'ascii':
+            log.warning("VTK ASCII files do not support NaN, will be set to zero")
+            results[I, J] = 0.0
+        return results
+
     def add_step(self, **data):
         self.step_data = data
         self.stepid += 1
@@ -60,6 +69,7 @@ class AbstractVTKWriter:
             results = results.reshape(-1, 3)
         else:
             assert False
+        results = self.nan_filter(results)
         field.results[patchid] = results
 
     def finalize_step(self):
