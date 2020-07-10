@@ -14,6 +14,7 @@ FILES = [
     ('hdf5', 'Cavity3D-compatible.hdf5'),
     ('hdf5', 'Cyl2D-VMSFSI-weak.hdf5'),
     ('hdf5', 'singular-pressure-corner-rec.hdf5'),
+    ('hdf5', 'SmallBox.hdf5'),
     ('hdf5', 'Square.hdf5'),
     ('hdf5', 'Square-ad.hdf5'),
     ('hdf5', 'Square-LR.hdf5'),
