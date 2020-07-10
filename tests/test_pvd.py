@@ -1,4 +1,4 @@
-from os.path import join, splitext, dirname
+from os.path import join, splitext, dirname, exists, basename
 import pytest
 import tempfile
 import xml.etree.ElementTree as ET
@@ -18,8 +18,8 @@ has_vtk_9 = vtk.vtkVersion().GetVTKMajorVersion() >= 9
 @pytest.fixture(params=FILES)
 def filenames(request):
     rootdir, rootname = request.param
-    basename, _ = splitext(rootname)
-    pvdname = '{}.pvd'.format(basename)
+    base, _ = splitext(basename(rootname))
+    pvdname = '{}.pvd'.format(base)
     return (
         join(TESTDATA_DIR, rootdir, rootname),
         join(TESTDATA_DIR, 'pvd', pvdname),
@@ -35,6 +35,8 @@ def load_grid(filename):
 
 
 def compare_pvd(outfn, reffn):
+    assert exists(outfn)
+    assert exists(reffn)
     with open(outfn, 'r') as f:
         out = ET.fromstring(f.read())
     assert out.tag == 'VTKFile'

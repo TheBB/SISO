@@ -1,4 +1,4 @@
-from os.path import join, splitext
+from os.path import join, splitext, exists, basename
 import pytest
 import re
 import tempfile
@@ -24,8 +24,8 @@ NUM = re.compile(r'-?\d+[ +\-e.\d]*\n?$')
 @pytest.fixture(params=FILES)
 def filenames(request):
     rootdir, rootname = request.param
-    basename, _ = splitext(rootname)
-    vtfname = '{}.vtf'.format(basename)
+    base, _ = splitext(basename(rootname))
+    vtfname = '{}.vtf'.format(base)
     return (
         join(TESTDATA_DIR, rootdir, rootname),
         join(TESTDATA_DIR, 'vtf', vtfname),
@@ -58,5 +58,7 @@ def test_vtf_integrity(filenames):
         outfile = join(tempdir, outfile)
         with config(mode='ascii'), get_reader(infile) as r, get_writer('vtf')(outfile) as w:
             r.write(w)
+        assert exists(outfile)
+        assert exists(checkfile)
         with open(outfile, 'r') as out, open(checkfile, 'r') as ref:
             compare_vtf(out, ref)

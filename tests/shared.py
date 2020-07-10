@@ -26,6 +26,7 @@ FILES = [
     ('g2', 'annulus3D.g2'),
     ('lr', 'square-2.lr'),
     ('lr', 'backstep-3.lr'),
+    ('res', 'box/box.res'),
 ]
 
 

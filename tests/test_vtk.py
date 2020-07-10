@@ -1,4 +1,4 @@
-from os.path import join, splitext, dirname
+from os.path import join, splitext, dirname, exists, basename
 import pytest
 import tempfile
 
@@ -15,8 +15,8 @@ has_vtk_9 = vtk.vtkVersion().GetVTKMajorVersion() >= 9
 @pytest.fixture(params=FILES)
 def filenames(request):
     rootdir, rootname = request.param
-    basename, _ = splitext(rootname)
-    vtkname = '{}.vtk'.format(basename)
+    base, _ = splitext(basename(rootname))
+    vtkname = '{}.vtk'.format(base)
     return (
         join(TESTDATA_DIR, rootdir, rootname),
         join(TESTDATA_DIR, 'vtk', vtkname),
@@ -32,6 +32,8 @@ def load_grid(filename):
 
 
 def compare_vtk(out, ref):
+    assert exists(out)
+    assert exists(ref)
     compare_vtk_unstructured(load_grid(out), load_grid(ref))
 
 
