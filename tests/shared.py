@@ -24,6 +24,8 @@ FILES = [
     ('hdf5', 'Waterfall3D.hdf5'),
     ('g2', 'Backstep2D.g2'),
     ('g2', 'annulus3D.g2'),
+    ('lr', 'square-2.lr'),
+    ('lr', 'backstep-3.lr'),
 ]
 
 
