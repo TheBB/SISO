@@ -12,7 +12,7 @@ import sys
 import treelog as log
 
 from .. import config
-from ..geometry import SplinePatch, LRPatch
+from ..geometry import SplinePatch, LRPatch, UnstructuredPatch
 
 
 def expand_to_dims(array, dims=3):
@@ -43,7 +43,9 @@ class Basis:
         key = (stepid, patchid)
         if key not in self.patch_cache:
             g2bytes = self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes()
-            if g2bytes.startswith(b'# LRSPLINE'):
+            if g2bytes.startswith(b'# LAGRANGIAN'):
+                patch = UnstructuredPatch.from_lagrangian(g2bytes)
+            elif g2bytes.startswith(b'# LRSPLINE'):
                 patch = LRPatch(g2bytes)
             else:
                 patch = SplinePatch(g2bytes)

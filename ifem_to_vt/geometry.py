@@ -180,6 +180,47 @@ class UnstructuredPatch(Patch):
         self.nodes = nodes
         self.cells = cells
 
+    @classmethod
+    def from_lagrangian(cls, data):
+        if isinstance(data, bytes):
+            data = data.decode()
+        assert isinstance(data, str)
+        assert data.startswith('# LAGRANGIAN')
+        lines = data.split('\n')
+        specs, lines = lines[0][12:].split(), iter(lines[1:])
+
+        # Decode nodes, elements, type
+        assert specs[0].startswith('nodes=')
+        nnodes = int(specs[0].split('=')[-1])
+        assert specs[1].startswith('elements=')
+        ncells = int(specs[1].split('=')[-1])
+        assert specs[2].startswith('type=')
+        celltype = specs[2].split('=')[-1]
+
+        if celltype not in ('hexahedron',):
+            raise ValueError("Unknown cell type: {}".format(celltype))
+
+        # Read nodes and cells
+        nodes = np.zeros((nnodes, 3))
+        for i in range(nnodes):
+            nodes[i] = list(map(float, next(lines).split()))
+
+        cells = np.zeros((ncells, 8), dtype=np.int32)
+        for i in range(ncells):
+            cells[i] = list(map(int, next(lines).split()))
+        cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
+        cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
+
+        return cls(nodes, cells)
+
+    @property
+    def key(self):
+        return (
+            (np.min(self.nodes[:,0]), np.max(self.nodes[:,0])),
+            (np.min(self.nodes[:,1]), np.max(self.nodes[:,1])),
+            (np.min(self.nodes[:,2]), np.max(self.nodes[:,2])),
+        )
+
     @property
     def num_nodes(self):
         return len(self.nodes)
@@ -187,6 +228,18 @@ class UnstructuredPatch(Patch):
     @property
     def num_cells(self):
         return len(self.cells)
+
+    def tesselate(self):
+        if config.nvis != 1:
+            raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
+        return self
+
+    def tesselate_coeffs(self, coeffs, cells=False):
+        if config.nvis != 1:
+            raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
+        if cells:
+            return coeffs.reshape((self.num_cells, -1))
+        return coeffs.reshape((self.num_nodes, -1))
 
 
 class LRPatch(Patch):
