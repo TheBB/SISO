@@ -61,35 +61,6 @@ def subdivide_volume(el, nodes, elements, nvis):
 
 
 
-class LRVolumeTesselation:
-
-    def __init__(self, patch):
-        nodes, elements = OrderedDict(), []
-        for el in patch.elements:
-            subdivide_volume(el, nodes, elements, config.nvis)
-
-        self._nodes = nodes
-        self._elements = np.array(elements, dtype=int)
-
-    def __call__(self, patch, coeffs=None, cells=False):
-        if cells:
-            assert coeffs is not None
-            ncomps = len(patch.elements) // coeffs.size
-            coeffs = coeffs.reshape((-1, ncomps))
-            coeffs = np.repeat(coeffs, config.nvis**3, axis=0)
-            return coeffs
-
-        if coeffs is not None:
-            patch = patch.clone()
-            patch.controlpoints = coeffs.reshape((len(patch.basis), -1))
-
-        return np.array([patch(*node) for node in self._nodes], dtype=float)
-
-    def elements(self):
-        return 3, self._elements
-
-
-
 # Abstract superclasses
 # ----------------------------------------------------------------------
 
@@ -278,28 +249,23 @@ class LRPatch(Patch):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
-    @property
-    def tesselator(self):
-        if isinstance(self.obj, lr.LRSplineSurface):
-            return LRSurfaceTesselator
-        return LRVolumeTesselation
-
     def tesselate(self) -> Patch:
-        tess = self.tesselator(self)
+        tess = LRTesselator(self)
         return tess.tesselate(self)
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        tess = self.tesselator(self)
+        tess = LRTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
 
 
-class LRSurfaceTesselator(Tesselator):
+class LRTesselator(Tesselator):
 
     def __init__(self, patch: LRPatch):
         super().__init__(patch)
         nodes, cells = OrderedDict(), []
+        subdivider = subdivide_face if patch.obj.pardim == 2 else subdivide_volume
         for el in patch.obj.elements:
-            subdivide_face(el, nodes, cells, config.nvis)
+            subdivider(el, nodes, cells, config.nvis)
         self.nodes = np.array(list(nodes))
         self.cells = np.array(cells, dtype=int)
 
