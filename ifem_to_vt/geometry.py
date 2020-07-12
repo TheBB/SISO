@@ -61,34 +61,6 @@ def subdivide_volume(el, nodes, elements, nvis):
 
 
 
-class LRSurfaceTesselation:
-
-    def __init__(self, patch):
-        nodes, elements = OrderedDict(), []
-        for el in patch.elements:
-            subdivide_face(el, nodes, elements, config.nvis)
-
-        self._nodes = nodes
-        self._elements = np.array(elements, dtype=int)
-
-    def __call__(self, patch, coeffs=None, cells=False):
-        if cells:
-            assert coeffs is not None
-            ncomps = len(patch.elements) // coeffs.size
-            coeffs = coeffs.reshape((-1, ncomps))
-            coeffs = np.repeat(coeffs, config.nvis**2, axis=0)
-            return coeffs
-
-        if coeffs is not None:
-            patch = patch.clone()
-            patch.controlpoints = coeffs.reshape((len(patch.basis), -1))
-
-        return np.array([patch(*node) for node in self._nodes], dtype=float)
-
-    def elements(self):
-        return 2, self._elements
-
-
 class LRVolumeTesselation:
 
     def __init__(self, patch):
@@ -265,6 +237,11 @@ class UnstructuredPatch(Patch):
         return coeffs.reshape((self.num_nodes, -1))
 
 
+
+# LRSpline support
+# ----------------------------------------------------------------------
+
+
 class LRPatch(Patch):
 
     def __init__(self, obj: Union[bytes, str, lr.LRSplineObject]):
@@ -304,21 +281,58 @@ class LRPatch(Patch):
     @property
     def tesselator(self):
         if isinstance(self.obj, lr.LRSplineSurface):
-            return LRSurfaceTesselation
+            return LRSurfaceTesselator
         return LRVolumeTesselation
 
     def tesselate(self) -> Patch:
-        tess = self.tesselator(self.obj)
-        nodes = tess(self.obj)
-        nodes = nodes.reshape((-1, nodes.shape[-1]))
-        _, cells = tess.elements()
-        return UnstructuredPatch(nodes, cells)
+        tess = self.tesselator(self)
+        return tess.tesselate(self)
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        tess = self.tesselator(self.obj)
-        results = tess(self.obj, coeffs=coeffs, cells=cells)
-        results = results.reshape((-1, results.shape[-1]))
-        return results
+        tess = self.tesselator(self)
+        return tess.tesselate_field(self, coeffs, cells=cells)
+
+
+class LRSurfaceTesselator(Tesselator):
+
+    def __init__(self, patch: LRPatch):
+        super().__init__(patch)
+        nodes, cells = OrderedDict(), []
+        for el in patch.obj.elements:
+            subdivide_face(el, nodes, cells, config.nvis)
+        self.nodes = np.array(list(nodes))
+        self.cells = np.array(cells, dtype=int)
+
+    @singledispatchmethod
+    def tesselate(self, patch: Patch) -> Patch:
+        raise NotImplementedError
+
+    @tesselate.register
+    def _(self, patch: LRPatch) -> Patch:
+        spline = patch.obj
+        nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
+        return UnstructuredPatch(nodes, self.cells)
+
+    @singledispatchmethod
+    def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
+        raise NotImplementedError
+
+    @tesselate_field.register
+    def _(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+        spline = patch.obj
+
+        if not cells:
+            # Create a new patch with substituted control points, and
+            # evaluate it at the predetermined knot values.
+            newspline = spline.clone()
+            newspline.controlpoints = coeffs.reshape((len(spline), -1))
+            return np.array([newspline(*node) for node in self.nodes], dtype=float)
+
+        # For every cell center, check which cell it belongs to in the
+        # reference spline, then use that coefficient.
+        coeffs = flatten_2d(coeffs)
+        cell_centers = [np.mean(self.nodes[c,:], axis=0) for c in self.cells]
+        return np.array([coeffs[spline.element_at(*c).id, :] for c in cell_centers])
 
 
 
