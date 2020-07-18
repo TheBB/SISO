@@ -46,6 +46,7 @@ def compare_data(out, ref):
         np.testing.assert_allclose(
             vtknp.vtk_to_numpy(out.GetArray(i)),
             vtknp.vtk_to_numpy(ref.GetArray(i)),
+            atol=1e-15,
         )
 
 
@@ -53,6 +54,7 @@ def compare_vtk_unstructured(out, ref):
     np.testing.assert_allclose(
         vtknp.vtk_to_numpy(out.GetPoints().GetData()),
         vtknp.vtk_to_numpy(ref.GetPoints().GetData()),
+        atol=1e-15,
     )
     np.testing.assert_array_equal(
         vtknp.vtk_to_numpy(out.GetCells().GetData()),
