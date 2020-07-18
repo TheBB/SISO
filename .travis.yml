@@ -22,7 +22,8 @@ before_install:
 
 install:
   - source ./ci/install.sh
-  - conda install -y python=${CONDA_PYTHON} vtk h5py
+  - conda install -y python=${CONDA_PYTHON} h5py
+  - pip install vtk>=9
   - pip install pytest
   - pip install twine cibuildwheel==1.1.0
   - conda list
