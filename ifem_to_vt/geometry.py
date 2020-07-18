@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from functools import singledispatchmethod
 from io import StringIO
 from itertools import product
 
 import lrspline as lr
 import numpy as np
+from singledispatchmethod import singledispatchmethod
 import splipy.io
 from splipy import SplineObject, BSplineBasis
 
@@ -273,7 +273,7 @@ class LRTesselator(Tesselator):
     def tesselate(self, patch: Patch) -> Patch:
         raise NotImplementedError
 
-    @tesselate.register
+    @tesselate.register(LRPatch)
     def _(self, patch: LRPatch) -> Patch:
         spline = patch.obj
         nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
@@ -283,7 +283,7 @@ class LRTesselator(Tesselator):
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
-    @tesselate_field.register
+    @tesselate_field.register(LRPatch)
     def _(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
@@ -374,7 +374,7 @@ class TensorTesselator(Tesselator):
     def tesselate(self, patch: Patch) -> Patch:
         raise NotImplementedError
 
-    @tesselate.register
+    @tesselate.register(SplinePatch)
     def _(self, patch: SplinePatch):
         nodes = flatten_2d(patch.obj(*self.knots))
         return UnstructuredPatch(nodes, self.cells())
@@ -383,7 +383,7 @@ class TensorTesselator(Tesselator):
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
-    @tesselate_field.register
+    @tesselate_field.register(SplinePatch)
     def _(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 

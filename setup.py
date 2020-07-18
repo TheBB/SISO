@@ -25,6 +25,7 @@ setup(
         'vtk',
         'netcdf4',
         'nptyping',
+        'singledispatchmethod',
         'treelog',
     ],
     extras_require={
