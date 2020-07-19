@@ -1,15 +1,13 @@
-from os.path import join, splitext, dirname, exists, basename
+from os.path import splitext, basename
+from pathlib import Path
 import pytest
-import tempfile
 import xml.etree.ElementTree as ET
 
 import numpy as np
+from click.testing import CliRunner
 
-from .shared import TESTDATA_DIR, FILES, step_filenames, compare_vtk_unstructured
-
-from ifem_to_vt import config
-from ifem_to_vt.reader import get_reader
-from ifem_to_vt.writer import get_writer
+from .shared import TESTDATA_DIR, FILES, step_filenames, compare_vtk_unstructured, cd_temp
+from ifem_to_vt.__main__ import convert
 
 import vtk
 has_vtk_9 = vtk.vtkVersion().GetVTKMajorVersion() >= 9
@@ -17,26 +15,27 @@ has_vtk_9 = vtk.vtkVersion().GetVTKMajorVersion() >= 9
 
 @pytest.fixture(params=FILES)
 def filenames(request):
-    rootdir, rootname = request.param
+    rootdir, rootname, nsteps = request.param
     base, _ = splitext(basename(rootname))
     pvdname = '{}.pvd'.format(base)
     return (
-        join(TESTDATA_DIR, rootdir, rootname),
-        join(TESTDATA_DIR, 'pvd', pvdname),
+        TESTDATA_DIR / rootdir / rootname,
+        TESTDATA_DIR / 'pvd' / pvdname,
         pvdname,
+        nsteps,
     )
 
 
-def load_grid(filename):
+def load_grid(filename: Path):
     reader = vtk.vtkXMLUnstructuredGridReader()
-    reader.SetFileName(filename)
+    reader.SetFileName(str(filename))
     reader.Update()
     return reader.GetOutput()
 
 
-def compare_pvd(outfn, reffn):
-    assert exists(outfn)
-    assert exists(reffn)
+def compare_pvd(outfn: Path, reffn: Path):
+    assert outfn.exists()
+    assert reffn.exists()
     with open(outfn, 'r') as f:
         out = ET.fromstring(f.read())
     assert out.tag == 'VTKFile'
@@ -55,16 +54,16 @@ def compare_pvd(outfn, reffn):
         np.testing.assert_allclose(float(outtag.attrib['timestep']), float(reftag.attrib['timestep']))
         assert outtag.attrib['part'] == reftag.attrib['part']
         compare_vtk_unstructured(
-            load_grid(join(dirname(outfn), outtag.attrib['file'])),
-            load_grid(join(dirname(reffn), reftag.attrib['file'])),
+            load_grid(outfn.parent / outtag.attrib['file']),
+            load_grid(reffn.parent / reftag.attrib['file']),
         )
 
 
 @pytest.mark.skipif(not has_vtk_9, reason="VTK tests only work on VTK>=9")
 def test_pvd_integrity(filenames):
-    infile, checkfile, outfile = filenames
-    with tempfile.TemporaryDirectory() as tempdir:
-        outfile = join(tempdir, outfile)
-        with config(output_mode='ascii'), get_reader(infile) as r, get_writer('pvd')(outfile) as w:
-            r.write(w)
+    infile, checkfile, outfile, nsteps = filenames
+    with cd_temp() as tempdir:
+        outfile = tempdir / outfile
+        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'pvd', str(infile)])
+        assert res.exit_code == 0
         compare_pvd(outfile, checkfile)

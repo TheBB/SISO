@@ -56,7 +56,6 @@ class RichOutputLog(log.RichOutputLog):
 
 @suppress_warnings
 def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
-
     # Set up logging
     if rich:
         logger = RichOutputLog(sys.stdout)

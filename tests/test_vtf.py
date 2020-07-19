@@ -1,15 +1,13 @@
-from os.path import join, splitext, exists, basename
+from os.path import splitext, basename
+from pathlib import Path
 import pytest
 import re
-import tempfile
 
 import numpy as np
+from click.testing import CliRunner
 
-from .shared import TESTDATA_DIR, FILES
-
-from ifem_to_vt import config
-from ifem_to_vt.reader import get_reader
-from ifem_to_vt.writer import get_writer
+from .shared import TESTDATA_DIR, FILES, cd_temp
+from ifem_to_vt.__main__ import convert
 
 try:
     import vtfwriter
@@ -23,12 +21,12 @@ NUM = re.compile(r'-?\d+[ +\-e.\d]*\n?$')
 
 @pytest.fixture(params=FILES)
 def filenames(request):
-    rootdir, rootname = request.param
+    rootdir, rootname, _ = request.param
     base, _ = splitext(basename(rootname))
     vtfname = '{}.vtf'.format(base)
     return (
-        join(TESTDATA_DIR, rootdir, rootname),
-        join(TESTDATA_DIR, 'vtf', vtfname),
+        TESTDATA_DIR / rootdir / rootname,
+        TESTDATA_DIR / 'vtf' / vtfname,
         vtfname,
     )
 
@@ -54,11 +52,11 @@ def compare_vtf(out, ref):
 @pytest.mark.skipif(not has_vtf, reason="VTF tests not runnable without vtfwriter")
 def test_vtf_integrity(filenames):
     infile, checkfile, outfile = filenames
-    with tempfile.TemporaryDirectory() as tempdir:
-        outfile = join(tempdir, outfile)
-        with config(output_mode='ascii'), get_reader(infile) as r, get_writer('vtf')(outfile) as w:
-            r.write(w)
-        assert exists(outfile)
-        assert exists(checkfile)
+    with cd_temp() as tempdir:
+        outfile = tempdir / outfile
+        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'vtf', str(infile)])
+        assert res.exit_code == 0
+        assert outfile.exists()
+        assert checkfile.exists()
         with open(outfile, 'r') as out, open(checkfile, 'r') as ref:
             compare_vtf(out, ref)
