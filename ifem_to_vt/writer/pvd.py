@@ -24,7 +24,7 @@ class Writer(AbstractVTUWriter):
         fn, ext = splitext(self.filename)
         root = join(fn, 'data')
         makedirs(root, mode=0o775, exist_ok=True)
-        if config.last:
+        if not config.multiple_timesteps:
             return root + '.vtu'
         return '{}-{}.vtu'.format(root, self.stepid)
 

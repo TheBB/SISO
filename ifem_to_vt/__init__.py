@@ -8,12 +8,30 @@ class Config:
     their needs.
     """
 
-    basis = ()
-    geometry = None
+
+    # Number of subdivisions for additional resolution.
     nvis = 1
-    mode = 'binary'
-    last = False
-    endianness = 'native'
+
+    # Whether the data set contains multiple time steps.
+    multiple_timesteps = True
+
+    # Whether to copy only the final time step.
+    only_final_timestep = False
+
+    # Output mode. Used by the VTK and VTF writers.
+    output_mode = 'binary'
+
+    # Input endianness indicator. Used by the SIMRA reader.
+    input_endianness = 'native'
+
+    # List of basis objects to copy to output. Used by the IFEM
+    # reader.
+    only_bases = ()
+
+    # Which basis should be used to represent the geometry. Used by
+    # the IFEM reader.
+    geometry_basis = None
+
 
     def __init__(self):
         self._required_keys = set()

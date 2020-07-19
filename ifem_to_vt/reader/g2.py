@@ -26,7 +26,7 @@ class Reader:
 
     def __init__(self, filename):
         self.filename = filename
-        config.require(last=True)
+        config.require(multiple_timesteps=False)
 
     def __enter__(self):
         with G2(self.filename) as g2:

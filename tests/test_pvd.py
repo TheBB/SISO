@@ -65,6 +65,6 @@ def test_pvd_integrity(filenames):
     infile, checkfile, outfile = filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        with config(mode='ascii'), get_reader(infile) as r, get_writer('pvd')(outfile) as w:
+        with config(output_mode='ascii'), get_reader(infile) as r, get_writer('pvd')(outfile) as w:
             r.write(w)
         compare_pvd(outfile, checkfile)

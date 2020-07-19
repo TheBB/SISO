@@ -32,21 +32,28 @@ class RichOutputLog(log.RichOutputLog):
 
 
 @click.command()
-@click.option('--basis', '-b', multiple=True, help='Include fields in this basis.')
-@click.option('--geometry', '-g', default=None, help='Use this basis to provide geometry.')
-@click.option('--nvis', '-n', default=1, help='Extra sampling points per element.')
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd', 'nc']), required=False, help='Output format.')
-@click.option('--mode', '-m', type=click.Choice(['binary', 'ascii', 'appended']), default='binary', help='Output mode.')
-@click.option('--last', is_flag=True, help='Read only the last step.')
-@click.option('--endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+
+# Options that are forwarded to config
+@click.option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
+@click.option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
+@click.option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
+@click.option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
+@click.option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@click.option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']), default='binary', help='Output mode.')
+
+# Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
 @click.option('--info', 'verbosity', flag_value='info', default=True)
 @click.option('--user', 'verbosity', flag_value='user')
 @click.option('--warning', 'verbosity', flag_value='warning')
 @click.option('--error', 'verbosity', flag_value='error')
 @click.option('--rich/--no-rich', default=True)
+
+# Filenames
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
+
 @suppress_warnings
 def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
 

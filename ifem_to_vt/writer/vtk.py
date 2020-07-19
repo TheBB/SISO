@@ -30,7 +30,7 @@ class AbstractVTKWriter:
         pass
 
     def make_filename(self):
-        if config.last:
+        if not config.multiple_timesteps:
             return self.filename
         fn, ext = splitext(self.filename)
         return '{}-{}{}'.format(fn, self.stepid, ext)
@@ -43,7 +43,7 @@ class AbstractVTKWriter:
 
     def nan_filter(self, results):
         I, J = np.where(np.isnan(results))
-        if len(I) > 0 and config.mode == 'ascii':
+        if len(I) > 0 and config.output_mode == 'ascii':
             log.warning("VTK ASCII files do not support NaN, will be set to zero")
             results[I, J] = 0.0
         return results
@@ -118,12 +118,12 @@ class AbstractVTKWriter:
 class Writer(AbstractVTKWriter):
 
     def validate_mode(self):
-        if not config.mode in ('ascii', 'binary'):
-            raise ValueError("VTK format does not support '{}' mode".format(config.mode))
+        if not config.output_mode in ('ascii', 'binary'):
+            raise ValueError("VTK format does not support '{}' mode".format(config.output_mode))
 
     def writer(self):
         writer = vtk.vtkUnstructuredGridWriter()
-        if config.mode == 'ascii':
+        if config.output_mode == 'ascii':
             writer.SetFileTypeToASCII()
         else:
             writer.SetFileTypeToBinary()

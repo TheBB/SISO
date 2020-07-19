@@ -56,7 +56,7 @@ def test_vtf_integrity(filenames):
     infile, checkfile, outfile = filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        with config(mode='ascii'), get_reader(infile) as r, get_writer('vtf')(outfile) as w:
+        with config(output_mode='ascii'), get_reader(infile) as r, get_writer('vtf')(outfile) as w:
             r.write(w)
         assert exists(outfile)
         assert exists(checkfile)

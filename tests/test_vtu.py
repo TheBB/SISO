@@ -42,11 +42,11 @@ def test_vtu_integrity(filenames):
     infile, checkfile, outfile = filenames
     with tempfile.TemporaryDirectory() as tempdir:
         outfile = join(tempdir, outfile)
-        with config(mode='ascii'):
+        with config(output_mode='ascii'):
             with get_reader(infile) as r, get_writer('vtu')(outfile) as w:
                 nsteps = getattr(r, 'nsteps', 0)
                 r.write(w)
-            if config.last:
+            if not config.multiple_timesteps:
                 compare_vtu(outfile, checkfile)
             else:
                 for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):

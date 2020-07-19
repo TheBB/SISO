@@ -274,8 +274,8 @@ class Reader:
         self.combine_fields()
         self.sort_fields()
 
-        if config.geometry:
-            self.geometry = GeometryManager(self.bases[config.geometry])
+        if config.geometry_basis:
+            self.geometry = GeometryManager(self.bases[config.geometry_basis])
         else:
             self.geometry = GeometryManager(next(iter(self.bases.values())))
 
@@ -297,7 +297,7 @@ class Reader:
             yield stepid, {'time': time}, self.h5[str(stepid)]
 
     def outputsteps(self):
-        if config.last:
+        if config.only_final_timestep:
             for stepid, time, _ in self.steps():
                 pass
             yield stepid, time
@@ -306,12 +306,12 @@ class Reader:
                 yield stepid, time
 
     def allowed_bases(self, group, items=False):
-        if not config.basis:
+        if not config.only_bases:
             yield from (group.items() if items else group)
         elif items:
-            yield from ((b, v) for b, v in group.items() if b in config.basis)
+            yield from ((b, v) for b, v in group.items() if b in config.only_bases)
         else:
-            yield from (b for b in group if b in config.basis)
+            yield from (b for b in group if b in config.only_bases)
 
     def init_bases(self):
         for stepid, _, stepgrp in self.steps():
@@ -336,9 +336,9 @@ class Reader:
 
         # Delete the bases we don't need
         # TODO: Don't do it this way, though
-        if config.basis:
-            config.require(basis=tuple(set(self.bases) & set(config.basis)))
-            keep = config.only_bases + ((config.geometry,) if config.geometry else ())
+        if config.only_bases:
+            config.require(only_bases=tuple(set(self.bases) & set(config.only_bases)))
+            keep = config.only_bases + ((config.geometry_basis,) if config.geometry_basis else ())
             self.bases = OrderedDict((b,v) for b,v in self.bases.items() if b in keep)
         else:
             config.require(basis=tuple(self.bases.keys()))
