@@ -355,13 +355,15 @@ class Reader:
                 kspans = basisgrp['knotspan'] if 'knotspan' in basisgrp else []
 
                 for fieldname in fields:
-                    if fieldname not in self.fields:
+                    if fieldname not in self.fields and basisname in self.bases:
                         self.fields[fieldname] = Field(fieldname, self.bases[basisname], self)
-                    self.fields[fieldname].add_update(stepid)
+                    if fieldname in self.fields:
+                        self.fields[fieldname].add_update(stepid)
                 for fieldname in kspans:
-                    if fieldname not in self.fields:
+                    if fieldname not in self.fields and basisname in self.bases:
                         self.fields[fieldname] = Field(fieldname, self.bases[basisname], self, cells=True)
-                    self.fields[fieldname].add_update(stepid)
+                    if fieldname in self.fields:
+                        self.fields[fieldname].add_update(stepid)
 
     def log_fields(self):
         for field in self.fields.values():
