@@ -8,6 +8,7 @@ env:
   jobs:
     - CONDA_PYTHON=3.6
     - CONDA_PYTHON=3.7
+    - CONDA_PYTHON=3.8
 
 os:
   - linux
