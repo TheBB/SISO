@@ -6,7 +6,7 @@ import re
 import numpy as np
 from click.testing import CliRunner
 
-from .shared import TESTDATA_DIR, FILES, cd_temp
+from .shared import TESTCASES, cd_temp
 from ifem_to_vt.__main__ import convert
 
 try:
@@ -17,18 +17,6 @@ except ImportError:
 
 
 NUM = re.compile(r'-?\d+[ +\-e.\d]*\n?$')
-
-
-@pytest.fixture(params=FILES)
-def filenames(request):
-    rootdir, rootname, _ = request.param
-    base, _ = splitext(basename(rootname))
-    vtfname = '{}.vtf'.format(base)
-    return (
-        TESTDATA_DIR / rootdir / rootname,
-        TESTDATA_DIR / 'vtf' / vtfname,
-        vtfname,
-    )
 
 
 def compare_vtf(out, ref):
@@ -50,13 +38,13 @@ def compare_vtf(out, ref):
 
 
 @pytest.mark.skipif(not has_vtf, reason="VTF tests not runnable without vtfwriter")
-def test_vtf_integrity(filenames):
-    infile, checkfile, outfile = filenames
+@pytest.mark.parametrize('case', TESTCASES['vtf'])
+def test_vtf_integrity(case):
     with cd_temp() as tempdir:
-        outfile = tempdir / outfile
-        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'vtf', str(infile)])
+        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'vtf', str(case.sourcefile)])
         assert res.exit_code == 0
-        assert outfile.exists()
-        assert checkfile.exists()
-        with open(outfile, 'r') as out, open(checkfile, 'r') as ref:
-            compare_vtf(out, ref)
+        for out, ref in case.check_files(tempdir):
+            assert out.exists()
+            assert ref.exists()
+            with open(out, 'r') as a, open(ref, 'r') as b:
+                compare_vtf(a, b)

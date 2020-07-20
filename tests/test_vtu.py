@@ -4,24 +4,11 @@ import pytest
 
 from click.testing import CliRunner
 
-from .shared import TESTDATA_DIR, FILES, step_filenames, compare_vtk_unstructured, cd_temp
+from .shared import TESTCASES, compare_vtk_unstructured, cd_temp
 from ifem_to_vt.__main__ import convert
 
 import vtk
 has_vtk_9 = vtk.vtkVersion().GetVTKMajorVersion() >= 9
-
-
-@pytest.fixture(params=FILES)
-def filenames(request):
-    rootdir, rootname, nsteps = request.param
-    base, _ = splitext(basename(rootname))
-    vtuname = '{}.vtu'.format(base)
-    return (
-        TESTDATA_DIR / rootdir / rootname,
-        TESTDATA_DIR / 'vtu' / vtuname,
-        Path(vtuname),
-        nsteps,
-    )
 
 
 def load_grid(filename: Path):
@@ -38,14 +25,10 @@ def compare_vtu(out: Path, ref: Path):
 
 
 @pytest.mark.skipif(not has_vtk_9, reason="VTK tests only work on VTK>=9")
-def test_vtu_integrity(filenames):
-    infile, checkfile, outfile, nsteps = filenames
+@pytest.mark.parametrize('case', TESTCASES['vtu'])
+def test_vtu_integrity(case):
     with cd_temp() as tempdir:
-        outfile = tempdir / outfile
-        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'vtu', str(infile)])
+        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'vtu', str(case.sourcefile)])
         assert res.exit_code == 0
-        if nsteps is None:
-            compare_vtu(outfile, checkfile)
-        else:
-            for outfn, checkfn in zip(step_filenames(nsteps, outfile), step_filenames(nsteps, checkfile)):
-                compare_vtu(outfn, checkfn)
+        for out, ref in case.check_files(tempdir):
+            compare_vtu(out, ref)
