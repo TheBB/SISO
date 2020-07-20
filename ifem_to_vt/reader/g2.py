@@ -1,6 +1,8 @@
 from splipy.io import G2
 
-from .hdf5 import Log, GeometryManager
+from .. import config
+from ..geometry import SplinePatch
+from .hdf5 import GeometryManager
 
 
 class SimpleBasis:
@@ -22,14 +24,13 @@ class SimpleBasis:
 
 class Reader:
 
-    def __init__(self, filename, nvis=1, **kwargs):
-        self.basis = None
+    def __init__(self, filename):
         self.filename = filename
-        self.nvis = nvis
+        config.require(multiple_timesteps=False)
 
     def __enter__(self):
         with G2(self.filename) as g2:
-            patches = g2.read()
+            patches = list(map(SplinePatch, g2.read()))
         self.basis = SimpleBasis(patches)
         return self
 
@@ -38,6 +39,6 @@ class Reader:
 
     def write(self, w):
         w.add_step(time=0.0)
-        geometry = GeometryManager(self.basis, self.nvis)
+        geometry = GeometryManager(self.basis)
         geometry.update(w, 0)
         w.finalize_step()

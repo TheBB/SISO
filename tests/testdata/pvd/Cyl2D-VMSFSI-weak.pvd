@@ -1,0 +1,15 @@
+<VTKFile type="Collection">
+  <Collection>
+    <DataSet timestep="0.0" part="0" file="Cyl2D-VMSFSI-weak/data-1.vtu" />
+    <DataSet timestep="0.001" part="0" file="Cyl2D-VMSFSI-weak/data-2.vtu" />
+    <DataSet timestep="0.002" part="0" file="Cyl2D-VMSFSI-weak/data-3.vtu" />
+    <DataSet timestep="0.003" part="0" file="Cyl2D-VMSFSI-weak/data-4.vtu" />
+    <DataSet timestep="0.004" part="0" file="Cyl2D-VMSFSI-weak/data-5.vtu" />
+    <DataSet timestep="0.005" part="0" file="Cyl2D-VMSFSI-weak/data-6.vtu" />
+    <DataSet timestep="0.006" part="0" file="Cyl2D-VMSFSI-weak/data-7.vtu" />
+    <DataSet timestep="0.007" part="0" file="Cyl2D-VMSFSI-weak/data-8.vtu" />
+    <DataSet timestep="0.008" part="0" file="Cyl2D-VMSFSI-weak/data-9.vtu" />
+    <DataSet timestep="0.009000000000000001" part="0" file="Cyl2D-VMSFSI-weak/data-10.vtu" />
+    <DataSet timestep="0.01" part="0" file="Cyl2D-VMSFSI-weak/data-11.vtu" />
+  </Collection>
+</VTKFile>

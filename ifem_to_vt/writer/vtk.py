@@ -4,6 +4,10 @@ import numpy as np
 from os.path import splitext
 from collections import namedtuple, OrderedDict
 
+import treelog as log
+
+from .. import config
+
 
 Patch = namedtuple('Patch', ['nodes', 'elements', 'dim'])
 Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
@@ -11,10 +15,8 @@ Field = namedtuple('Field', ['name', 'cells', 'kind', 'results'])
 
 class AbstractVTKWriter:
 
-    def __init__(self, filename, mode='binary', last=False, **kwargs):
-        self.mode = mode
+    def __init__(self, filename):
         self.filename = filename
-        self.last = last
 
         self.validate_mode()
 
@@ -28,7 +30,7 @@ class AbstractVTKWriter:
         pass
 
     def make_filename(self):
-        if self.last:
+        if not config.multiple_timesteps:
             return self.filename
         fn, ext = splitext(self.filename)
         return '{}-{}{}'.format(fn, self.stepid, ext)
@@ -38,6 +40,13 @@ class AbstractVTKWriter:
 
     def validate_mode(self):
         raise NotImplementedError
+
+    def nan_filter(self, results):
+        I, J = np.where(np.isnan(results))
+        if len(I) > 0 and config.output_mode == 'ascii':
+            log.warning("VTK ASCII files do not support NaN, will be set to zero")
+            results[I, J] = 0.0
+        return results
 
     def add_step(self, **data):
         self.step_data = data
@@ -60,6 +69,7 @@ class AbstractVTKWriter:
             results = results.reshape(-1, 3)
         else:
             assert False
+        results = self.nan_filter(results)
         field.results[patchid] = results
 
     def finalize_step(self):
@@ -76,6 +86,8 @@ class AbstractVTKWriter:
         elif all(p.dim == 3 for p in self.patches.values()):
             npts = 8
             celltype = vtk.VTK_HEXAHEDRON
+        else:
+            assert False
 
         offset = np.hstack([[0], np.cumsum([len(p.nodes) for p in self.patches.values()])])
         elements = np.vstack([patch.elements + off for patch, off in zip(self.patches.values(), offset)])
@@ -106,12 +118,12 @@ class AbstractVTKWriter:
 class Writer(AbstractVTKWriter):
 
     def validate_mode(self):
-        if not self.mode in ('ascii', 'binary'):
-            raise ValueError("VTK format does not support '{}' mode".format(self.mode))
+        if not config.output_mode in ('ascii', 'binary'):
+            raise ValueError("VTK format does not support '{}' mode".format(config.output_mode))
 
     def writer(self):
         writer = vtk.vtkUnstructuredGridWriter()
-        if self.mode == 'ascii':
+        if config.output_mode == 'ascii':
             writer.SetFileTypeToASCII()
         else:
             writer.SetFileTypeToBinary()

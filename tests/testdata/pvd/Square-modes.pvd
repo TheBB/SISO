@@ -1,0 +1,14 @@
+<VTKFile type="Collection">
+  <Collection>
+    <DataSet timestep="0.01967792546774338" part="0" file="Square-modes/data-1.vtu" />
+    <DataSet timestep="0.05193570663902443" part="0" file="Square-modes/data-2.vtu" />
+    <DataSet timestep="0.06683009764277467" part="0" file="Square-modes/data-3.vtu" />
+    <DataSet timestep="0.06688078415144048" part="0" file="Square-modes/data-4.vtu" />
+    <DataSet timestep="0.06953908959247375" part="0" file="Square-modes/data-5.vtu" />
+    <DataSet timestep="0.08587525903056437" part="0" file="Square-modes/data-6.vtu" />
+    <DataSet timestep="0.1126415831283766" part="0" file="Square-modes/data-7.vtu" />
+    <DataSet timestep="0.1168900644897287" part="0" file="Square-modes/data-8.vtu" />
+    <DataSet timestep="0.14417177662201497" part="0" file="Square-modes/data-9.vtu" />
+    <DataSet timestep="0.14447494267151362" part="0" file="Square-modes/data-10.vtu" />
+  </Collection>
+</VTKFile>

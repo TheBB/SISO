@@ -1,14 +1,15 @@
 from collections import defaultdict, OrderedDict
 
+from .. import config
 import vtfwriter as vtf
 
 
 class Writer(vtf.File):
 
-    def __init__(self, filename, mode='binary', **kwargs):
-        if mode not in ('ascii', 'binary'):
-            raise ValueError("VTF format does not support '{}' mode".format(mode))
-        super(Writer, self).__init__(filename, 'w' if mode == 'ascii' else 'wb')
+    def __init__(self, filename):
+        if config.output_mode not in ('ascii', 'binary'):
+            raise ValueError("VTF format does not support '{}' mode".format(config.output_mode))
+        super(Writer, self).__init__(filename, 'w' if config.output_mode == 'ascii' else 'wb')
         self.steps = []
         self.geometry_blocks = []
         self.internal_stepid = dict()

@@ -2,10 +2,13 @@ from pathlib import Path
 
 from scipy.io import FortranFile
 
+from .. import config
+
 
 class Reader:
 
-    def __init__(self, result_fn, mesh_fn=None, endianness='native', **kwargs):
+    def __init__(self, result_fn, mesh_fn=None):
+        config.require(multiple_timesteps=False)
         self.result_fn = Path(result_fn)
         if mesh_fn is None:
             self.mesh_fn = self.result_fn.parent / 'mesh.dat'
@@ -15,7 +18,7 @@ class Reader:
         if not self.mesh_fn.is_file():
             raise IOError('Unable to find mesh file: {}'.format(self.mesh_fn))
 
-        endian = {'native': '=', 'big': '>', 'small': '<'}[endianness]
+        endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
         self.f4_type = endian + 'f4'
         self.u4_type = endian + 'u4'
 
