@@ -10,7 +10,6 @@ from .shared import TESTCASES, compare_vtk_unstructured, cd_temp
 from ifem_to_vt.__main__ import convert
 
 import vtk
-has_vtk_9 = vtk.vtkVersion().GetVTKMajorVersion() >= 9
 
 
 def load_grid(filename: Path):
@@ -46,7 +45,6 @@ def compare_pvd(outfn: Path, reffn: Path):
         )
 
 
-@pytest.mark.skipif(not has_vtk_9, reason="VTK tests only work on VTK>=9")
 @pytest.mark.parametrize('case', TESTCASES['pvd'])
 def test_pvd_integrity(case):
     with cd_temp() as tempdir:
