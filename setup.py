@@ -30,6 +30,8 @@ setup(
     ],
     extras_require={
         'VTF': ['vtfwriter'],
+        'testing': ['pytest', 'dataclasses'],
+        'deploy': ['twine', 'cibuildwheel==1.1.0'],
     },
     entry_points={
         'console_scripts': [
