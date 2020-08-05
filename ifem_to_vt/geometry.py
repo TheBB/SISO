@@ -424,7 +424,7 @@ class TensorTesselator(Tesselator):
 
         return flatten_2d(newspline(*knots))
 
-    def cells(self):
+    def cells(self) -> Array2D:
         nshape = tuple(len(k) for k in self.knots)
         ranges = [range(k-1) for k in nshape]
         nidxs = [np.array(q) for q in zip(*product(*ranges))]
