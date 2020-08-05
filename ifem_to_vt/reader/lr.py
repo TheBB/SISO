@@ -30,7 +30,10 @@ class Reader:
 
     def __enter__(self):
         with open(self.filename, 'rb') as f:
-            patches = list(map(LRPatch, lrspline.LRSplineObject.read_many(f)))
+            patches = [
+                LRPatch((i,), patch) for i, patch
+                in enumerate(lrspline.LRSplineObject.read_many(f))
+            ]
         self.basis = SimpleBasis(patches)
         return self
 

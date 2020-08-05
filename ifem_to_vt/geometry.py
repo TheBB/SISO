@@ -8,15 +8,28 @@ import numpy as np
 from singledispatchmethod import singledispatchmethod
 import splipy.io
 from splipy import SplineObject, BSplineBasis
+import treelog as log
 
-from typing import Tuple, Any, Union, IO
+from typing import Tuple, Any, Union, IO, Dict, Hashable
 from nptyping import NDArray, Float
 
 from . import config
 from .util import prod, flatten_2d
 
 
+
+# Types
+# ----------------------------------------------------------------------
+
+
 Array2D = NDArray[Any, Any]
+BoundingBox = Tuple[Tuple[float, float], ...]
+PatchID = Tuple[Hashable, ...]
+
+
+
+# Utility functions
+# ----------------------------------------------------------------------
 
 
 def subdivide_linear(knots, nvis):
@@ -60,12 +73,13 @@ def subdivide_volume(el, nodes, elements, nvis):
 
 
 
-
 # Abstract superclasses
 # ----------------------------------------------------------------------
 
 
 class Patch(ABC):
+
+    key: PatchID
 
     @property
     @abstractmethod
@@ -93,7 +107,7 @@ class Patch(ABC):
 
     @property
     @abstractmethod
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         """Hashable bounding box."""
         pass
 
@@ -132,13 +146,14 @@ class UnstructuredPatch(Patch):
     should be convertable to it.
     """
 
-    def __init__(self, nodes: Array2D, cells: Array2D):
+    def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D):
         assert nodes.ndim == cells.ndim == 2
+        self.key = key
         self.nodes = nodes
         self.cells = cells
 
     @classmethod
-    def from_lagrangian(cls, data: Union[bytes, str]) -> 'UnstructuredPatch':
+    def from_lagrangian(cls, key: PatchID, data: Union[bytes, str]) -> 'UnstructuredPatch':
         if isinstance(data, bytes):
             data = data.decode()
         assert isinstance(data, str)
@@ -168,7 +183,7 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(nodes, cells)
+        return cls(key, nodes, cells)
 
     @property
     def num_physdim(self) -> int:
@@ -181,7 +196,7 @@ class UnstructuredPatch(Patch):
         }[self.num_physidm, self.cells.shape[-1]]
 
     @property
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         return tuple(
             (np.min(self.nodes[:,i]), np.max(self.nodes[:,i]))
             for i in range(self.num_physdim)
@@ -215,7 +230,7 @@ class UnstructuredPatch(Patch):
 
 class LRPatch(Patch):
 
-    def __init__(self, obj: Union[bytes, str, lr.LRSplineObject]):
+    def __init__(self, key: PatchID, obj: Union[bytes, str, lr.LRSplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -225,6 +240,7 @@ class LRPatch(Patch):
                 obj = lr.LRSplineVolume(obj)
         assert isinstance(obj, lr.LRSplineObject)
         self.obj = obj
+        self.key = key
 
     @property
     def num_physdim(self) -> int:
@@ -235,7 +251,7 @@ class LRPatch(Patch):
         return self.obj.pardim
 
     @property
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         return tuple(
             (np.min(self.obj.controlpoints[:,i]), np.max(self.obj.controlpoints[:,i]))
             for i in range(self.num_physdim)
@@ -277,7 +293,7 @@ class LRTesselator(Tesselator):
     def _(self, patch: LRPatch) -> Patch:
         spline = patch.obj
         nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
-        return UnstructuredPatch(nodes, self.cells)
+        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
@@ -321,7 +337,7 @@ class G2Object(splipy.io.G2):
 class SplinePatch(Patch):
     """A representation of a Splipy SplineObject."""
 
-    def __init__(self, obj: Union[bytes, str, SplineObject]):
+    def __init__(self, key: PatchID, obj: Union[bytes, str, SplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -330,6 +346,7 @@ class SplinePatch(Patch):
                 obj = g.read()[0]
         assert isinstance(obj, SplineObject)
         self.obj = obj
+        self.key = key
 
     @property
     def num_physdim(self) -> int:
@@ -340,7 +357,7 @@ class SplinePatch(Patch):
         return self.obj.pardim
 
     @property
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         return tuple(
             (np.min(self.obj.controlpoints[...,i]), np.max(self.obj.controlpoints[...,i]))
             for i in range(self.num_physdim)
@@ -377,7 +394,7 @@ class TensorTesselator(Tesselator):
     @tesselate.register(SplinePatch)
     def _(self, patch: SplinePatch):
         nodes = flatten_2d(patch.obj(*self.knots))
-        return UnstructuredPatch(nodes, self.cells())
+        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells())
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
@@ -433,3 +450,35 @@ class TensorTesselator(Tesselator):
             eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nshape)
 
         return eidxs
+
+
+
+# GeometryManager
+# ----------------------------------------------------------------------
+
+
+class GeometryManager:
+
+    patch_keys: Dict[PatchID, int]
+    bounding_boxes: Dict[BoundingBox, int]
+
+    def __init__(self):
+        self.patch_keys = dict()
+        self.bounding_boxes = dict()
+
+    def update(self, patch: Patch):
+        if patch.key not in self.patch_keys:
+            patchid = len(self.patch_keys)
+            log.debug(f"New unique patch detected, assigned ID {patchid}")
+            self.patch_keys[patch.key] = patchid
+        else:
+            patchid = self.patch_keys[patch.key]
+        self.bounding_boxes[patch.bounding_box] = patchid
+        return patchid
+
+    def global_id(self, patch: Patch):
+        try:
+            return self.bounding_boxes[patch.bounding_box]
+        except KeyError:
+            log.error("Unable to find corresponding geometry patch")
+            return None

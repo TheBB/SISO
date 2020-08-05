@@ -30,7 +30,10 @@ class Reader:
 
     def __enter__(self):
         with G2(self.filename) as g2:
-            patches = list(map(SplinePatch, g2.read()))
+            patches = [
+                SplinePatch((i,), patch) for i, patch
+                in enumerate(g2.read())
+            ]
         self.basis = SimpleBasis(patches)
         return self
 

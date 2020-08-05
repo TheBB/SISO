@@ -12,7 +12,7 @@ import sys
 import treelog as log
 
 from .. import config
-from ..geometry import SplinePatch, LRPatch, UnstructuredPatch
+from ..geometry import SplinePatch, LRPatch, UnstructuredPatch, GeometryManager as NewGeometryManager
 
 
 def expand_to_dims(array, dims=3):
@@ -41,14 +41,15 @@ class Basis:
         while stepid not in self.update_steps:
             stepid -= 1
         key = (stepid, patchid)
+        patchkey = (self.name, patchid)
         if key not in self.patch_cache:
             g2bytes = self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes()
             if g2bytes.startswith(b'# LAGRANGIAN'):
-                patch = UnstructuredPatch.from_lagrangian(g2bytes)
+                patch = UnstructuredPatch.from_lagrangian(patchkey, g2bytes)
             elif g2bytes.startswith(b'# LRSPLINE'):
-                patch = LRPatch(g2bytes)
+                patch = LRPatch(patchkey, g2bytes)
             else:
-                patch = SplinePatch(g2bytes)
+                patch = SplinePatch(patchkey, g2bytes)
             self.patch_cache[key] = patch
         return self.patch_cache[key]
 
@@ -202,24 +203,11 @@ class GeometryManager:
     def __init__(self, basis):
         self.basis = basis
         self.has_updated = False
-
-        # Map knot vector -> evaluation points
-        self.tesselations = {}
-
-        # Map basisname x patchid ->
-        self.globids = {}
-
-        # Map corner tuple -> basisname x patchid
-        self.corners = {}
-
+        self.idmanager = NewGeometryManager()
         log.info('Using {} for geometry'.format(basis.name))
 
     def findid(self, patch):
-        corners = patch.bounding_box
-        if corners not in self.corners:
-            log.error('Unable to find corresponding geometry patch')
-            return None
-        return self.globids[self.corners[corners]]
+        return self.idmanager.global_id(patch)
 
     def update(self, w, stepid):
         if self.has_updated and not self.basis.update_at(stepid):
@@ -232,15 +220,7 @@ class GeometryManager:
         # Maybe overkill.
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
-            key = (self.basis.name, patchid)
-
-            if key not in self.globids:
-                self.globids[key] = len(self.globids)
-                log.debug('New unique patch detected, generating global ID')
-
-            # FIXME: This leaves behind invalidated corner IDs, which we should probably delete.
-            self.corners[patch.bounding_box] = key
-            globpatchid = self.globids[(self.basis.name, patchid)]
+            globpatchid = self.idmanager.update(patch)
 
             tess = patch.tesselate()
             nodes = tess.nodes
