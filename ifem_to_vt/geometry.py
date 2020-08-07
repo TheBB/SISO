@@ -14,7 +14,7 @@ from typing import Tuple, Any, Union, IO, Dict, Hashable
 from nptyping import NDArray, Float
 
 from . import config
-from .util import prod, flatten_2d
+from .util import prod, flatten_2d, ensure_ncomps
 
 
 
@@ -125,6 +125,10 @@ class Patch(ABC):
         """
         pass
 
+    @abstractmethod
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        pass
+
 
 class Tesselator(ABC):
 
@@ -140,11 +144,19 @@ class Tesselator(ABC):
         pass
 
 
+
+# Unstructured support
+# ----------------------------------------------------------------------
+
+
 class UnstructuredPatch(Patch):
     """A patch that represents an unstructured collection of nodes and
     cells.  This is the lowest common grid form: all other grids
     should be convertable to it.
     """
+
+    nodes: Array2D
+    cells: Array2D
 
     def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D):
         assert nodes.ndim == cells.ndim == 2
@@ -191,9 +203,12 @@ class UnstructuredPatch(Patch):
 
     @property
     def num_pardim(self) -> int:
+        # TODO: Must keep track of cell type in a better way
         return {
-            (4, 8): 3
-        }[self.num_physidm, self.cells.shape[-1]]
+            (2, 4): 2,
+            (3, 4): 2,
+            (3, 8): 3,
+        }[self.num_physdim, self.cells.shape[-1]]
 
     @property
     def bounding_box(self) -> BoundingBox:
@@ -221,6 +236,9 @@ class UnstructuredPatch(Patch):
         if cells:
             return coeffs.reshape((self.num_cells, -1))
         return coeffs.reshape((self.num_nodes, -1))
+
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        self.nodes = ensure_ncomps(self.nodes, ncomps, allow_scalar)
 
 
 
@@ -272,6 +290,9 @@ class LRPatch(Patch):
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         tess = LRTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
+
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        self.obj.controlpoints = ensure_ncomps(self.obj.controlpoints, ncomps, allow_scalar)
 
 
 class LRTesselator(Tesselator):
@@ -378,6 +399,11 @@ class SplinePatch(Patch):
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         tess = TensorTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
+
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        if allow_scalar and self.obj.dimension == 1:
+            return
+        self.obj.set_dimension(ncomps)
 
 
 class TensorTesselator(Tesselator):

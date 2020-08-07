@@ -22,7 +22,7 @@ NUM = re.compile(r'-?\d+[ +\-e.\d]*\n?$')
 def compare_vtf(out, ref):
     outiter = iter(out)
     refiter = iter(ref)
-    for outline, refline in zip(outiter, refiter):
+    for i, (outline, refline) in enumerate(zip(outiter, refiter), start=1):
         if 'EXPORT_DATE' in outline:
             continue
         if NUM.match(refline):

@@ -1,15 +1,25 @@
 from collections import defaultdict, OrderedDict
+from pathlib import Path
 
-from .. import config
+from singledispatchmethod import singledispatchmethod
 import vtfwriter as vtf
 
+from typing import Optional
 
-class Writer(vtf.File):
+from .. import config
+from ..fields import AbstractFieldPatch, CombinedFieldPatch
+from ..geometry import Patch, UnstructuredPatch
+from .writer import AbstractWriter
 
-    def __init__(self, filename):
-        if config.output_mode not in ('ascii', 'binary'):
-            raise ValueError("VTF format does not support '{}' mode".format(config.output_mode))
-        super(Writer, self).__init__(filename, 'w' if config.output_mode == 'ascii' else 'wb')
+
+
+class Writer(AbstractWriter):
+
+    out: vtf.File
+    dirty_geometry: bool
+
+    def __init__(self, filename: Path):
+        super().__init__(filename)
         self.steps = []
         self.geometry_blocks = []
         self.internal_stepid = dict()
@@ -18,75 +28,93 @@ class Writer(vtf.File):
         self.field_blocks = OrderedDict()
         self.dirty_geometry = False
 
-    def __enter__(self):
+    def validate_mode(self):
+        if config.output_mode not in ('ascii', 'binary'):
+            raise ValueError("VTF format does not support '{}' mode".format(config.output_mode))
+
+    def __enter__(self) -> 'Writer':
         super(Writer, self).__enter__()
-        self.gblock = self.GeometryBlock()
-        self.gblock.__enter__()
+        self.out = vtf.File(str(self.make_filename()), 'w' if config.output_mode == 'ascii' else 'wb').__enter__()
+        self.gblock = self.out.GeometryBlock().__enter__()
         return self
 
-    def __exit__(self, type_, value, backtrace):
+    def __exit__(self, *args, **kwargs):
         for fname, data in self.field_blocks.items():
             with data['cons']() as fblock:
                 fblock.SetName(fname)
                 for stepid, rblocks in data['steps'].items():
                     fblock.BindResultBlocks(stepid, *rblocks)
 
-        self.gblock.__exit__(type_, value, backtrace)
+        self.gblock.__exit__(*args, **kwargs)
         self.exit_stateinfo()
-        super(Writer, self).__exit__(type_, value, backtrace)
+        self.out.__exit__(*args, **kwargs)
+        super().__exit__(*args, **kwargs)
 
     def exit_stateinfo(self):
-        with self.StateInfoBlock() as states:
+        with self.out.StateInfoBlock() as states:
             for stepid, data in enumerate(self.steps):
                 key, value = next(iter(data.items()))
                 func = states.SetStepData if key == 'time' else states.SetModeData
                 desc = {'value': 'Eigenvalue', 'frequency': 'Frequency', 'time': 'Time'}[key]
                 func(stepid+1, '{} {:.4f}'.format(desc, value), value)
 
-    def get_stepid(self, stepid):
-        return self.internal_stepid.setdefault(stepid, len(self.internal_stepid) + 1)
+    def add_step(self, **stepdata):
+        super().add_step(**stepdata)
+        self.steps.append(stepdata)
 
-    def add_step(self, **data):
-        self.steps.append(data)
+    @singledispatchmethod
+    def update_geometry(self, patch: Patch, patchid: Optional[int] = None):
+        if patchid is None:
+            patchid = super().update_geometry(patch)
+        return self.update_geometry(patch.tesselate(), patchid=patchid)
 
-    def finalize_step(self):
-        pass
+    @update_geometry.register(UnstructuredPatch)
+    def _(self, patch: UnstructuredPatch, patchid: Optional[int] = None):
+        if patchid is None:
+            patchid = super().update_geometry(patch)
+        patch.ensure_ncomps(3, allow_scalar=False)
 
-    def update_geometry(self, nodes, elements, dim, patchid):
         if len(self.geometry_blocks) <= patchid:
             self.geometry_blocks.extend([None] * (patchid - len(self.geometry_blocks) + 1))
 
-        with self.NodeBlock() as nblock:
-            nblock.SetNodes(nodes.flat)
+        with self.out.NodeBlock() as nblock:
+            nblock.SetNodes(patch.nodes.flat)
 
-        with self.ElementBlock() as eblock:
-            eblock.AddElements(elements.flat, dim)
+        with self.out.ElementBlock() as eblock:
+            eblock.AddElements(patch.cells.flat, patch.num_pardim)
             eblock.SetPartName('Patch {}'.format(patchid+1))
             eblock.BindNodeBlock(nblock, patchid+1)
 
         self.geometry_blocks[patchid] = (nblock, eblock)
         self.dirty_geometry = True
 
-    def finalize_geometry(self, stepid):
-        stepid = self.get_stepid(stepid)
+    def finalize_geometry(self):
         if self.dirty_geometry:
-            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=stepid)
+            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
         self.dirty_geometry = False
+        super().finalize_geometry()
 
-    def update_field(self, results, name, stepid, patchid, kind='scalar', cells=False):
-        stepid = self.get_stepid(stepid)
+    def update_field(self, field: AbstractFieldPatch):
+        patchid = super().update_field(field)
+        field.ensure_ncomps(3, allow_scalar=True)
+        if isinstance(field, CombinedFieldPatch) or not isinstance(field.patch, UnstructuredPatch):
+            data = field.tesselate()
+        else:
+            data = field.data
+
         nblock, eblock = self.geometry_blocks[patchid]
-        vector = kind in ('vector', 'displacement')
-        with self.ResultBlock(cells=cells, vector=vector) as rblock:
-            rblock.SetResults(results.flat)
-            rblock.BindBlock(eblock if cells else nblock)
+        with self.out.ResultBlock(cells=field.cells, vector=field.num_comps>1) as rblock:
+            rblock.SetResults(data.flat)
+            rblock.BindBlock(eblock if field.cells else nblock)
 
-        if name not in self.field_blocks:
-            cons = {
-                'scalar': self.ScalarBlock,
-                'vector': self.VectorBlock,
-                'displacement': self.DisplacementBlock,
-            }[kind]
-            self.field_blocks[name] = {'cons': cons, 'steps': {}}
-        steps = self.field_blocks[name]['steps']
-        steps.setdefault(stepid, []).append(rblock)
+        if field.name not in self.field_blocks:
+            if field.is_scalar:
+                cons = self.out.ScalarBlock
+            elif not field.is_displacement:
+                cons = self.out.VectorBlock
+            else:
+                cons = self.out.DisplacementBlock
+            self.field_blocks[field.name] = {'cons': cons, 'steps': {}}
+
+        steps = self.field_blocks[field.name]['steps']
+        steps.setdefault(self.stepid + 1, []).append(rblock)

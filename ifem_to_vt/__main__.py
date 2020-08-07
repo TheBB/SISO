@@ -78,12 +78,11 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
 
     try:
         Writer = get_writer(fmt)
-    except ValueError as e:
+        with config(**kwargs), get_reader(infile) as r, Writer(outfile) as w:
+            r.write(w)
+    except Exception as e:
         log.error(e)
         sys.exit(1)
-
-    with config(**kwargs), get_reader(infile) as r, Writer(outfile) as w:
-        r.write(w)
 
 
 if __name__ == '__main__':

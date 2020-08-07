@@ -1,25 +1,15 @@
-import h5py
-from contextlib import contextmanager
-from collections import namedtuple, OrderedDict
-from itertools import chain, product
-import lrspline as lr
-import numpy as np
-import splipy.io
-from splipy import SplineObject, BSplineBasis
-from splipy.SplineModel import ObjectCatalogue
-import splipy.utils
+from collections import OrderedDict
+from functools import lru_cache
 import sys
+
+import h5py
+import numpy as np
 import treelog as log
 
 from .. import config
+from ..util import ensure_ncomps
+from ..fields import SimpleFieldPatch, CombinedFieldPatch, Displacement
 from ..geometry import SplinePatch, LRPatch, UnstructuredPatch, GeometryManager as NewGeometryManager
-
-
-def expand_to_dims(array, dims=3):
-    nshape = array.shape[:-1] + (1,)
-    while array.shape[-1] < dims:
-        array = np.concatenate((array, np.zeros(nshape)), axis=-1)
-    return array
 
 
 class Basis:
@@ -37,34 +27,31 @@ class Basis:
     def update_at(self, stepid):
         return stepid in self.update_steps
 
+    @lru_cache
     def patch_at(self, stepid, patchid):
         while stepid not in self.update_steps:
             stepid -= 1
-        key = (stepid, patchid)
         patchkey = (self.name, patchid)
-        if key not in self.patch_cache:
-            g2bytes = self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes()
-            if g2bytes.startswith(b'# LAGRANGIAN'):
-                patch = UnstructuredPatch.from_lagrangian(patchkey, g2bytes)
-            elif g2bytes.startswith(b'# LRSPLINE'):
-                patch = LRPatch(patchkey, g2bytes)
-            else:
-                patch = SplinePatch(patchkey, g2bytes)
-            self.patch_cache[key] = patch
-        return self.patch_cache[key]
+        g2bytes = self.reader.h5[str(stepid)][self.name]['basis'][str(patchid+1)][:].tobytes()
+        if g2bytes.startswith(b'# LAGRANGIAN'):
+            return UnstructuredPatch.from_lagrangian(patchkey, g2bytes)
+        elif g2bytes.startswith(b'# LRSPLINE'):
+            return LRPatch(patchkey, g2bytes)
+        else:
+            return SplinePatch(patchkey, g2bytes)
 
 
 class Field:
 
-    def __init__(self, name, basis, reader, cells=False, vectorize=False):
+    def __init__(self, name, basis, reader, cells=False):
         self.name = name
         self.basis = basis
         self.reader = reader
         self.cells = cells
-        self.vectorize = vectorize
         self.decompose = True
         self.update_steps = set()
         self.ncomps = None
+        self.fieldtype = None
 
     @property
     def basisname(self):
@@ -78,12 +65,12 @@ class Field:
 
             num = len(coeffs)
             denom = patch.num_cells if self.cells else patch.num_nodes
-
             if num % denom != 0:
-                log.error('Inconsistent dimension in field "{}" ({}/{}); unable to discover number of components'.format(
-                    self.name, num, denom
-                ))
-                sys.exit(2)
+                raise Exception(
+                    f"Inconsistent dimension in field \"{self.name}\" ({num}/{denom}); "
+                    "unable to discover number of components"
+                )
+
             self.ncomps = num // denom
 
     def update_at(self, stepid):
@@ -92,57 +79,37 @@ class Field:
     def update(self, w, stepid):
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
-            globpatchid = self.reader.geometry.findid(patch)
-            if globpatchid is None:
-                continue
 
             coeffs = self.coeffs(stepid, patchid)
-
-            results = self.tesselate(patch, coeffs)
-            if hasattr(self, 'kind'):
-                kind = self.kind
-            else:
-                kind = 'vector' if results.shape[-1] > 1 else 'scalar'
-            w.update_field(results, self.name, stepid, globpatchid, kind, cells=self.cells)
+            w.update_field(SimpleFieldPatch(self.name, patch, coeffs, cells=self.cells, fieldtype=self.fieldtype))
 
             if self.decompose and self.ncomps > 1:
                 for i in range(self.ncomps):
-                    w.update_field(
-                        results[...,i], '{}_{}'.format(self.name, 'xyz'[i]),
-                        stepid, globpatchid, 'scalar', cells=self.cells,
-                    )
+                    w.update_field(SimpleFieldPatch(
+                        f'{self.name}_{"xyz"[i]}', patch, coeffs[...,i:i+1], cells=self.cells
+                    ))
 
     def coeffs(self, stepid, patchid):
         sub = 'knotspan' if self.cells else 'fields'
-        return self.reader.h5[str(stepid)][self.basis.name][sub][self.name][str(patchid+1)][:]
-
-    def tesselate(self, patch, coeffs):
-        results = patch.tesselate_field(coeffs, cells=self.cells)
-
-        if self.ncomps == 1 and self.vectorize:
-            results = expand_to_dims(results)
-            results[...,-1] = results[...,0].copy()
-            results[...,0] = 0.0
-        elif self.ncomps > 1:
-            results = expand_to_dims(results)
-
-        return results
+        coeffs = self.reader.h5[str(stepid)][self.basis.name][sub][self.name][str(patchid+1)][:]
+        if self.ncomps is not None:
+            coeffs = coeffs.reshape((-1, self.ncomps))
+        return coeffs
 
 
 class CombinedField(Field):
 
     def __init__(self, name, sources, reader):
-        assert all(not s.vectorize for s in sources)
         cells = set(s.cells for s in sources)
         assert len(cells) == 1
 
         self.name = name
         self.reader = reader
         self.cells = next(iter(cells))
-        self.vectorize = False
         self.decompose = False
         self.ncomps = len(sources)
         self.sources = sources
+        self.fieldtype = None
 
         self.update_steps = set()
         for s in sources:
@@ -155,27 +122,16 @@ class CombinedField(Field):
     def update(self, w, stepid):
         # Assume all bases have the same number of patches,
         # so just grab the indices from the first one
-        for patchid in range(self.sources[0].basis.npatches):
 
-            results = []
+        for patchid in range(self.sources[0].basis.npatches):
+            patches, results = [], []
             for src in self.sources:
                 patch = src.basis.patch_at(stepid, patchid)
-                globpatchid = self.reader.geometry.findid(patch)
+                patches.append(patch)
                 coeffs = src.coeffs(stepid, patchid)
-                results.append(src.tesselate(patch, coeffs))
+                results.append(coeffs)
 
-            if globpatchid is None:
-                continue
-
-            results = np.concatenate(results, axis=-1)
-            results = expand_to_dims(results)
-
-            if hasattr(self, 'kind'):
-                kind = self.kind
-            else:
-                kind = 'vector'
-
-            w.update_field(results, self.name, stepid, globpatchid, kind, cells=self.cells)
+            w.update_field(CombinedFieldPatch(self.name, patches, results, cells=self.cells, fieldtype=self.fieldtype))
 
 
 class SplitField(Field):
@@ -187,15 +143,15 @@ class SplitField(Field):
         self.index = index
         self.reader = reader
         self.cells = source.cells
-        self.vectorize = False
         self.decompose = False
         self.ncomps = 1
         self.update_steps = source.update_steps
+        self.fieldtype = None
 
     def coeffs(self, stepid, patchid):
         coeffs = self.source.coeffs(stepid, patchid)
         coeffs = np.reshape(coeffs, (-1, self.source.ncomps))
-        return coeffs[:, self.index]
+        return coeffs[:, self.index:self.index+1]
 
 
 class GeometryManager:
@@ -203,14 +159,11 @@ class GeometryManager:
     def __init__(self, basis):
         self.basis = basis
         self.has_updated = False
-        self.idmanager = NewGeometryManager()
         log.info('Using {} for geometry'.format(basis.name))
-
-    def findid(self, patch):
-        return self.idmanager.global_id(patch)
 
     def update(self, w, stepid):
         if self.has_updated and not self.basis.update_at(stepid):
+            w.finalize_geometry()
             return
         self.has_updated = True
 
@@ -220,21 +173,9 @@ class GeometryManager:
         # Maybe overkill.
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
-            globpatchid = self.idmanager.update(patch)
+            w.update_geometry(patch)
 
-            tess = patch.tesselate()
-            nodes = tess.nodes
-            dim = 2 if tess.cells.shape[-1] == 4 else 3
-            eidxs = tess.cells
-
-            while nodes.shape[-1] < 3:
-                nshape = nodes.shape[:-1] + (1,)
-                nodes = np.concatenate((nodes, np.zeros(nshape)), axis=-1)
-
-            log.debug('Writing patch {}'.format(globpatchid))
-            w.update_geometry(nodes, eidxs, dim, globpatchid)
-
-        w.finalize_geometry(stepid)
+        w.finalize_geometry()
 
 
 class Reader:
@@ -416,7 +357,7 @@ class Reader:
         for pid in range(self.npatches(0, field.basis)):
             patch, tesselation = self._tesselated_patch(0, field.basis, pid)
             coeffs, data = self.mode_coeffs(field, mid, pid)
-            raw = self._tesselate(patch, tesselation, coeffs, vectorize=True)
+            raw = self._tesselate(patch, tesselation, coeffs)
             results = np.ndarray.flatten(raw)
             w.update_mode(results, field.name, pid, **data)
 
@@ -449,11 +390,23 @@ class EigenField(Field):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.kind = 'displacement'
+        self.fieldtype = Displacement()
         self.decompose = False
 
     def coeffs(self, stepid, patchid):
-        return self.reader.h5['0'][self.basis.name]['Eigenmode'][str(stepid+1)][str(patchid+1)][:]
+        coeffs = self.reader.h5['0'][self.basis.name]['Eigenmode'][str(stepid+1)][str(patchid+1)][:]
+        if self.ncomps is not None:
+            coeffs = coeffs.reshape((-1, self.ncomps))
+
+            # Eigenfields are to be considered vector quantities
+            coeffs = ensure_ncomps(coeffs, 3, False)
+
+            # Scalar eigenmodes live on the z-axis
+            if self.ncomps == 1:
+                coeffs[:, -1] = coeffs[:, 0].copy()
+                coeffs[:, 0] = 0
+
+        return coeffs
 
 
 class EigenReader(Reader):
@@ -478,7 +431,7 @@ class EigenReader(Reader):
 
     def init_fields(self):
         basis = next(iter(self.bases.values()))
-        field = EigenField('Mode Shape', basis, self, vectorize=True)
+        field = EigenField('Mode Shape', basis, self)
         for modeid in range(self.nmodes):
             field.add_update(modeid)
         self.fields['Mode Shape'] = field

@@ -3,6 +3,8 @@ from pathlib import Path
 from scipy.io import FortranFile
 
 from .. import config
+from ..fields import SimpleFieldPatch
+from ..geometry import UnstructuredPatch
 
 
 class Reader:
@@ -34,23 +36,24 @@ class Reader:
     def write(self, w):
         npts, nelems, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
         coords = self.mesh.read_reals(self.f4_type).reshape(npts, 3)
-        elements = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
+        cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
+        patch = UnstructuredPatch(('geometry',), coords, cells)
 
         data = self.result.read_reals(dtype=self.f4_type)
         time, data = data[0], data[1:].reshape(-1, 11)
 
         w.add_step(time=time)
-        w.update_geometry(coords, elements, 3, 0)
-        w.finalize_geometry(0)
+        w.update_geometry(patch)
+        w.finalize_geometry()
 
-        w.update_field(data[:,:3], 'u',    0, 0, 'vector', cells=False)
-        w.update_field(data[:,3],  'ps',   0, 0, 'scalar', cells=False)
-        w.update_field(data[:,4],  'tk',   0, 0, 'scalar', cells=False)
-        w.update_field(data[:,5],  'td',   0, 0, 'scalar', cells=False)
-        w.update_field(data[:,6],  'vtef', 0, 0, 'scalar', cells=False)
-        w.update_field(data[:,7],  'pt',   0, 0, 'scalar', cells=False)
-        w.update_field(data[:,8],  'pts',  0, 0, 'scalar', cells=False)
-        w.update_field(data[:,9],  'rho',  0, 0, 'scalar', cells=False)
-        w.update_field(data[:,10], 'rhos', 0, 0, 'scalar', cells=False)
+        w.update_field(SimpleFieldPatch('u',    patch, data[:,:3]))
+        w.update_field(SimpleFieldPatch('ps',   patch, data[:,3:4]))
+        w.update_field(SimpleFieldPatch('tk',   patch, data[:,4:5]))
+        w.update_field(SimpleFieldPatch('td',   patch, data[:,5:6]))
+        w.update_field(SimpleFieldPatch('vtef', patch, data[:,6:7]))
+        w.update_field(SimpleFieldPatch('pt',   patch, data[:,7:8]))
+        w.update_field(SimpleFieldPatch('pts',  patch, data[:,8:9]))
+        w.update_field(SimpleFieldPatch('rho',  patch, data[:,9:10]))
+        w.update_field(SimpleFieldPatch('rhos', patch, data[:,10:11]))
 
         w.finalize_step()
