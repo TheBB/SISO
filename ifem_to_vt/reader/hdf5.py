@@ -27,7 +27,7 @@ class Basis:
     def update_at(self, stepid):
         return stepid in self.update_steps
 
-    @lru_cache
+    @lru_cache(24)
     def patch_at(self, stepid, patchid):
         while stepid not in self.update_steps:
             stepid -= 1

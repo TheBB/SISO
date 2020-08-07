@@ -81,7 +81,7 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
         with config(**kwargs), get_reader(infile) as r, Writer(outfile) as w:
             r.write(w)
     except Exception as e:
-        log.error(e)
+        log.error(str(e))
         sys.exit(1)
 
 
