@@ -14,7 +14,11 @@ from typing import Tuple, Any, Union, IO, Dict, Hashable
 from nptyping import NDArray, Float
 
 from . import config
-from .util import prod, flatten_2d, ensure_ncomps
+
+from .util import (
+    prod, flatten_2d, ensure_ncomps,
+    subdivide_face, subdivide_linear, subdivide_volume
+)
 
 
 
@@ -25,51 +29,6 @@ from .util import prod, flatten_2d, ensure_ncomps
 Array2D = NDArray[Any, Any]
 BoundingBox = Tuple[Tuple[float, float], ...]
 PatchID = Tuple[Hashable, ...]
-
-
-
-# Utility functions
-# ----------------------------------------------------------------------
-
-
-def subdivide_linear(knots, nvis):
-    out = []
-    for left, right in zip(knots[:-1], knots[1:]):
-        out.extend(np.linspace(left, right, num=nvis, endpoint=False))
-    out.append(knots[-1])
-    return out
-
-
-def subdivide_face(el, nodes, elements, nvis):
-    left, bottom = el.start()
-    right, top = el.end()
-    xs = subdivide_linear((left, right), nvis)
-    ys = subdivide_linear((bottom, top), nvis)
-
-    for (l, r) in zip(xs[:-1], xs[1:]):
-        for (b, t) in zip(ys[:-1], ys[1:]):
-            sw, se, nw, ne = (l, b), (r, b), (l, t), (r, t)
-            for pt in (sw, se, nw, ne):
-                nodes.setdefault(pt, len(nodes))
-            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
-
-
-def subdivide_volume(el, nodes, elements, nvis):
-    umin, vmin, wmin = el.start()
-    umax, vmax, wmax = el.end()
-    us = subdivide_linear((umin, umax), nvis)
-    vs = subdivide_linear((vmin, vmax), nvis)
-    ws = subdivide_linear((wmin, wmax), nvis)
-
-    for (ul, ur) in zip(us[:-1], us[1:]):
-        for (vl, vr) in zip(vs[:-1], vs[1:]):
-            for (wl, wr) in zip(ws[:-1], ws[1:]):
-                bsw, bse, bnw, bne = (ul, vl, wl), (ur, vl, wl), (ul, vr, wl), (ur, vr, wl)
-                tsw, tse, tnw, tne = (ul, vl, wr), (ur, vl, wr), (ul, vr, wr), (ur, vr, wr)
-                for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
-                    nodes.setdefault(pt, len(nodes))
-                elements.append([nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
-                                 nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
 
 
 
