@@ -11,7 +11,7 @@ from splipy import SplineObject, BSplineBasis
 import treelog as log
 
 from typing import Tuple, Any, Union, IO, Dict, Hashable
-from nptyping import NDArray, Float
+from .typing import Array2D, BoundingBox, PatchID
 
 from . import config
 
@@ -22,13 +22,26 @@ from .util import (
 
 
 
-# Types
+# Abstract superclasses
 # ----------------------------------------------------------------------
 
 
-Array2D = NDArray[Any, Any]
-BoundingBox = Tuple[Tuple[float, float], ...]
-PatchID = Tuple[Hashable, ...]
+class CellType:
+
+    num_nodes: int
+    num_pardim: int
+
+
+class Quad(CellType):
+
+    num_nodes = 4
+    num_pardim = 2
+
+
+class Hex(CellType):
+
+    num_nodes = 8
+    num_pardim = 3
 
 
 
@@ -116,12 +129,15 @@ class UnstructuredPatch(Patch):
 
     nodes: Array2D
     cells: Array2D
+    celltype: CellType
 
-    def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D):
+    def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D, celltype: CellType):
         assert nodes.ndim == cells.ndim == 2
         self.key = key
         self.nodes = nodes
         self.cells = cells
+        self.celltype = celltype
+        assert cells.shape[-1] == celltype.num_nodes
 
     @classmethod
     def from_lagrangian(cls, key: PatchID, data: Union[bytes, str]) -> 'UnstructuredPatch':
@@ -154,7 +170,7 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(key, nodes, cells)
+        return cls(key, nodes, cells, celltype=Hex())
 
     @property
     def num_physdim(self) -> int:
@@ -162,12 +178,7 @@ class UnstructuredPatch(Patch):
 
     @property
     def num_pardim(self) -> int:
-        # TODO: Must keep track of cell type in a better way
-        return {
-            (2, 4): 2,
-            (3, 4): 2,
-            (3, 8): 3,
-        }[self.num_physdim, self.cells.shape[-1]]
+        return self.celltype.num_pardim
 
     @property
     def bounding_box(self) -> BoundingBox:
@@ -273,7 +284,8 @@ class LRTesselator(Tesselator):
     def _(self, patch: LRPatch) -> Patch:
         spline = patch.obj
         nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
-        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells)
+        celltype = Hex() if patch.num_pardim == 3 else Quad()
+        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells, celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
@@ -379,7 +391,8 @@ class TensorTesselator(Tesselator):
     @tesselate.register(SplinePatch)
     def _(self, patch: SplinePatch):
         nodes = flatten_2d(patch.obj(*self.knots))
-        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells())
+        celltype = Hex() if patch.num_pardim == 3 else Quad()
+        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells(), celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:

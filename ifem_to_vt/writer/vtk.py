@@ -7,11 +7,13 @@ import vtk
 import vtk.util.numpy_support as vnp
 
 from dataclasses import dataclass
+
 from typing import Optional, Dict
+from ..typing import Array2D
 
 from .. import config
 from ..fields import AbstractFieldPatch, CombinedFieldPatch
-from ..geometry import Patch, UnstructuredPatch, Array2D
+from ..geometry import Patch, UnstructuredPatch, Hex
 from ..util import ensure_ncomps
 from .writer import AbstractWriter
 
@@ -27,13 +29,6 @@ class Writer(AbstractWriter):
 
     patches: Dict[int, UnstructuredPatch]
     fields: Dict[str, Field]
-
-    # Supported cell types, in terms of physical dimension and cell size
-    celltypes = {
-        (2, 4): vtk.VTK_QUAD,
-        (3, 4): vtk.VTK_QUAD,
-        (3, 8): vtk.VTK_HEXAHEDRON
-    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -69,9 +64,6 @@ class Writer(AbstractWriter):
     def _(self, patch: UnstructuredPatch, patchid: Optional[int] = None):
         if patchid is None:
             patchid = super().update_geometry(patch)
-        assert (patch.num_physdim, patch.cells.shape[-1]) in {
-            (2, 4), (3, 4), (3, 8),
-        }
         self.patches[patchid] = patch
 
     def update_field(self, field: AbstractFieldPatch):
@@ -102,8 +94,10 @@ class Writer(AbstractWriter):
 
         cellarray = vtk.vtkCellArray()
         cellarray.SetCells(len(cells), vnp.numpy_to_vtkIdTypeArray(cells.ravel(), deep=True))
+
         patch = next(iter(patches))
-        grid.SetCells(self.celltypes[(patch.num_physdim, patch.cells.shape[-1])], cellarray)
+        celltype = vtk.VTK_HEXAHEDRON if isinstance(patch.celltype, Hex) else vtk.VTK_QUAD
+        grid.SetCells(celltype, cellarray)
 
         pointdata = grid.GetPointData()
         celldata = grid.GetCellData()

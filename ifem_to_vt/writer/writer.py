@@ -4,9 +4,10 @@ from pathlib import Path
 import treelog as log
 
 from typing import Any, Optional, Dict
+from ..typing import Array2D
 
 from .. import config
-from ..geometry import Patch, GeometryManager, Array2D
+from ..geometry import Patch, GeometryManager
 from ..fields import AbstractFieldPatch, SimpleFieldPatch, CombinedFieldPatch
 
 

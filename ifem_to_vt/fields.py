@@ -3,8 +3,9 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from typing import List
+from .typing import Array2D
 
-from .geometry import Patch, Array2D
+from .geometry import Patch
 from .util import ensure_ncomps
 
 

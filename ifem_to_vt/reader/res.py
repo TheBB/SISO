@@ -4,7 +4,7 @@ from scipy.io import FortranFile
 
 from .. import config
 from ..fields import SimpleFieldPatch
-from ..geometry import UnstructuredPatch
+from ..geometry import UnstructuredPatch, Hex
 
 
 class Reader:
@@ -37,7 +37,7 @@ class Reader:
         npts, nelems, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
         coords = self.mesh.read_reals(self.f4_type).reshape(npts, 3)
         cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-        patch = UnstructuredPatch(('geometry',), coords, cells)
+        patch = UnstructuredPatch(('geometry',), coords, cells, celltype=Hex())
 
         data = self.result.read_reals(dtype=self.f4_type)
         time, data = data[0], data[1:].reshape(-1, 11)
