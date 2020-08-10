@@ -5,7 +5,7 @@ import re
 import numpy as np
 from click.testing import CliRunner
 
-from .shared import TESTCASES, cd_temp
+from .shared import TESTCASES, PreparedTestCase
 from ifem_to_vt.__main__ import convert
 
 try:
@@ -38,10 +38,8 @@ def compare_vtf(out, ref):
 
 @pytest.mark.skipif(not has_vtf, reason="VTF tests not runnable without vtfwriter")
 @pytest.mark.parametrize('case', TESTCASES['vtf'])
-def test_vtf_integrity(case):
-    with cd_temp() as tempdir:
-        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'vtf', str(case.sourcefile)])
-        assert res.exit_code == 0
+def test_vtf_integrity(case: PreparedTestCase):
+    with case.invoke('vtf') as tempdir:
         for out, ref in case.check_files(tempdir):
             assert out.exists()
             assert ref.exists()

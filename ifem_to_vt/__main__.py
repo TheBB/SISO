@@ -1,6 +1,7 @@
 from functools import wraps
 from pathlib import Path
 import sys
+import traceback
 import warnings
 
 import click
@@ -86,8 +87,12 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
             with ReaderClass(infile) as r, WriterClass(outfile) as w:
                 r.write(w)
     except Exception as e:
-        raise
-        log.error(str(e))
+        if verbosity == 'debug':
+            # In debug mode, allow exceptions to filter through in raw form
+            traceback.print_exc()
+        else:
+            log.error(f"Error: {e}")
+            log.error("More information may be available with --debug")
         sys.exit(1)
 
 

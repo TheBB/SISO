@@ -5,7 +5,7 @@ from click.testing import CliRunner
 import numpy as np
 import pytest
 
-from .shared import TESTCASES, compare_vtk_unstructured, cd_temp
+from .shared import TESTCASES, compare_vtk_unstructured, PreparedTestCase
 from ifem_to_vt.__main__ import convert
 
 import vtk
@@ -45,9 +45,7 @@ def compare_pvd(outfn: Path, reffn: Path):
 
 
 @pytest.mark.parametrize('case', TESTCASES['pvd'])
-def test_pvd_integrity(case):
-    with cd_temp() as tempdir:
-        res = CliRunner().invoke(convert, ['--mode', 'ascii', '-f', 'pvd', str(case.sourcefile)])
-        assert res.exit_code == 0
+def test_pvd_integrity(case: PreparedTestCase):
+    with case.invoke('pvd') as tempdir:
         for out, ref in case.check_files(tempdir):
             compare_pvd(out, ref)

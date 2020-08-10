@@ -3,17 +3,20 @@ from os import chdir
 from pathlib import Path
 import tempfile
 
-from typing import List, Optional, Iterator, Tuple
-
+from click.testing import CliRunner
 from dataclasses import dataclass
 import numpy as np
+
+from typing import List, Optional, Iterator, Tuple
 
 import vtk
 import vtk.util.numpy_support as vtknp
 
+from ifem_to_vt.__main__ import convert
+
 
 @contextmanager
-def cd_temp():
+def cd_temp() -> Path:
     """Context manager that creates a temporary directory and sets cwd to
     it, restoring it after.
     """
@@ -28,7 +31,7 @@ def cd_temp():
 
 
 @dataclass
-class TestCase:
+class PreparedTestCase:
     """Data class representing a single test case, with source file,
     indended target format, and a list of output files as reference.
     """
@@ -46,6 +49,16 @@ class TestCase:
         """
         for filename in self.reference_files:
             yield (path / filename, self.reference_path / filename)
+
+    @contextmanager
+    def invoke(self, fmt: str, mode: str = 'ascii') -> Path:
+        args = ['--debug', '--mode', mode, '-f', fmt, str(self.sourcefile)]
+        with cd_temp() as tempdir:
+            res = CliRunner().invoke(convert, args)
+            if res.exit_code != 0:
+                print(res.stdout)
+                assert False
+            yield tempdir
 
 
 # In the following we build a catalogue of test cases
@@ -70,7 +83,7 @@ def testcase(sourcefile: Path, nsteps: Optional[int], *formats: str):
     for fmt in formats:
         basename = Path(f'{sourcefile.stem}.{fmt}')
         reference_files = filename_maker(fmt, fmt in MULTISTEP_FORMATS)(basename, nsteps)
-        TESTCASES.setdefault(fmt, []).append(TestCase(sourcefile, fmt, TESTDATA_DIR / fmt, reference_files))
+        TESTCASES.setdefault(fmt, []).append(PreparedTestCase(sourcefile, fmt, TESTDATA_DIR / fmt, reference_files))
 
 
 def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
