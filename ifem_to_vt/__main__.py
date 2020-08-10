@@ -9,7 +9,7 @@ import treelog as log
 
 from . import config
 from ifem_to_vt.reader import Reader
-from ifem_to_vt.writer import get_writer
+from ifem_to_vt.writer import Writer
 
 
 def suppress_warnings(func):
@@ -81,11 +81,12 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
         # The config can influence the choice of readers or writers,
         # so apply it first
         with config(**kwargs):
-            Writer = get_writer(fmt)
             ReaderClass = Reader.find_applicable(Path(infile))
-            with ReaderClass(infile) as r, Writer(outfile) as w:
+            WriterClass = Writer.find_applicable(fmt)
+            with ReaderClass(infile) as r, WriterClass(outfile) as w:
                 r.write(w)
     except Exception as e:
+        raise
         log.error(str(e))
         sys.exit(1)
 

@@ -25,10 +25,16 @@ class Field:
     data: Dict[int, Array2D]
 
 
-class Writer(AbstractWriter):
+class VTKWriter(AbstractWriter):
+
+    writer_name = "VTK"
 
     patches: Dict[int, UnstructuredPatch]
     fields: Dict[str, Field]
+
+    @classmethod
+    def applicable(cls, fmt: str) -> bool:
+        return fmt == 'vtk'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

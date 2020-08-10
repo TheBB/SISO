@@ -1,11 +1,17 @@
 from pathlib import Path
 from os import makedirs
 
-from .vtu import Writer as VTUWriter
+from .vtu import VTUWriter
 from .. import config
 
 
-class Writer(VTUWriter):
+class PVDWriter(VTUWriter):
+
+    writer_name = "PVD"
+
+    @classmethod
+    def applicable(self, fmt: str) -> bool:
+        return fmt == 'pvd'
 
     def __init__(self, outpath: Path):
         outpath = Path(outpath)

@@ -9,10 +9,13 @@ from ..typing import Array2D
 from .. import config
 from ..geometry import Patch, GeometryManager
 from ..fields import AbstractFieldPatch, SimpleFieldPatch, CombinedFieldPatch
+from ..util import subclasses
 
 
 
 class AbstractWriter(ABC):
+
+    writer_name: str
 
     geometry: GeometryManager
     outpath: Path
@@ -21,6 +24,22 @@ class AbstractWriter(ABC):
     stepdata: Dict[str, Any]
     step_finalized: bool
     geometry_finalized: bool
+
+    @classmethod
+    def applicable(self, fmt: str) -> bool:
+        """Return true if the class can handle the given format."""
+        return False
+
+    @staticmethod
+    def find_applicable(fmt: str) -> type:
+        """Return a writer subclass that can handle the given format."""
+        for cls in subclasses(AbstractWriter, invert=True):
+            if cls.applicable(fmt):
+                log.info(f"Using writer: {cls.writer_name}")
+                return cls
+            else:
+                log.debug(f"Rejecting writer: {cls.writer_name}")
+        raise TypeError(f"Unable to find any applicable writers for {fmt}")
 
     def __init__(self, outpath: Path):
         self.geometry = GeometryManager()

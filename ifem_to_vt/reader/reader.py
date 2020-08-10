@@ -20,7 +20,7 @@ class Reader(ABC):
         """Return a reader subclass that can handle files of the given type."""
         for cls in subclasses(Reader, invert=True):
             if cls.applicable(filename):
-                log.info(f"Found applicable reader: {cls.reader_name}")
+                log.info(f"Using reader: {cls.reader_name}")
                 return cls
             else:
                 log.debug(f"Rejecting reader: {cls.reader_name}")

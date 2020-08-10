@@ -2,7 +2,7 @@ from collections import defaultdict, OrderedDict
 from pathlib import Path
 
 from singledispatchmethod import singledispatchmethod
-import vtfwriter as vtf
+import treelog as log
 
 from typing import Optional
 
@@ -11,12 +11,23 @@ from ..fields import AbstractFieldPatch, CombinedFieldPatch
 from ..geometry import Patch, UnstructuredPatch
 from .writer import AbstractWriter
 
+try:
+    import vtfwriter as vtf
+    HAS_VTF = True
+except ImportError:
+    HAS_VTF = False
 
 
-class Writer(AbstractWriter):
+class VTFWriter(AbstractWriter):
 
-    out: vtf.File
+    writer_name = "VTF"
+
+    out: 'vtf.File'             # vtf is optional
     dirty_geometry: bool
+
+    @classmethod
+    def applicable(cls, fmt: str) -> bool:
+        return HAS_VTF and fmt == 'vtf'
 
     def __init__(self, filename: Path):
         super().__init__(filename)
@@ -33,7 +44,7 @@ class Writer(AbstractWriter):
             raise ValueError("VTF format does not support '{}' mode".format(config.output_mode))
 
     def __enter__(self) -> 'Writer':
-        super(Writer, self).__enter__()
+        super().__enter__()
         self.out = vtf.File(str(self.make_filename()), 'w' if config.output_mode == 'ascii' else 'wb').__enter__()
         self.gblock = self.out.GeometryBlock().__enter__()
         return self
@@ -49,6 +60,7 @@ class Writer(AbstractWriter):
         self.exit_stateinfo()
         self.out.__exit__(*args, **kwargs)
         super().__exit__(*args, **kwargs)
+        log.user(self.make_filename())
 
     def exit_stateinfo(self):
         with self.out.StateInfoBlock() as states:

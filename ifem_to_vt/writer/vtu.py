@@ -1,10 +1,16 @@
 import vtk
 
-from .vtk import Writer as VTKWriter
+from .vtk import VTKWriter
 from .. import config
 
 
-class Writer(VTKWriter):
+class VTUWriter(VTKWriter):
+
+    writer_name = "VTU"
+
+    @classmethod
+    def applicable(cls, fmt: str) -> bool:
+        return fmt == 'vtu'
 
     def nan_filter(self, results):
         return results
