@@ -1,5 +1,7 @@
 import numpy as np
 
+from typing import Iterable
+
 
 def prod(values):
     retval = 1
@@ -21,6 +23,22 @@ def ensure_ncomps(data, ncomps: int, allow_scalar: bool):
     if data.shape[-1] >= ncomps:
         return data
     return np.hstack([data, np.zeros((data.shape[0], ncomps - data.shape[-1]), dtype=data.dtype)])
+
+
+def subclasses(cls: type, root: bool = False, invert: bool = False) -> Iterable[type]:
+    """Iterate over all subclasses of CLS.  If ROOT is true, CLS itself is
+    included.  If INVERT is true, yield subclasses before superclasses.
+    """
+    if root and not invert:
+        yield cls
+    for sub in cls.__subclasses__():
+        if not invert:
+            yield sub
+        yield from subclasses(sub, root=False)
+        if invert:
+            yield sub
+    if root and invert:
+        yield cls
 
 
 def subdivide_linear(knots, nvis):

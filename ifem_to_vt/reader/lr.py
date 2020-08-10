@@ -1,8 +1,11 @@
+from pathlib import Path
+
 import lrspline
 
 from .. import config
 from ..geometry import LRPatch
 from .hdf5 import GeometryManager
+from .reader import Reader
 
 
 class SimpleBasis:
@@ -22,7 +25,13 @@ class SimpleBasis:
         return self.patches[patchid]
 
 
-class Reader:
+class LRReader(Reader):
+
+    reader_name = "LRSplines"
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        return filename.suffix == '.lr'
 
     def __init__(self, filename):
         self.filename = filename

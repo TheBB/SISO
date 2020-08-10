@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from splipy.io import G2
 
 from .. import config
 from ..geometry import SplinePatch
 from .hdf5 import GeometryManager
+from .reader import Reader
 
 
 class SimpleBasis:
@@ -22,7 +25,13 @@ class SimpleBasis:
         return self.patches[patchid]
 
 
-class Reader:
+class G2Reader(Reader):
+
+    reader_name = "GoTools"
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        return filename.suffix == '.g2'
 
     def __init__(self, filename):
         self.filename = filename

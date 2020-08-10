@@ -5,9 +5,26 @@ from scipy.io import FortranFile
 from .. import config
 from ..fields import SimpleFieldPatch
 from ..geometry import UnstructuredPatch, Hex
+from .reader import Reader
 
 
-class Reader:
+class SIMRAReader(Reader):
+
+    reader_name = "SIMRA"
+
+    @classmethod
+    def applicable(self, filename: Path) -> bool:
+        try:
+            endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
+            u4_type = f'{endian}u4'
+            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
+                assert f._read_size() % 4 == 0
+            with FortranFile(filename.with_name('mesh.dat'), 'r', header_dtype=u4_type) as f:
+                assert f._read_size() == 6 * 4
+            return True
+        except:
+            raise
+            return False
 
     def __init__(self, result_fn, mesh_fn=None):
         config.require(multiple_timesteps=False)

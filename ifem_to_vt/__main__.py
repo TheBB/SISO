@@ -1,13 +1,14 @@
 from functools import wraps
 import click
 from os.path import splitext, basename
+from pathlib import Path
 import sys
 import warnings
 
 import treelog as log
 
 from . import config
-from ifem_to_vt.reader import get_reader
+from ifem_to_vt.reader import Reader
 from ifem_to_vt.writer import get_writer
 
 
@@ -77,9 +78,13 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
         outfile = '{}.{}'.format(base, fmt)
 
     try:
-        Writer = get_writer(fmt)
-        with config(**kwargs), get_reader(infile) as r, Writer(outfile) as w:
-            r.write(w)
+        # The config can influence the choice of readers or writers,
+        # so apply it first
+        with config(**kwargs):
+            Writer = get_writer(fmt)
+            ReaderClass = Reader.find_applicable(Path(infile))
+            with ReaderClass(infile) as r, Writer(outfile) as w:
+                r.write(w)
     except Exception as e:
         log.error(str(e))
         sys.exit(1)

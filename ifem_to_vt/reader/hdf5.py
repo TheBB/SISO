@@ -1,11 +1,13 @@
 from collections import OrderedDict
 from functools import lru_cache
+from pathlib import Path
 import sys
 
 import h5py
 import numpy as np
 import treelog as log
 
+from .reader import Reader
 from .. import config
 from ..util import ensure_ncomps
 from ..fields import SimpleFieldPatch, CombinedFieldPatch, Displacement
@@ -178,12 +180,29 @@ class GeometryManager:
         w.finalize_geometry()
 
 
-class Reader:
+class IFEMReader(Reader):
 
-    def __init__(self, h5):
-        self.h5 = h5
+    reader_name = "IFEM"
+
+    filename: Path
+    h5: h5py.File
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        """Check if it's a valid HDF5 file and that it contains a group called '0'."""
+        try:
+            with h5py.File(filename, 'r') as f:
+                assert '0' in f
+            return True
+        except:
+            return False
+
+    def __init__(self, filename: Path):
+        self.filename = filename
 
     def __enter__(self):
+        self.h5 = h5py.File(str(self.filename), 'r').__enter__()
+
         self.bases = OrderedDict()
         self.fields = OrderedDict()
 
@@ -202,8 +221,8 @@ class Reader:
 
         return self
 
-    def __exit__(self, type_, value, backtrace):
-        self.h5.close()
+    def __exit__(self, *args):
+        self.h5.__exit__(*args)
 
     @property
     def nsteps(self):
@@ -409,7 +428,20 @@ class EigenField(Field):
         return coeffs
 
 
-class EigenReader(Reader):
+class IFEMEigenReader(IFEMReader):
+
+    reader_name = "IFEM-eigenmodes"
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        try:
+            with h5py.File(filename, 'r') as f:
+                assert '0' in f
+                basisname = next(iter(f['0']))
+                assert 'Eigenmode' in f['0'][basisname]
+            return True
+        except:
+            return False
 
     @property
     def basis(self):
@@ -435,12 +467,3 @@ class EigenReader(Reader):
         for modeid in range(self.nmodes):
             field.add_update(modeid)
         self.fields['Mode Shape'] = field
-
-
-def get_reader(filename):
-    h5 = h5py.File(filename, 'r')
-    basisname = next(iter(h5['0']))
-    if 'Eigenmode' in h5['0'][basisname]:
-        log.info('Detected eigenmodes')
-        return EigenReader(h5)
-    return Reader(h5)
