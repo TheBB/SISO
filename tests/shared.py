@@ -3,16 +3,20 @@ from os import chdir
 from pathlib import Path
 import tempfile
 
-from typing import List, Optional
-
+from click.testing import CliRunner
+from dataclasses import dataclass
 import numpy as np
+
+from typing import List, Optional, Iterator, Tuple
 
 import vtk
 import vtk.util.numpy_support as vtknp
 
+from ifem_to_vt.__main__ import convert
+
 
 @contextmanager
-def cd_temp():
+def cd_temp() -> Path:
     """Context manager that creates a temporary directory and sets cwd to
     it, restoring it after.
     """
@@ -26,7 +30,8 @@ def cd_temp():
             chdir(olddir)
 
 
-class TestCase:
+@dataclass
+class PreparedTestCase:
     """Data class representing a single test case, with source file,
     indended target format, and a list of output files as reference.
     """
@@ -34,16 +39,9 @@ class TestCase:
     sourcefile: Path
     target_format: str
     reference_path: Path
-    reference_files: List[str]
+    reference_files: List[Path]
 
-    def __init__(self, sourcefile, target_format, reference_path, reference_files):
-        self.sourcefile = sourcefile
-        self.target_format = target_format
-        self.reference_path = reference_path
-        self.reference_files = list(reference_files)
-        assert len(self.reference_files) > 0
-
-    def check_files(self, path):
+    def check_files(self, path: Path) -> Iterator[Tuple[Path, Path]]:
         """Yield a sequence of tuples, the first being the output of the test
         and the second being the reference to check against.  The test
         output files should be found in the given path, usually the
@@ -51,6 +49,16 @@ class TestCase:
         """
         for filename in self.reference_files:
             yield (path / filename, self.reference_path / filename)
+
+    @contextmanager
+    def invoke(self, fmt: str, mode: str = 'ascii') -> Path:
+        args = ['--debug', '--mode', mode, '-f', fmt, str(self.sourcefile)]
+        with cd_temp() as tempdir:
+            res = CliRunner().invoke(convert, args)
+            if res.exit_code != 0:
+                print(res.stdout)
+                assert False
+            yield tempdir
 
 
 # In the following we build a catalogue of test cases
@@ -66,7 +74,7 @@ TESTDATA_DIR = Path(__file__).parent / 'testdata'
 MULTISTEP_FORMATS = {'pvd', 'vtf'}
 
 
-def testcase(sourcefile, nsteps, *formats):
+def testcase(sourcefile: Path, nsteps: Optional[int], *formats: str):
     """Create test cases for converting SOURCEFILE to every format listed
     in FORMATS.  NSTEPS should be None if the source data has no
     timesteps, or the number of steps if it does.
@@ -74,12 +82,11 @@ def testcase(sourcefile, nsteps, *formats):
     sourcefile = TESTDATA_DIR / sourcefile
     for fmt in formats:
         basename = Path(f'{sourcefile.stem}.{fmt}')
-        TESTCASES.setdefault(fmt, []).append(TestCase(
-            sourcefile, fmt, TESTDATA_DIR / fmt, filename_maker(fmt, fmt in MULTISTEP_FORMATS)(basename, nsteps)
-        ))
+        reference_files = filename_maker(fmt, fmt in MULTISTEP_FORMATS)(basename, nsteps)
+        TESTCASES.setdefault(fmt, []).append(PreparedTestCase(sourcefile, fmt, TESTDATA_DIR / fmt, reference_files))
 
 
-def filename_maker(ext: Optional[str], multistep: bool):
+def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
     """Return a function that creates correct filenames for output
     formats.  EXT should be the expected extension (possibly None) and
     MULTISTEP should be True if the format supports multiple timesteps
@@ -92,10 +99,8 @@ def filename_maker(ext: Optional[str], multistep: bool):
     ext = f'.{ext}' if ext is not None else ''
     def maker(base: Path, nsteps: Optional[int] = None):
         if multistep or nsteps is None:
-            yield Path(f'{base.stem}{ext}')
-            return
-        for i in range(1, nsteps + 1):
-            yield Path(f'{base.stem}-{i}{ext}')
+            return [Path(f'{base.stem}{ext}')]
+        return [Path(f'{base.stem}-{i}{ext}') for i in range(1, nsteps + 1)]
     return maker
 
 

@@ -8,56 +8,40 @@ import numpy as np
 from singledispatchmethod import singledispatchmethod
 import splipy.io
 from splipy import SplineObject, BSplineBasis
+import treelog as log
 
-from typing import Tuple, Any, Union, IO
-from nptyping import NDArray, Float
+from typing import Tuple, Any, Union, IO, Dict, Hashable, List
+from .typing import Array2D, BoundingBox, PatchID
 
 from . import config
-from .util import prod, flatten_2d
+
+from .util import (
+    prod, flatten_2d, ensure_ncomps,
+    subdivide_face, subdivide_linear, subdivide_volume
+)
 
 
-Array2D = NDArray[Any, Any]
+
+# Abstract superclasses
+# ----------------------------------------------------------------------
 
 
-def subdivide_linear(knots, nvis):
-    out = []
-    for left, right in zip(knots[:-1], knots[1:]):
-        out.extend(np.linspace(left, right, num=nvis, endpoint=False))
-    out.append(knots[-1])
-    return out
+class CellType:
+
+    num_nodes: int
+    num_pardim: int
 
 
-def subdivide_face(el, nodes, elements, nvis):
-    left, bottom = el.start()
-    right, top = el.end()
-    xs = subdivide_linear((left, right), nvis)
-    ys = subdivide_linear((bottom, top), nvis)
+class Quad(CellType):
 
-    for (l, r) in zip(xs[:-1], xs[1:]):
-        for (b, t) in zip(ys[:-1], ys[1:]):
-            sw, se, nw, ne = (l, b), (r, b), (l, t), (r, t)
-            for pt in (sw, se, nw, ne):
-                nodes.setdefault(pt, len(nodes))
-            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
+    num_nodes = 4
+    num_pardim = 2
 
 
-def subdivide_volume(el, nodes, elements, nvis):
-    umin, vmin, wmin = el.start()
-    umax, vmax, wmax = el.end()
-    us = subdivide_linear((umin, umax), nvis)
-    vs = subdivide_linear((vmin, vmax), nvis)
-    ws = subdivide_linear((wmin, wmax), nvis)
+class Hex(CellType):
 
-    for (ul, ur) in zip(us[:-1], us[1:]):
-        for (vl, vr) in zip(vs[:-1], vs[1:]):
-            for (wl, wr) in zip(ws[:-1], ws[1:]):
-                bsw, bse, bnw, bne = (ul, vl, wl), (ur, vl, wl), (ul, vr, wl), (ur, vr, wl)
-                tsw, tse, tnw, tne = (ul, vl, wr), (ur, vl, wr), (ul, vr, wr), (ur, vr, wr)
-                for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
-                    nodes.setdefault(pt, len(nodes))
-                elements.append([nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
-                                 nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
-
+    num_nodes = 8
+    num_pardim = 3
 
 
 
@@ -66,6 +50,8 @@ def subdivide_volume(el, nodes, elements, nvis):
 
 
 class Patch(ABC):
+
+    key: PatchID
 
     @property
     @abstractmethod
@@ -93,7 +79,7 @@ class Patch(ABC):
 
     @property
     @abstractmethod
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         """Hashable bounding box."""
         pass
 
@@ -111,6 +97,10 @@ class Patch(ABC):
         """
         pass
 
+    @abstractmethod
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        pass
+
 
 class Tesselator(ABC):
 
@@ -126,25 +116,37 @@ class Tesselator(ABC):
         pass
 
 
+
+# Unstructured support
+# ----------------------------------------------------------------------
+
+
 class UnstructuredPatch(Patch):
     """A patch that represents an unstructured collection of nodes and
     cells.  This is the lowest common grid form: all other grids
     should be convertable to it.
     """
 
-    def __init__(self, nodes: Array2D, cells: Array2D):
+    nodes: Array2D
+    cells: Array2D
+    celltype: CellType
+
+    def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D, celltype: CellType):
         assert nodes.ndim == cells.ndim == 2
+        self.key = key
         self.nodes = nodes
         self.cells = cells
+        self.celltype = celltype
+        assert cells.shape[-1] == celltype.num_nodes
 
     @classmethod
-    def from_lagrangian(cls, data: Union[bytes, str]) -> 'UnstructuredPatch':
+    def from_lagrangian(cls, key: PatchID, data: Union[bytes, str]) -> 'UnstructuredPatch':
         if isinstance(data, bytes):
             data = data.decode()
         assert isinstance(data, str)
         assert data.startswith('# LAGRANGIAN')
-        lines = data.split('\n')
-        specs, lines = lines[0][12:].split(), iter(lines[1:])
+        all_lines = data.split('\n')
+        specs, lines = all_lines[0][12:].split(), iter(all_lines[1:])
 
         # Decode nodes, elements, type
         assert specs[0].startswith('nodes=')
@@ -168,7 +170,7 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(nodes, cells)
+        return cls(key, nodes, cells, celltype=Hex())
 
     @property
     def num_physdim(self) -> int:
@@ -176,12 +178,10 @@ class UnstructuredPatch(Patch):
 
     @property
     def num_pardim(self) -> int:
-        return {
-            (4, 8): 3
-        }[self.num_physidm, self.cells.shape[-1]]
+        return self.celltype.num_pardim
 
     @property
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         return tuple(
             (np.min(self.nodes[:,i]), np.max(self.nodes[:,i]))
             for i in range(self.num_physdim)
@@ -207,6 +207,9 @@ class UnstructuredPatch(Patch):
             return coeffs.reshape((self.num_cells, -1))
         return coeffs.reshape((self.num_nodes, -1))
 
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        self.nodes = ensure_ncomps(self.nodes, ncomps, allow_scalar)
+
 
 
 # LRSpline support
@@ -215,7 +218,7 @@ class UnstructuredPatch(Patch):
 
 class LRPatch(Patch):
 
-    def __init__(self, obj: Union[bytes, str, lr.LRSplineObject]):
+    def __init__(self, key: PatchID, obj: Union[bytes, str, lr.LRSplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -225,6 +228,7 @@ class LRPatch(Patch):
                 obj = lr.LRSplineVolume(obj)
         assert isinstance(obj, lr.LRSplineObject)
         self.obj = obj
+        self.key = key
 
     @property
     def num_physdim(self) -> int:
@@ -235,7 +239,7 @@ class LRPatch(Patch):
         return self.obj.pardim
 
     @property
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         return tuple(
             (np.min(self.obj.controlpoints[:,i]), np.max(self.obj.controlpoints[:,i]))
             for i in range(self.num_physdim)
@@ -257,12 +261,16 @@ class LRPatch(Patch):
         tess = LRTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
 
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        self.obj.controlpoints = ensure_ncomps(self.obj.controlpoints, ncomps, allow_scalar)
+
 
 class LRTesselator(Tesselator):
 
     def __init__(self, patch: LRPatch):
         super().__init__(patch)
-        nodes, cells = OrderedDict(), []
+        nodes: Dict[Tuple[float, ...], int] = dict()
+        cells: List[List[int]] = []
         subdivider = subdivide_face if patch.obj.pardim == 2 else subdivide_volume
         for el in patch.obj.elements:
             subdivider(el, nodes, cells, config.nvis)
@@ -274,17 +282,18 @@ class LRTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate.register(LRPatch)
-    def _(self, patch: LRPatch) -> Patch:
+    def _1(self, patch: LRPatch) -> Patch:
         spline = patch.obj
         nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
-        return UnstructuredPatch(nodes, self.cells)
+        celltype = Hex() if patch.num_pardim == 3 else Quad()
+        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells, celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
     @tesselate_field.register(LRPatch)
-    def _(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def _2(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
         if not cells:
@@ -321,7 +330,7 @@ class G2Object(splipy.io.G2):
 class SplinePatch(Patch):
     """A representation of a Splipy SplineObject."""
 
-    def __init__(self, obj: Union[bytes, str, SplineObject]):
+    def __init__(self, key: PatchID, obj: Union[bytes, str, SplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -330,6 +339,7 @@ class SplinePatch(Patch):
                 obj = g.read()[0]
         assert isinstance(obj, SplineObject)
         self.obj = obj
+        self.key = key
 
     @property
     def num_physdim(self) -> int:
@@ -340,7 +350,7 @@ class SplinePatch(Patch):
         return self.obj.pardim
 
     @property
-    def bounding_box(self) -> Tuple[Tuple[float, float], ...]:
+    def bounding_box(self) -> BoundingBox:
         return tuple(
             (np.min(self.obj.controlpoints[...,i]), np.max(self.obj.controlpoints[...,i]))
             for i in range(self.num_physdim)
@@ -362,29 +372,35 @@ class SplinePatch(Patch):
         tess = TensorTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
 
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
+        if allow_scalar and self.obj.dimension == 1:
+            return
+        self.obj.set_dimension(ncomps)
+
 
 class TensorTesselator(Tesselator):
 
     def __init__(self, patch: SplinePatch):
         super().__init__(patch)
         knots = patch.obj.knots()
-        self.knots = tuple(subdivide_linear(kts, config.nvis) for kts in knots)
+        self.knots = list(subdivide_linear(kts, config.nvis) for kts in knots)
 
     @singledispatchmethod
     def tesselate(self, patch: Patch) -> Patch:
         raise NotImplementedError
 
     @tesselate.register(SplinePatch)
-    def _(self, patch: SplinePatch):
+    def _1(self, patch: SplinePatch):
         nodes = flatten_2d(patch.obj(*self.knots))
-        return UnstructuredPatch(nodes, self.cells())
+        celltype = Hex() if patch.num_pardim == 3 else Quad()
+        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells(), celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
     @tesselate_field.register(SplinePatch)
-    def _(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def _2(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
         if not cells:
@@ -407,7 +423,7 @@ class TensorTesselator(Tesselator):
 
         return flatten_2d(newspline(*knots))
 
-    def cells(self):
+    def cells(self) -> Array2D:
         nshape = tuple(len(k) for k in self.knots)
         ranges = [range(k-1) for k in nshape]
         nidxs = [np.array(q) for q in zip(*product(*ranges))]
@@ -433,3 +449,35 @@ class TensorTesselator(Tesselator):
             eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nshape)
 
         return eidxs
+
+
+
+# GeometryManager
+# ----------------------------------------------------------------------
+
+
+class GeometryManager:
+
+    patch_keys: Dict[PatchID, int]
+    bounding_boxes: Dict[BoundingBox, int]
+
+    def __init__(self):
+        self.patch_keys = dict()
+        self.bounding_boxes = dict()
+
+    def update(self, patch: Patch):
+        if patch.key not in self.patch_keys:
+            patchid = len(self.patch_keys)
+            log.debug(f"New unique patch detected, assigned ID {patchid}")
+            self.patch_keys[patch.key] = patchid
+        else:
+            patchid = self.patch_keys[patch.key]
+        self.bounding_boxes[patch.bounding_box] = patchid
+        return patchid
+
+    def global_id(self, patch: Patch):
+        try:
+            return self.bounding_boxes[patch.bounding_box]
+        except KeyError:
+            log.error("Unable to find corresponding geometry patch")
+            return None

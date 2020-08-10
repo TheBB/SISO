@@ -18,6 +18,7 @@ setup(
     packages=['ifem_to_vt', 'ifem_to_vt.writer', 'ifem_to_vt.reader'],
     install_requires=[
         'click',
+        'dataclasses',
         'numpy',
         'Splipy>=1.4',
         'lrsplines>=1.5',
@@ -30,6 +31,8 @@ setup(
     ],
     extras_require={
         'VTF': ['vtfwriter'],
+        'testing': ['pytest'],
+        'deploy': ['twine', 'cibuildwheel==1.1.0'],
     },
     entry_points={
         'console_scripts': [

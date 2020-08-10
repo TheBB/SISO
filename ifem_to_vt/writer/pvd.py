@@ -1,15 +1,26 @@
+from pathlib import Path
 from os import makedirs
-from os.path import splitext, join
-from .vtu import Writer as AbstractVTUWriter
 
+from .vtu import VTUWriter
 from .. import config
 
 
-class Writer(AbstractVTUWriter):
+class PVDWriter(VTUWriter):
+
+    writer_name = "PVD"
+
+    @classmethod
+    def applicable(self, fmt: str) -> bool:
+        return fmt == 'pvd'
+
+    def __init__(self, outpath: Path):
+        outpath = Path(outpath)
+        self.rootfile = outpath
+        super().__init__(outpath.with_suffix('') / 'data.vtu')
 
     def __enter__(self):
         super().__enter__()
-        self.pvd = open(self.filename, 'w')
+        self.pvd = open(self.rootfile, 'w')
         self.pvd.write('<VTKFile type="Collection">\n')
         self.pvd.write('  <Collection>\n')
         return self
@@ -20,19 +31,16 @@ class Writer(AbstractVTUWriter):
         self.pvd.write('</VTKFile>\n')
         self.pvd.close()
 
-    def make_filename(self):
-        fn, ext = splitext(self.filename)
-        root = join(fn, 'data')
-        makedirs(root, mode=0o775, exist_ok=True)
-        if not config.multiple_timesteps:
-            return root + '.vtu'
-        return '{}-{}.vtu'.format(root, self.stepid)
+    def make_filename(self, *args, **kwargs):
+        filename = super().make_filename(*args, **kwargs)
+        makedirs(filename.parent, mode=0o775, exist_ok=True)
+        return filename
 
     def finalize_step(self):
         super().finalize_step()
-        filename = self.make_filename()
-        if self.step_data:
-            timestep = next(iter(self.step_data.values()))
+        filename = self.make_filename(with_step=True)
+        if self.stepdata:
+            timestep = next(iter(self.stepdata.values()))
         else:
-            timestep = self.stepid - 1
+            timestep = self.stepid
         self.pvd.write('    <DataSet timestep="{}" part="0" file="{}" />\n'.format(timestep, filename))

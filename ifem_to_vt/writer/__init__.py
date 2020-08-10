@@ -1,9 +1,5 @@
-import importlib
-
-
-def get_writer(fmt):
-    try:
-        module = importlib.import_module('ifem_to_vt.writer.{}'.format(fmt))
-        return lambda fn: module.Writer(fn)
-    except ModuleNotFoundError:
-        raise ValueError('Unsupported format: {}'.format(fmt))
+from .writer import Writer
+from .vtk import VTKWriter
+from .vtu import VTUWriter
+from .pvd import PVDWriter
+from .vtf import VTFWriter

@@ -1,14 +1,15 @@
 from functools import wraps
-import click
-from os.path import splitext, basename
+from pathlib import Path
 import sys
+import traceback
 import warnings
 
+import click
 import treelog as log
 
 from . import config
-from ifem_to_vt.reader import get_reader
-from ifem_to_vt.writer import get_writer
+from ifem_to_vt.reader import Reader
+from ifem_to_vt.writer import Writer
 
 
 def suppress_warnings(func):
@@ -66,24 +67,33 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
         )
     log.current = log.FilterLog(logger, minlevel=getattr(log.proto.Level, verbosity))
 
+    # Convert to pathlib
+    infile = Path(infile)
+    outfile = Path(outfile) if outfile else None
+
     # Determine filename of output
     if outfile and not fmt:
-        _, fmt = splitext(outfile)
-        fmt = fmt[1:].lower()
+        fmt = outfile.suffix[1:].lower()
     elif not outfile:
-        fmt = fmt or 'vtu'
-        filename = basename(infile)
-        base, _ = splitext(filename)
-        outfile = '{}.{}'.format(base, fmt)
+        fmt = fmt or 'pvd'
+        outfile = Path(infile.name).with_suffix(f'.{fmt}')
 
     try:
-        Writer = get_writer(fmt)
-    except ValueError as e:
-        log.error(e)
+        # The config can influence the choice of readers or writers,
+        # so apply it first
+        with config(**kwargs):
+            ReaderClass = Reader.find_applicable(infile)
+            WriterClass = Writer.find_applicable(fmt)
+            with ReaderClass(infile) as r, WriterClass(outfile) as w:
+                r.write(w)
+    except Exception as e:
+        if verbosity == 'debug':
+            # In debug mode, allow exceptions to filter through in raw form
+            traceback.print_exc()
+        else:
+            log.error(f"Error: {e}")
+            log.error("More information may be available with --debug")
         sys.exit(1)
-
-    with config(**kwargs), get_reader(infile) as r, Writer(outfile) as w:
-        r.write(w)
 
 
 if __name__ == '__main__':
