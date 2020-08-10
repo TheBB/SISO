@@ -23,7 +23,6 @@ class SIMRAReader(Reader):
                 assert f._read_size() == 6 * 4
             return True
         except:
-            raise
             return False
 
     def __init__(self, result_fn, mesh_fn=None):
