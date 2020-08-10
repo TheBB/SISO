@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from inspect import isabstract
 from pathlib import Path
 
 import treelog as log
@@ -34,6 +35,8 @@ class AbstractWriter(ABC):
     def find_applicable(fmt: str) -> type:
         """Return a writer subclass that can handle the given format."""
         for cls in subclasses(AbstractWriter, invert=True):
+            if isabstract(cls):
+                continue
             if cls.applicable(fmt):
                 log.info(f"Using writer: {cls.writer_name}")
                 return cls
