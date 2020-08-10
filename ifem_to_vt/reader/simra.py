@@ -2,15 +2,25 @@ from pathlib import Path
 
 from scipy.io import FortranFile
 
+from typing import Optional
+
 from .. import config
 from ..fields import SimpleFieldPatch
 from ..geometry import UnstructuredPatch, Hex
 from .reader import Reader
+from ..writer import Writer
+
 
 
 class SIMRAReader(Reader):
 
     reader_name = "SIMRA"
+
+    result_fn: Path
+    mesh_fn: Path
+
+    result: FortranFile
+    mesh: FortranFile
 
     @classmethod
     def applicable(self, filename: Path) -> bool:
@@ -25,31 +35,28 @@ class SIMRAReader(Reader):
         except:
             return False
 
-    def __init__(self, result_fn, mesh_fn=None):
+    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None):
         config.require(multiple_timesteps=False)
         self.result_fn = Path(result_fn)
-        if mesh_fn is None:
-            self.mesh_fn = self.result_fn.parent / 'mesh.dat'
-        else:
-            self.mesh_fn = mesh_fn
+        self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
 
         if not self.mesh_fn.is_file():
-            raise IOError('Unable to find mesh file: {}'.format(self.mesh_fn))
+            raise IOError(f"Unable to find mesh file: {self.mesh_fn}")
 
         endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
-        self.f4_type = endian + 'f4'
-        self.u4_type = endian + 'u4'
+        self.f4_type = f'{endian}f4'
+        self.u4_type = f'{endian}u4'
 
     def __enter__(self):
         self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
         self.mesh = FortranFile(self.mesh_fn, 'r', header_dtype=self.u4_type).__enter__()
         return self
 
-    def __exit__(self, type_, value, backtrace):
-        self.mesh.__exit__(type_, value, backtrace)
-        self.result.__exit__(type_, value, backtrace)
+    def __exit__(self, *args):
+        self.mesh.__exit__(*args)
+        self.result.__exit__(*args)
 
-    def write(self, w):
+    def write(self, w: Writer):
         npts, nelems, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
         coords = self.mesh.read_reals(self.f4_type).reshape(npts, 3)
         cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
