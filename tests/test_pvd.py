@@ -1,4 +1,3 @@
-from os.path import splitext, basename
 from pathlib import Path
 import xml.etree.ElementTree as ET
 

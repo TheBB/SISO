@@ -43,7 +43,7 @@ class G2Reader(PureGeometryReader):
     suffix = '.g2'
 
     def __enter__(self):
-        self.g2 = G2(self.filename).__enter__()
+        self.g2 = G2(str(self.filename)).__enter__()
         return self
 
     def __exit__(self, *args):

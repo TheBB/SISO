@@ -1,10 +1,9 @@
 from functools import wraps
-import click
-from os.path import splitext, basename
 from pathlib import Path
 import sys
 import warnings
 
+import click
 import treelog as log
 
 from . import config
@@ -67,21 +66,22 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
         )
     log.current = log.FilterLog(logger, minlevel=getattr(log.proto.Level, verbosity))
 
+    # Convert to pathlib
+    infile = Path(infile)
+    outfile = Path(outfile) if outfile else None
+
     # Determine filename of output
     if outfile and not fmt:
-        _, fmt = splitext(outfile)
-        fmt = fmt[1:].lower()
+        fmt = outfile.suffix[1:].lower()
     elif not outfile:
-        fmt = fmt or 'vtu'
-        filename = basename(infile)
-        base, _ = splitext(filename)
-        outfile = '{}.{}'.format(base, fmt)
+        fmt = fmt or 'pvd'
+        outfile = Path(infile.name).with_suffix(f'.{fmt}')
 
     try:
         # The config can influence the choice of readers or writers,
         # so apply it first
         with config(**kwargs):
-            ReaderClass = Reader.find_applicable(Path(infile))
+            ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
             with ReaderClass(infile) as r, WriterClass(outfile) as w:
                 r.write(w)
