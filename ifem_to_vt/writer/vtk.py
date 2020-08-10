@@ -15,7 +15,7 @@ from .. import config
 from ..fields import AbstractFieldPatch, CombinedFieldPatch
 from ..geometry import Patch, UnstructuredPatch, Hex
 from ..util import ensure_ncomps
-from .writer import AbstractWriter
+from .writer import Writer
 
 
 
@@ -25,7 +25,7 @@ class Field:
     data: Dict[int, Array2D]
 
 
-class VTKWriter(AbstractWriter):
+class VTKWriter(Writer):
 
     writer_name = "VTK"
 

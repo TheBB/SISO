@@ -9,7 +9,7 @@ from typing import Optional
 from .. import config
 from ..fields import AbstractFieldPatch, CombinedFieldPatch
 from ..geometry import Patch, UnstructuredPatch
-from .writer import AbstractWriter
+from .writer import Writer
 
 try:
     import vtfwriter as vtf
@@ -18,7 +18,7 @@ except ImportError:
     HAS_VTF = False
 
 
-class VTFWriter(AbstractWriter):
+class VTFWriter(Writer):
 
     writer_name = "VTF"
 

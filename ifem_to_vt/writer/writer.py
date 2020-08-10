@@ -14,7 +14,7 @@ from ..util import subclasses
 
 
 
-class AbstractWriter(ABC):
+class Writer(ABC):
 
     writer_name: str
 
@@ -34,7 +34,7 @@ class AbstractWriter(ABC):
     @staticmethod
     def find_applicable(fmt: str) -> type:
         """Return a writer subclass that can handle the given format."""
-        for cls in subclasses(AbstractWriter, invert=True):
+        for cls in subclasses(Writer, invert=True):
             if isabstract(cls):
                 continue
             if cls.applicable(fmt):
