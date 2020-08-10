@@ -1,13 +1,14 @@
 from collections import defaultdict, OrderedDict
 from pathlib import Path
 
+from dataclasses import dataclass
 from singledispatchmethod import singledispatchmethod
 import treelog as log
 
-from typing import Optional
+from typing import Optional, List, Dict, Any, Tuple, Type
 
 from .. import config
-from ..fields import AbstractFieldPatch, CombinedFieldPatch
+from ..fields import AbstractFieldPatch, CombinedFieldPatch, SimpleFieldPatch
 from ..geometry import Patch, UnstructuredPatch
 from .writer import Writer
 
@@ -18,12 +19,23 @@ except ImportError:
     HAS_VTF = False
 
 
+
+@dataclass
+class Field:
+    blocktype: Type['vtf.Block']
+    steps: Dict[int, List['vtf.ResultBlock']]
+
+
 class VTFWriter(Writer):
 
     writer_name = "VTF"
 
     out: 'vtf.File'             # vtf is optional
     dirty_geometry: bool
+
+    steps: List[Dict[str, Any]]
+    geometry_blocks: List[Tuple['vtf.NodeBlock', 'vtf.ElementBlock']]
+    field_blocks: Dict[str, Field]
 
     @classmethod
     def applicable(cls, fmt: str) -> bool:
@@ -33,10 +45,8 @@ class VTFWriter(Writer):
         super().__init__(filename)
         self.steps = []
         self.geometry_blocks = []
-        self.internal_stepid = dict()
 
-        self.mode_data = []
-        self.field_blocks = OrderedDict()
+        self.field_blocks = dict()
         self.dirty_geometry = False
 
     def validate_mode(self):
@@ -51,9 +61,9 @@ class VTFWriter(Writer):
 
     def __exit__(self, *args, **kwargs):
         for fname, data in self.field_blocks.items():
-            with data['cons']() as fblock:
+            with data.blocktype() as fblock:
                 fblock.SetName(fname)
-                for stepid, rblocks in data['steps'].items():
+                for stepid, rblocks in data.steps.items():
                     fblock.BindResultBlocks(stepid, *rblocks)
 
         self.gblock.__exit__(*args, **kwargs)
@@ -86,8 +96,10 @@ class VTFWriter(Writer):
             patchid = super().update_geometry(patch)
         patch.ensure_ncomps(3, allow_scalar=False)
 
+        # If we haven't seen this patch before, assert that it's the
+        # next unseen one
         if len(self.geometry_blocks) <= patchid:
-            self.geometry_blocks.extend([None] * (patchid - len(self.geometry_blocks) + 1))
+            assert len(self.geometry_blocks) == patchid
 
         with self.out.NodeBlock() as nblock:
             nblock.SetNodes(patch.nodes.flat)
@@ -97,7 +109,10 @@ class VTFWriter(Writer):
             eblock.SetPartName('Patch {}'.format(patchid+1))
             eblock.BindNodeBlock(nblock, patchid+1)
 
-        self.geometry_blocks[patchid] = (nblock, eblock)
+        if len(self.geometry_blocks) <= patchid:
+            self.geometry_blocks.append((nblock, eblock))
+        else:
+            self.geometry_blocks[patchid] = (nblock, eblock)
         self.dirty_geometry = True
 
     def finalize_geometry(self):
@@ -109,10 +124,14 @@ class VTFWriter(Writer):
     def update_field(self, field: AbstractFieldPatch):
         patchid = super().update_field(field)
         field.ensure_ncomps(3, allow_scalar=True)
-        if isinstance(field, CombinedFieldPatch) or not isinstance(field.patch, UnstructuredPatch):
+        if isinstance(field, CombinedFieldPatch):
             data = field.tesselate()
-        else:
+        elif isinstance(field, SimpleFieldPatch) and not isinstance(field.patch, UnstructuredPatch):
+            data = field.tesselate()
+        elif isinstance(field, SimpleFieldPatch):
             data = field.data
+        else:
+            assert False
 
         nblock, eblock = self.geometry_blocks[patchid]
         with self.out.ResultBlock(cells=field.cells, vector=field.num_comps>1) as rblock:
@@ -121,12 +140,12 @@ class VTFWriter(Writer):
 
         if field.name not in self.field_blocks:
             if field.is_scalar:
-                cons = self.out.ScalarBlock
+                blocktype = self.out.ScalarBlock
             elif not field.is_displacement:
-                cons = self.out.VectorBlock
+                blocktype = self.out.VectorBlock
             else:
-                cons = self.out.DisplacementBlock
-            self.field_blocks[field.name] = {'cons': cons, 'steps': {}}
+                blocktype = self.out.DisplacementBlock
+            self.field_blocks[field.name] = Field(blocktype, {})
 
-        steps = self.field_blocks[field.name]['steps']
+        steps = self.field_blocks[field.name].steps
         steps.setdefault(self.stepid + 1, []).append(rblock)

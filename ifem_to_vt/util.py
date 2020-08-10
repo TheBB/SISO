@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import Iterable
+from typing import Iterable, Type, TypeVar
 
 
 def prod(values):
@@ -25,7 +25,8 @@ def ensure_ncomps(data, ncomps: int, allow_scalar: bool):
     return np.hstack([data, np.zeros((data.shape[0], ncomps - data.shape[-1]), dtype=data.dtype)])
 
 
-def subclasses(cls: type, root: bool = False, invert: bool = False) -> Iterable[type]:
+T = TypeVar('T')
+def subclasses(cls: Type[T], root: bool = False, invert: bool = False) -> Iterable[Type[T]]:
     """Iterate over all subclasses of CLS.  If ROOT is true, CLS itself is
     included.  If INVERT is true, yield subclasses before superclasses.
     """

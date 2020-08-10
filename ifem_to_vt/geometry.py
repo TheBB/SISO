@@ -10,7 +10,7 @@ import splipy.io
 from splipy import SplineObject, BSplineBasis
 import treelog as log
 
-from typing import Tuple, Any, Union, IO, Dict, Hashable
+from typing import Tuple, Any, Union, IO, Dict, Hashable, List
 from .typing import Array2D, BoundingBox, PatchID
 
 from . import config
@@ -145,8 +145,8 @@ class UnstructuredPatch(Patch):
             data = data.decode()
         assert isinstance(data, str)
         assert data.startswith('# LAGRANGIAN')
-        lines = data.split('\n')
-        specs, lines = lines[0][12:].split(), iter(lines[1:])
+        all_lines = data.split('\n')
+        specs, lines = all_lines[0][12:].split(), iter(all_lines[1:])
 
         # Decode nodes, elements, type
         assert specs[0].startswith('nodes=')
@@ -269,7 +269,8 @@ class LRTesselator(Tesselator):
 
     def __init__(self, patch: LRPatch):
         super().__init__(patch)
-        nodes, cells = OrderedDict(), []
+        nodes: Dict[Tuple[float, ...], int] = dict()
+        cells: List[List[int]] = []
         subdivider = subdivide_face if patch.obj.pardim == 2 else subdivide_volume
         for el in patch.obj.elements:
             subdivider(el, nodes, cells, config.nvis)
@@ -281,7 +282,7 @@ class LRTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate.register(LRPatch)
-    def _(self, patch: LRPatch) -> Patch:
+    def _1(self, patch: LRPatch) -> Patch:
         spline = patch.obj
         nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
         celltype = Hex() if patch.num_pardim == 3 else Quad()
@@ -292,7 +293,7 @@ class LRTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate_field.register(LRPatch)
-    def _(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def _2(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
         if not cells:
@@ -382,14 +383,14 @@ class TensorTesselator(Tesselator):
     def __init__(self, patch: SplinePatch):
         super().__init__(patch)
         knots = patch.obj.knots()
-        self.knots = tuple(subdivide_linear(kts, config.nvis) for kts in knots)
+        self.knots = list(subdivide_linear(kts, config.nvis) for kts in knots)
 
     @singledispatchmethod
     def tesselate(self, patch: Patch) -> Patch:
         raise NotImplementedError
 
     @tesselate.register(SplinePatch)
-    def _(self, patch: SplinePatch):
+    def _1(self, patch: SplinePatch):
         nodes = flatten_2d(patch.obj(*self.knots))
         celltype = Hex() if patch.num_pardim == 3 else Quad()
         return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells(), celltype=celltype)
@@ -399,7 +400,7 @@ class TensorTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate_field.register(SplinePatch)
-    def _(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def _2(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
         if not cells:

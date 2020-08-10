@@ -96,7 +96,7 @@ class StandardBasis(Basis):
 
 class EigenBasis(Basis):
 
-    def __init__(self, name: str, reader: str):
+    def __init__(self, name: str, reader: 'IFEMReader'):
         super().__init__(name, reader)
         self.npatches = len(reader.h5[self.group_path(0)])
 
@@ -187,7 +187,6 @@ class StandardField(SimpleField):
         self.name = name
         self.basis = basis
         self.cells = cells
-        self.ncomps = None
         self.fieldtype = None
         self.reader = reader
 

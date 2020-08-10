@@ -12,7 +12,7 @@ from typing import Optional, Dict
 from ..typing import Array2D
 
 from .. import config
-from ..fields import AbstractFieldPatch, CombinedFieldPatch
+from ..fields import AbstractFieldPatch, CombinedFieldPatch, SimpleFieldPatch
 from ..geometry import Patch, UnstructuredPatch, Hex
 from ..util import ensure_ncomps
 from .writer import Writer
@@ -75,10 +75,14 @@ class VTKWriter(Writer):
     def update_field(self, field: AbstractFieldPatch):
         patchid = super().update_field(field)
         field.ensure_ncomps(3, allow_scalar=True)
-        if isinstance(field, CombinedFieldPatch) or not isinstance(field.patch, UnstructuredPatch):
+        if isinstance(field, CombinedFieldPatch):
             data = field.tesselate()
-        else:
+        elif isinstance(field, SimpleFieldPatch) and not isinstance(field.patch, UnstructuredPatch):
+            data = field.tesselate()
+        elif isinstance(field, SimpleFieldPatch):
             data = field.data
+        else:
+            assert False
         self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
 
     def finalize_step(self):
