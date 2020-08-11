@@ -1,0 +1,5 @@
+<VTKFile type="Collection">
+  <Collection>
+    <DataSet timestep="2.0" part="0" file="SmallBox-with-last/data.vtu" />
+  </Collection>
+</VTKFile>

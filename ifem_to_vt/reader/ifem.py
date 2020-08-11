@@ -288,13 +288,15 @@ class SplitField(SimpleField):
 class GeometryManager:
 
     basis: Basis
+    written: bool
 
     def __init__(self, basis: Basis):
         self.basis = basis
+        self.written = False
         log.info(f"Using {basis.name} for geometry")
 
     def update(self, w: Writer, stepid: int):
-        if not self.basis.update_at(stepid):
+        if not self.basis.update_at(stepid) and self.written:
             w.finalize_geometry()
             return
 
@@ -307,6 +309,7 @@ class GeometryManager:
             w.update_geometry(patch)
 
         w.finalize_geometry()
+        self.written = True
 
 
 
@@ -510,7 +513,7 @@ class IFEMReader(Reader):
             self.geometry.update(w, stepid)
 
             for field in self.fields.values():
-                if field.update_at(stepid):
+                if field.update_at(stepid) or config.only_final_timestep:
                     log.info('Updating {} ({})'.format(field.name, field.basisname))
                     field.update(w, stepid)
 
