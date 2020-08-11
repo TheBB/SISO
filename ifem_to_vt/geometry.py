@@ -11,7 +11,7 @@ from splipy import SplineObject, BSplineBasis
 import treelog as log
 
 from typing import Tuple, Any, Union, IO, Dict, Hashable, List
-from .typing import Array2D, BoundingBox, PatchID
+from .typing import Array2D, BoundingBox, PatchID, Shape
 
 from . import config
 
@@ -30,18 +30,21 @@ class CellType:
 
     num_nodes: int
     num_pardim: int
+    structured: bool
 
 
 class Quad(CellType):
 
     num_nodes = 4
     num_pardim = 2
+    structured = True
 
 
 class Hex(CellType):
 
     num_nodes = 8
     num_pardim = 3
+    structured = True
 
 
 
@@ -84,7 +87,7 @@ class Patch(ABC):
         pass
 
     @abstractmethod
-    def tesselate(self) -> 'Patch':
+    def tesselate(self) -> 'UnstructuredPatch':
         """Convert to a suitable discrete representation.
         Currently an UnstructuredPatch.
         """
@@ -117,7 +120,7 @@ class Tesselator(ABC):
 
 
 
-# Unstructured support
+# Unstructured and structured support
 # ----------------------------------------------------------------------
 
 
@@ -128,16 +131,21 @@ class UnstructuredPatch(Patch):
     """
 
     nodes: Array2D
-    cells: Array2D
     celltype: CellType
+
+    _cells: Array2D
 
     def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D, celltype: CellType):
         assert nodes.ndim == cells.ndim == 2
         self.key = key
         self.nodes = nodes
-        self.cells = cells
+        self._cells = cells
         self.celltype = celltype
         assert cells.shape[-1] == celltype.num_nodes
+
+    @property
+    def cells(self) -> Array2D:
+        return self._cells
 
     @classmethod
     def from_lagrangian(cls, key: PatchID, data: Union[bytes, str]) -> 'UnstructuredPatch':
@@ -195,20 +203,64 @@ class UnstructuredPatch(Patch):
     def num_cells(self) -> int:
         return len(self.cells)
 
-    def tesselate(self) -> Patch:
-        if config.nvis != 1:
-            raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
+    def tesselate(self) -> 'UnstructuredPatch':
         return self
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        if config.nvis != 1:
-            raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
         if cells:
             return coeffs.reshape((self.num_cells, -1))
         return coeffs.reshape((self.num_nodes, -1))
 
     def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
         self.nodes = ensure_ncomps(self.nodes, ncomps, allow_scalar)
+
+
+class StructuredPatch(UnstructuredPatch):
+    """A patch that represents an structured collection of nodes and
+    cells.  This is interchangeable with UnstructuredPatch
+    """
+
+    shape: Shape
+
+    def __init__(self, key: PatchID, nodes: Array2D, shape: Shape, celltype: CellType):
+        self.key = key
+        self.nodes = nodes
+        self.celltype = celltype
+        self.shape = shape
+        assert celltype.structured
+        assert len(shape) == celltype.num_pardim
+
+    @property
+    def cells(self) -> Array2D:
+        nshape = tuple(k+1 for k in self.shape)
+        ranges = [range(k) for k in self.shape]
+        nidxs = [np.array(q) for q in zip(*product(*ranges))]
+        eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)), dtype=int)
+        if self.num_pardim == 1:
+            eidxs[:,0] = nidxs[0]
+            eidxs[:,1] = nidxs[0] + 1
+        elif self.num_pardim == 2:
+            i, j = nidxs
+            eidxs[:,0] = np.ravel_multi_index((i, j), nshape)
+            eidxs[:,1] = np.ravel_multi_index((i+1, j), nshape)
+            eidxs[:,2] = np.ravel_multi_index((i+1, j+1), nshape)
+            eidxs[:,3] = np.ravel_multi_index((i, j+1), nshape)
+        elif self.num_pardim == 3:
+            i, j, k = nidxs
+            eidxs[:,0] = np.ravel_multi_index((i, j, k), nshape)
+            eidxs[:,1] = np.ravel_multi_index((i+1, j, k), nshape)
+            eidxs[:,2] = np.ravel_multi_index((i+1, j+1, k), nshape)
+            eidxs[:,3] = np.ravel_multi_index((i, j+1, k), nshape)
+            eidxs[:,4] = np.ravel_multi_index((i, j, k+1), nshape)
+            eidxs[:,5] = np.ravel_multi_index((i+1, j, k+1), nshape)
+            eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nshape)
+            eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nshape)
+
+        return eidxs
+
+    @property
+    def num_cells(self) -> int:
+        return prod(self.shape)
 
 
 
@@ -253,7 +305,7 @@ class LRPatch(Patch):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
-    def tesselate(self) -> Patch:
+    def tesselate(self) -> UnstructuredPatch:
         tess = LRTesselator(self)
         return tess.tesselate(self)
 
@@ -278,11 +330,11 @@ class LRTesselator(Tesselator):
         self.cells = np.array(cells, dtype=int)
 
     @singledispatchmethod
-    def tesselate(self, patch: Patch) -> Patch:
+    def tesselate(self, patch: Patch) -> UnstructuredPatch:
         raise NotImplementedError
 
     @tesselate.register(LRPatch)
-    def _1(self, patch: LRPatch) -> Patch:
+    def _1(self, patch: LRPatch) -> UnstructuredPatch:
         spline = patch.obj
         nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
         celltype = Hex() if patch.num_pardim == 3 else Quad()
@@ -364,7 +416,7 @@ class SplinePatch(Patch):
     def num_cells(self) -> int:
         return prod(len(k) - 1 for k in self.obj.knots())
 
-    def tesselate(self) -> Patch:
+    def tesselate(self) -> UnstructuredPatch:
         tess = TensorTesselator(self)
         return tess.tesselate(self)
 
@@ -390,10 +442,11 @@ class TensorTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate.register(SplinePatch)
-    def _1(self, patch: SplinePatch):
+    def _1(self, patch: SplinePatch) -> UnstructuredPatch:
         nodes = flatten_2d(patch.obj(*self.knots))
         celltype = Hex() if patch.num_pardim == 3 else Quad()
-        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells(), celltype=celltype)
+        cellshape = tuple(len(kts) - 1 for kts in self.knots)
+        return StructuredPatch((*patch.key, 'tesselated'), nodes, cellshape, celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
@@ -422,33 +475,6 @@ class TensorTesselator(Tesselator):
             knots = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in self.knots]
 
         return flatten_2d(newspline(*knots))
-
-    def cells(self) -> Array2D:
-        nshape = tuple(len(k) for k in self.knots)
-        ranges = [range(k-1) for k in nshape]
-        nidxs = [np.array(q) for q in zip(*product(*ranges))]
-        eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)), dtype=int)
-        if len(nidxs) == 1:
-            eidxs[:,0] = nidxs[0]
-            eidxs[:,1] = nidxs[0] + 1
-        elif len(nidxs) == 2:
-            i, j = nidxs
-            eidxs[:,0] = np.ravel_multi_index((i, j), nshape)
-            eidxs[:,1] = np.ravel_multi_index((i+1, j), nshape)
-            eidxs[:,2] = np.ravel_multi_index((i+1, j+1), nshape)
-            eidxs[:,3] = np.ravel_multi_index((i, j+1), nshape)
-        elif len(nidxs) == 3:
-            i, j, k = nidxs
-            eidxs[:,0] = np.ravel_multi_index((i, j, k), nshape)
-            eidxs[:,1] = np.ravel_multi_index((i+1, j, k), nshape)
-            eidxs[:,2] = np.ravel_multi_index((i+1, j+1, k), nshape)
-            eidxs[:,3] = np.ravel_multi_index((i, j+1, k), nshape)
-            eidxs[:,4] = np.ravel_multi_index((i, j, k+1), nshape)
-            eidxs[:,5] = np.ravel_multi_index((i+1, j, k+1), nshape)
-            eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nshape)
-            eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nshape)
-
-        return eidxs
 
 
 

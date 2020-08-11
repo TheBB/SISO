@@ -124,14 +124,7 @@ class VTFWriter(Writer):
     def update_field(self, field: AbstractFieldPatch):
         patchid = super().update_field(field)
         field.ensure_ncomps(3, allow_scalar=True)
-        if isinstance(field, CombinedFieldPatch):
-            data = field.tesselate()
-        elif isinstance(field, SimpleFieldPatch) and not isinstance(field.patch, UnstructuredPatch):
-            data = field.tesselate()
-        elif isinstance(field, SimpleFieldPatch):
-            data = field.data
-        else:
-            assert False
+        data = field.tesselate()
 
         nblock, eblock = self.geometry_blocks[patchid]
         with self.out.ResultBlock(cells=field.cells, vector=field.num_comps>1) as rblock:
