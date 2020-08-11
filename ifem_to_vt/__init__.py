@@ -32,6 +32,11 @@ class Config:
     # the IFEM reader.
     geometry_basis = None
 
+    # Volumetric/surface field behaviour - useful for atmospheric data
+    # - volumetric: only include volumetric fields
+    # - planar: only include surface fields
+    # - extrude: include all, extruding surface fields upwards
+    volumetric = 'volumetric'
 
     def __init__(self):
         self._required_keys = set()

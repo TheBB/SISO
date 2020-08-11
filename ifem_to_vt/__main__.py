@@ -38,10 +38,14 @@ class RichOutputLog(log.RichOutputLog):
 # Options that are forwarded to config
 @click.option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
 @click.option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
+@click.option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.')
+@click.option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
+@click.option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 @click.option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
 @click.option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
 @click.option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
-@click.option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']), default='binary', help='Output mode.')
+@click.option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
+              default='binary', help='Output mode.')
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
