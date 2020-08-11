@@ -35,7 +35,7 @@ def subclasses(cls: Type[T], root: bool = False, invert: bool = False) -> Iterab
     for sub in cls.__subclasses__():
         if not invert:
             yield sub
-        yield from subclasses(sub, root=False)
+        yield from subclasses(sub, root=False, invert=invert)
         if invert:
             yield sub
     if root and invert:
