@@ -84,7 +84,7 @@ class Patch(ABC):
         pass
 
     @abstractmethod
-    def tesselate(self) -> 'Patch':
+    def tesselate(self) -> 'UnstructuredPatch':
         """Convert to a suitable discrete representation.
         Currently an UnstructuredPatch.
         """
@@ -195,14 +195,10 @@ class UnstructuredPatch(Patch):
     def num_cells(self) -> int:
         return len(self.cells)
 
-    def tesselate(self) -> Patch:
-        if config.nvis != 1:
-            raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
+    def tesselate(self) -> 'UnstructuredPatch':
         return self
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        if config.nvis != 1:
-            raise ValueError("Unstructured grid does not support tesselation with nvis > 1")
         if cells:
             return coeffs.reshape((self.num_cells, -1))
         return coeffs.reshape((self.num_nodes, -1))
@@ -253,7 +249,7 @@ class LRPatch(Patch):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
-    def tesselate(self) -> Patch:
+    def tesselate(self) -> UnstructuredPatch:
         tess = LRTesselator(self)
         return tess.tesselate(self)
 
@@ -278,11 +274,11 @@ class LRTesselator(Tesselator):
         self.cells = np.array(cells, dtype=int)
 
     @singledispatchmethod
-    def tesselate(self, patch: Patch) -> Patch:
+    def tesselate(self, patch: Patch) -> UnstructuredPatch:
         raise NotImplementedError
 
     @tesselate.register(LRPatch)
-    def _1(self, patch: LRPatch) -> Patch:
+    def _1(self, patch: LRPatch) -> UnstructuredPatch:
         spline = patch.obj
         nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
         celltype = Hex() if patch.num_pardim == 3 else Quad()
@@ -364,7 +360,7 @@ class SplinePatch(Patch):
     def num_cells(self) -> int:
         return prod(len(k) - 1 for k in self.obj.knots())
 
-    def tesselate(self) -> Patch:
+    def tesselate(self) -> UnstructuredPatch:
         tess = TensorTesselator(self)
         return tess.tesselate(self)
 
@@ -390,7 +386,7 @@ class TensorTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate.register(SplinePatch)
-    def _1(self, patch: SplinePatch):
+    def _1(self, patch: SplinePatch) -> UnstructuredPatch:
         nodes = flatten_2d(patch.obj(*self.knots))
         celltype = Hex() if patch.num_pardim == 3 else Quad()
         return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells(), celltype=celltype)

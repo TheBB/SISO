@@ -77,14 +77,7 @@ class VTKWriter(Writer):
     def update_field(self, field: AbstractFieldPatch):
         patchid = super().update_field(field)
         field.ensure_ncomps(3, allow_scalar=True)
-        if isinstance(field, CombinedFieldPatch):
-            data = field.tesselate()
-        elif isinstance(field, SimpleFieldPatch) and not isinstance(field.patch, UnstructuredPatch):
-            data = field.tesselate()
-        elif isinstance(field, SimpleFieldPatch):
-            data = field.data
-        else:
-            assert False
+        data = field.tesselate()
         self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
 
     def finalize_step(self):
