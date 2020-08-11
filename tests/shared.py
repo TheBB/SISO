@@ -137,6 +137,8 @@ testcase('lr/backstep-3.lr', None, FORMATS)
 testcase('lr/cube-3.lr', None, FORMATS)
 testcase('res/box/box.res', None, FORMATS)
 
+testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
+
 
 def compare_vtk_data(out, ref):
     """Helper function for comparing two vtkDataSetAttributes objects,
