@@ -229,6 +229,7 @@ class StructuredPatch(UnstructuredPatch):
         self.shape = shape
         assert celltype.structured
         assert len(shape) == celltype.num_pardim
+        assert prod(k+1 for k in shape) == len(nodes)
 
     @property
     def cells(self) -> Array2D:

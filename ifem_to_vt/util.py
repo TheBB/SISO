@@ -80,3 +80,17 @@ def subdivide_volume(el, nodes, elements, nvis):
                     nodes.setdefault(pt, len(nodes))
                 elements.append([nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
                                  nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
+
+
+def unstagger(data, axis):
+    index = [slice(None, None),] * data.ndim
+
+    plus = list(index)
+    plus[axis] = slice(1, None)
+    plus = tuple(plus)
+
+    minus = list(index)
+    minus[axis] = slice(0, -1)
+    minus = tuple(minus)
+
+    return (data[plus] + data[minus]) / 2
