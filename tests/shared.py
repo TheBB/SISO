@@ -37,9 +37,11 @@ class PreparedTestCase:
     """
 
     sourcefile: Path
+    outfile: Path
     target_format: str
     reference_path: Path
     reference_files: List[Path]
+    extra_args: List[str]
 
     def check_files(self, path: Path) -> Iterator[Tuple[Path, Path]]:
         """Yield a sequence of tuples, the first being the output of the test
@@ -52,7 +54,7 @@ class PreparedTestCase:
 
     @contextmanager
     def invoke(self, fmt: str, mode: str = 'ascii') -> Path:
-        args = ['--debug', '--mode', mode, '-f', fmt, str(self.sourcefile)]
+        args = ['--debug', '--mode', mode, '-f', fmt, *self.extra_args, str(self.sourcefile), str(self.outfile)]
         with cd_temp() as tempdir:
             res = CliRunner().invoke(convert, args)
             if res.exit_code != 0:
@@ -74,16 +76,24 @@ TESTDATA_DIR = Path(__file__).parent / 'testdata'
 MULTISTEP_FORMATS = {'pvd', 'vtf'}
 
 
-def testcase(sourcefile: Path, nsteps: Optional[int], *formats: str):
+def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
+             *extra_args: str, suffix: str = ''):
     """Create test cases for converting SOURCEFILE to every format listed
     in FORMATS.  NSTEPS should be None if the source data has no
     timesteps, or the number of steps if it does.
     """
     sourcefile = TESTDATA_DIR / sourcefile
     for fmt in formats:
-        basename = Path(f'{sourcefile.stem}.{fmt}')
+        basename = Path(f'{sourcefile.stem}{suffix}.{fmt}')
         reference_files = filename_maker(fmt, fmt in MULTISTEP_FORMATS)(basename, nsteps)
-        TESTCASES.setdefault(fmt, []).append(PreparedTestCase(sourcefile, fmt, TESTDATA_DIR / fmt, reference_files))
+        TESTCASES.setdefault(fmt, []).append(PreparedTestCase(
+            sourcefile=sourcefile,
+            outfile=basename,
+            target_format=fmt,
+            reference_path=TESTDATA_DIR/fmt,
+            reference_files=reference_files,
+            extra_args=list(extra_args),
+        ))
 
 
 def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
@@ -106,26 +116,26 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
 
 # List of test cases
 FORMATS = ['vtk', 'vtu', 'pvd', 'vtf']
-testcase('hdf5/Annulus.hdf5', 3, *FORMATS)
-testcase('hdf5/Cavity-mixed.hdf5', 1, *FORMATS)
-testcase('hdf5/Cavity3D-compatible.hdf5', 1, *FORMATS)
-testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, *FORMATS)
-testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, *FORMATS)
-testcase('hdf5/SmallBox.hdf5', 3, *FORMATS)
-testcase('hdf5/Square.hdf5', 1, *FORMATS)
-testcase('hdf5/Square-ad.hdf5', 11, *FORMATS)
-testcase('hdf5/Square-LR.hdf5', 1, *FORMATS)
-testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, *FORMATS)
-testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, *FORMATS)
-testcase('hdf5/Square-modes.hdf5', 10, *FORMATS)
-testcase('hdf5/Square-modes-freq.hdf5', 10, *FORMATS)
-testcase('hdf5/Waterfall3D.hdf5', 1, *FORMATS)
-testcase('g2/Backstep2D.g2', None, *FORMATS)
-testcase('g2/annulus3D.g2', None, *FORMATS)
-testcase('lr/square-2.lr', None, *FORMATS)
-testcase('lr/backstep-3.lr', None, *FORMATS)
-testcase('lr/cube-3.lr', None, *FORMATS)
-testcase('res/box/box.res', None, *FORMATS)
+testcase('hdf5/Annulus.hdf5', 3, FORMATS)
+testcase('hdf5/Cavity-mixed.hdf5', 1, FORMATS)
+testcase('hdf5/Cavity3D-compatible.hdf5', 1, FORMATS)
+testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, FORMATS)
+testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, FORMATS)
+testcase('hdf5/SmallBox.hdf5', 3, FORMATS)
+testcase('hdf5/Square.hdf5', 1, FORMATS)
+testcase('hdf5/Square-ad.hdf5', 11, FORMATS)
+testcase('hdf5/Square-LR.hdf5', 1, FORMATS)
+testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, FORMATS)
+testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, FORMATS)
+testcase('hdf5/Square-modes.hdf5', 10, FORMATS)
+testcase('hdf5/Square-modes-freq.hdf5', 10, FORMATS)
+testcase('hdf5/Waterfall3D.hdf5', 1, FORMATS)
+testcase('g2/Backstep2D.g2', None, FORMATS)
+testcase('g2/annulus3D.g2', None, FORMATS)
+testcase('lr/square-2.lr', None, FORMATS)
+testcase('lr/backstep-3.lr', None, FORMATS)
+testcase('lr/cube-3.lr', None, FORMATS)
+testcase('res/box/box.res', None, FORMATS)
 
 
 def compare_vtk_data(out, ref):
