@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from itertools import chain
 from os import makedirs
 from pathlib import Path
@@ -14,8 +15,8 @@ from typing import Optional, Dict
 from ..typing import Array2D
 
 from .. import config
-from ..fields import AbstractFieldPatch, CombinedFieldPatch, SimpleFieldPatch
-from ..geometry import Patch, UnstructuredPatch, Hex
+from ..fields import AbstractFieldPatch
+from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
 from ..util import ensure_ncomps
 from .writer import Writer
 
@@ -55,7 +56,7 @@ class VTKWriter(Writer):
             raise ValueError(f"VTK format does not support '{config.output_mode}' mode")
 
     def get_writer(self):
-        writer = vtk.vtkUnstructuredGridWriter()
+        writer = vtk.vtkStructuredGridWriter() if self.is_structured() else vtk.vtkUnstructuredGridWriter()
         if config.output_mode == 'ascii':
             writer.SetFileTypeToASCII()
         else:
@@ -80,9 +81,26 @@ class VTKWriter(Writer):
         data = field.tesselate()
         self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
 
-    def finalize_step(self):
-        super().finalize_step()
-        grid = vtk.vtkUnstructuredGrid()
+    def is_structured(self) -> bool:
+        # TODO: Structured output works fine, but needs to be
+        # implemented smoothly in the testing suite.  For now it is
+        # disabled.
+
+        # patch = next(iter(self.patches.values()))
+        # return len(self.patches) == 1 and isinstance(patch, StructuredPatch)
+        return False
+
+    @contextmanager
+    def grid(self) -> vtk.vtkDataSet:
+        structured = self.is_structured()
+        patch = next(iter(self.patches.values()))
+
+        grid = vtk.vtkStructuredGrid() if structured else vtk.vtkUnstructuredGrid()
+        if structured:
+            shape = patch.shape
+            while len(shape) < 3:
+                shape = (*shape, 0)
+            grid.SetDimensions(*(s + 1 for s in shape))
 
         # Concatenate nodes of all patches
         allpoints = np.vstack([p.nodes for p in self.patches.values()])
@@ -91,36 +109,42 @@ class VTKWriter(Writer):
         points.SetData(vnp.numpy_to_vtk(allpoints))
         grid.SetPoints(points)
 
-        # Concatenate cells of all patches
-        patches = self.patches.values()
-        offset = chain([0], np.cumsum([p.num_nodes for p in patches]))
-        cells = np.vstack([patch.cells + off for patch, off in zip(patches, offset)])
-        cells = np.hstack([cells.shape[-1] * np.ones((cells.shape[0], 1), dtype=int), cells])
+        # If unstructured, concatenate cells of all patches
+        if not structured:
+            patches = self.patches.values()
+            offset = chain([0], np.cumsum([p.num_nodes for p in patches]))
+            cells = np.vstack([patch.cells + off for patch, off in zip(patches, offset)])
+            cells = np.hstack([cells.shape[-1] * np.ones((cells.shape[0], 1), dtype=int), cells])
+            cells = cells.ravel()
 
-        cellarray = vtk.vtkCellArray()
-        cellarray.SetCells(len(cells), vnp.numpy_to_vtkIdTypeArray(cells.ravel(), deep=True))
+            cellarray = vtk.vtkCellArray()
+            cellarray.SetCells(len(cells), vnp.numpy_to_vtkIdTypeArray(cells))
 
-        patch = next(iter(patches))
-        celltype = vtk.VTK_HEXAHEDRON if isinstance(patch.celltype, Hex) else vtk.VTK_QUAD
-        grid.SetCells(celltype, cellarray)
+            celltype = vtk.VTK_HEXAHEDRON if isinstance(patch.celltype, Hex) else vtk.VTK_QUAD
+            grid.SetCells(celltype, cellarray)
 
-        pointdata = grid.GetPointData()
-        celldata = grid.GetCellData()
+        yield grid
 
-        for name, field in self.fields.items():
-            data = np.vstack([k for k in field.data.values()])
-            array = vnp.numpy_to_vtk(data)
-            array.SetName(name)
-            if field.cells:
-                celldata.AddArray(array)
-            else:
-                pointdata.AddArray(array)
+    def finalize_step(self):
+        super().finalize_step()
+        with self.grid() as grid:
+            pointdata = grid.GetPointData()
+            celldata = grid.GetCellData()
 
-        filename = self.make_filename(with_step=True)
-        writer = self.get_writer()
-        writer.SetFileName(str(filename))
-        writer.SetInputData(grid)
-        writer.Write()
+            for name, field in self.fields.items():
+                data = np.vstack([k for k in field.data.values()])
+                array = vnp.numpy_to_vtk(data)
+                array.SetName(name)
+                if field.cells:
+                    celldata.AddArray(array)
+                else:
+                    pointdata.AddArray(array)
+
+            filename = self.make_filename(with_step=True)
+            writer = self.get_writer()
+            writer.SetFileName(str(filename))
+            writer.SetInputData(grid)
+            writer.Write()
 
         log.user(filename)
 
@@ -128,6 +152,9 @@ class VTKWriter(Writer):
 class VTUWriter(VTKWriter):
 
     writer_name = "VTU"
+
+    def is_structured(self):
+        return False
 
     @classmethod
     def applicable(cls, fmt: str) -> bool:
