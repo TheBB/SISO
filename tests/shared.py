@@ -138,6 +138,7 @@ testcase('lr/cube-3.lr', None, FORMATS)
 testcase('res/box/box.res', None, FORMATS)
 
 testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
+testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis')
 
 
 def compare_vtk_data(out, ref):
