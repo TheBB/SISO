@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from io import StringIO
-from itertools import product
 
 import lrspline as lr
 import numpy as np
@@ -17,7 +16,8 @@ from . import config
 
 from .util import (
     prod, flatten_2d, ensure_ncomps,
-    subdivide_face, subdivide_linear, subdivide_volume
+    subdivide_face, subdivide_linear, subdivide_volume,
+    structured_cells,
 )
 
 
@@ -233,31 +233,7 @@ class StructuredPatch(UnstructuredPatch):
 
     @property
     def cells(self) -> Array2D:
-        nshape = tuple(k+1 for k in self.shape)
-        ranges = [range(k) for k in self.shape]
-        nidxs = [np.array(q) for q in zip(*product(*ranges))]
-        eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)), dtype=int)
-        if self.num_pardim == 1:
-            eidxs[:,0] = nidxs[0]
-            eidxs[:,1] = nidxs[0] + 1
-        elif self.num_pardim == 2:
-            i, j = nidxs
-            eidxs[:,0] = np.ravel_multi_index((i, j), nshape)
-            eidxs[:,1] = np.ravel_multi_index((i+1, j), nshape)
-            eidxs[:,2] = np.ravel_multi_index((i+1, j+1), nshape)
-            eidxs[:,3] = np.ravel_multi_index((i, j+1), nshape)
-        elif self.num_pardim == 3:
-            i, j, k = nidxs
-            eidxs[:,0] = np.ravel_multi_index((i, j, k), nshape)
-            eidxs[:,1] = np.ravel_multi_index((i+1, j, k), nshape)
-            eidxs[:,2] = np.ravel_multi_index((i+1, j+1, k), nshape)
-            eidxs[:,3] = np.ravel_multi_index((i, j+1, k), nshape)
-            eidxs[:,4] = np.ravel_multi_index((i, j, k+1), nshape)
-            eidxs[:,5] = np.ravel_multi_index((i+1, j, k+1), nshape)
-            eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nshape)
-            eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nshape)
-
-        return eidxs
+        return structured_cells(self.shape, self.num_pardim)
 
     @property
     def num_cells(self) -> int:

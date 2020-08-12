@@ -1,3 +1,5 @@
+from itertools import product
+
 import numpy as np
 
 from typing import Iterable, Type, TypeVar
@@ -94,3 +96,34 @@ def unstagger(data, axis):
     minus = tuple(minus)
 
     return (data[plus] + data[minus]) / 2
+
+
+def structured_cells(cellshape, pardim, nodemap=None):
+    nodeshape = tuple(s + 1 for s in cellshape)
+    ranges = [range(k) for k in cellshape]
+    nidxs = [np.array(q) for q in zip(*product(*ranges))]
+    eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)), dtype=int)
+    if pardim == 1:
+        eidxs[:,0] = nidxs[0]
+        eidxs[:,1] = nidxs[0] + 1
+    elif pardim == 2:
+        i, j = nidxs
+        eidxs[:,0] = np.ravel_multi_index((i, j), nodeshape)
+        eidxs[:,1] = np.ravel_multi_index((i+1, j), nodeshape)
+        eidxs[:,2] = np.ravel_multi_index((i+1, j+1), nodeshape)
+        eidxs[:,3] = np.ravel_multi_index((i, j+1), nodeshape)
+    elif pardim == 3:
+        i, j, k = nidxs
+        eidxs[:,0] = np.ravel_multi_index((i, j, k), nodeshape)
+        eidxs[:,1] = np.ravel_multi_index((i+1, j, k), nodeshape)
+        eidxs[:,2] = np.ravel_multi_index((i+1, j+1, k), nodeshape)
+        eidxs[:,3] = np.ravel_multi_index((i, j+1, k), nodeshape)
+        eidxs[:,4] = np.ravel_multi_index((i, j, k+1), nodeshape)
+        eidxs[:,5] = np.ravel_multi_index((i+1, j, k+1), nodeshape)
+        eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nodeshape)
+        eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nodeshape)
+
+    if nodemap is not None:
+        eidxs = nodemap.flat[eidxs]
+
+    return eidxs
