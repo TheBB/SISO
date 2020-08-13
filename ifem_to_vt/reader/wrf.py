@@ -5,13 +5,14 @@ from numpy import newaxis as __
 import numpy as np
 
 from typing import Optional
+from ..typing import Shape
 
 from .. import config
 from .reader import Reader
 from ..writer import Writer
-from ..geometry import Quad, Hex, StructuredPatch
+from ..geometry import Quad, Hex, StructuredPatch, UnstructuredPatch
 from ..fields import SimpleFieldPatch
-from ..util import unstagger
+from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap
 
 
 MEAN_EARTH_RADIUS = 6_371_000
@@ -19,7 +20,7 @@ MEAN_EARTH_RADIUS = 6_371_000
 
 class WRFReader(Reader):
 
-    reader_name = "NETCDF4-WRF"
+    reader_name = "WRF"
 
     filename: Path
     nc: netCDF4.Dataset
@@ -52,11 +53,32 @@ class WRFReader(Reader):
         return len(self.nc.dimensions['Time'])
 
     @property
+    def nlatitude(self) -> int:
+        return len(self.nc.dimensions['south_north'])
+
+    @property
+    def nlongitude(self) -> int:
+        return len(self.nc.dimensions['west_east'])
+
+    @property
+    def nplanar(self) -> int:
+        return self.nlatitude * self.nlongitude
+
+    @property
     def nvertical(self) -> int:
         return len(self.nc.dimensions['bottom_top'])
 
+    @property
+    def planar_shape(self) -> Shape:
+        return (self.nlatitude - 1, self.nlongitude - 1)
+
+    @property
+    def volumetric_shape(self) -> Shape:
+        return (self.nvertical - 1, *self.planar_shape)
+
     def variable_at(self, name: str, stepid: int, extrude_if_planar: bool = False) -> np.ndarray:
         time, *dimensions = self.nc[name].dimensions
+        dimensions = list(dimensions)
         assert time == 'Time'
         data = self.nc[name][stepid, ...]
 
@@ -64,13 +86,29 @@ class WRFReader(Reader):
         for i, dim in enumerate(dimensions):
             if dim.endswith('_stag'):
                 data = unstagger(data, i)
+                dimensions[i] = dim[:-5]
 
-        # Double-up the periodic axis
-        if config.periodic and dimensions[-1].startswith('west_east'):
-            data = np.append(data, data[..., :1], axis=-1)
+        # If periodic, compute polar values
+        if config.periodic and name in ('XLONG', 'XLAT'):
+            south = angle_mean_deg(data[0])
+            north = angle_mean_deg(data[-1])
+        elif config.periodic:
+            south = np.mean(data[...,  0, :], axis=-1)
+            north = np.mean(data[..., -1, :], axis=-1)
+
+        # Flatten the horizontals but leave the verticals intact
+        if len(dimensions) == 3:
+            data = data.reshape((self.nvertical, -1))
+        else:
+            data = data.flatten()
+
+        # If periodic, append previously computed polar values
+        if config.periodic:
+            appendix = np.array([south, north]).T
+            data = np.append(data, appendix, axis=-1)
 
         # Extrude the vertical direction if desired
-        if extrude_if_planar and self.variable_type(name) == 'planar':
+        if extrude_if_planar and len(dimensions) == 2:
             newdata = np.zeros((self.nvertical,) + data.shape, dtype=data.dtype)
             newdata[...] = data
             data = newdata
@@ -106,16 +144,17 @@ class WRFReader(Reader):
         # Get horizontal coordinates
         if config.mapping == 'local':
             # LOCAL: Create a uniform grid based on mesh sizes in the dataset.
-            x = np.arange(len(self.nc.dimensions['west_east'])) * self.nc.DX
-            y = np.arange(len(self.nc.dimensions['south_north'])) * self.nc.DY
+            x = np.arange(self.nlongitude) * self.nc.DX
+            y = np.arange(self.nlatitude) * self.nc.DY
             x, y = np.meshgrid(x, y)
+            x = x.flatten()
+            y = y.flatten()
         else:
             # GLOBAL: Get the longitudes and latitudes stored in the dataset.
             x = np.deg2rad(self.variable_at('XLONG', stepid))
             y = np.deg2rad(self.variable_at('XLAT', stepid))
 
         nnodes = x.size
-        planar_shape = tuple(s - 1 for s in x.shape)
 
         # Get vertical coordiantes
         if config.volumetric == 'planar':
@@ -146,11 +185,48 @@ class WRFReader(Reader):
                 z * np.sin(y),
             ]).reshape((-1, nnodes)).T
 
-        # Assemble structured patch and return
+        # Assemble structured or unstructured patch and return
+        if config.periodic:
+            cells, celltype = self.periodic_mesh()
+            return UnstructuredPatch(('geometry',), nodes, cells, celltype=celltype)
         if config.volumetric == 'planar':
-            return StructuredPatch(('geometry',), nodes, planar_shape, celltype=Quad())
+            return StructuredPatch(('geometry',), nodes, self.planar_shape, celltype=Quad())
         else:
-            return StructuredPatch(('geometry',), nodes, (self.nvertical - 1,) + planar_shape, celltype=Hex())
+            return StructuredPatch(('geometry',), nodes, self.volumetric_shape, celltype=Hex())
+
+    def periodic_mesh(self):
+        """Compute cell topology and cell type for the periodic unstructured
+        case, with polar points.
+        """
+        assert config.periodic
+
+        # TODO: Make this work with volumetric grids
+        assert config.volumetric == 'planar'
+
+        # Construct the basic structured mesh.  Note that our nodes
+        # are stored in order: vertical, S/N, W/E
+        cells = structured_cells(self.planar_shape, 2)
+
+        # Append a layer of cells for periodicity in the longitude direction
+        nodemap = mknodemap((self.nlatitude, 2), (self.nlongitude, self.nlongitude - 1))
+        appendix = structured_cells((self.nlatitude - 1, 1), 2, nodemap)
+        cells = np.append(cells, appendix, axis=0)
+
+        # Append a layer of cells tying the southern boundary to the south pole
+        pole_id = self.nplanar
+        nodemap = mknodemap((2, self.nlongitude + 1), (pole_id, 1), periodic=(1,))
+        nodemap[1] = nodemap[1,0]
+        appendix = structured_cells((1, self.nlongitude), 2, nodemap)
+        cells = np.append(cells, appendix, axis=0)
+
+        # Append a layer of cells tying the northern boundary to the north pole
+        pole_id = self.nplanar + 1
+        nodemap = mknodemap((2, self.nlongitude + 1), (-self.nlongitude - 1, 1), periodic=(1,), init=pole_id)
+        nodemap[0] = nodemap[0,0]
+        appendix = structured_cells((1, self.nlongitude), 2, nodemap)
+        cells = np.append(cells, appendix, axis=0)
+
+        return cells, Quad()
 
     def write(self, w: Writer):
         # Discovert which variables to include

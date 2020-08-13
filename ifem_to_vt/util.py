@@ -84,6 +84,18 @@ def subdivide_volume(el, nodes, elements, nvis):
                                  nodes[tsw], nodes[tse], nodes[tne], nodes[tnw]])
 
 
+def single_slice(total, axis, *args):
+    index = [slice(None, None)] * total
+    index[axis] = slice(*args)
+    return tuple(index)
+
+
+def single_index(total, axis, ix):
+    index = [slice(None, None)] * total
+    index[axis] = ix
+    return tuple(index)
+
+
 def unstagger(data, axis):
     index = [slice(None, None),] * data.ndim
 
@@ -95,7 +107,18 @@ def unstagger(data, axis):
     minus[axis] = slice(0, -1)
     minus = tuple(minus)
 
-    return (data[plus] + data[minus]) / 2
+    return (
+        data[single_slice(data.ndim, axis, 1, None)] +
+        data[single_slice(data.ndim, axis, 0, -1)]
+    ) / 2
+
+
+def nodemap(shape, strides, periodic=(), init=0):
+    indices = np.meshgrid(*(np.arange(s, dtype=int) for s in shape), indexing='ij')
+    nodes = sum(i * s for i, s in zip(indices, strides)) + init
+    for axis in periodic:
+        nodes[single_index(nodes.ndim, axis, -1)] = nodes[single_index(nodes.ndim, axis, 0)]
+    return nodes
 
 
 def structured_cells(cellshape, pardim, nodemap=None):
@@ -127,3 +150,8 @@ def structured_cells(cellshape, pardim, nodemap=None):
         eidxs = nodemap.flat[eidxs]
 
     return eidxs
+
+
+def angle_mean_deg(data):
+    data = np.deg2rad(data)
+    return np.rad2deg(np.arctan2(np.mean(np.sin(data)), np.mean(np.cos(data))))
