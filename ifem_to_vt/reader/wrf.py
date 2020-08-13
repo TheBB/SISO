@@ -82,6 +82,12 @@ class WRFReader(Reader):
         assert time == 'Time'
         data = self.nc[name][stepid, ...]
 
+        # If we're in planar mode and the field is volumetric, grab
+        # the surface slice
+        if len(dimensions) == 3 and config.volumetric == 'planar':
+            data = data[0, ...]
+            dimensions = dimensions[1:]
+
         # Detect staggered axes and un-stagger them
         for i, dim in enumerate(dimensions):
             if dim.endswith('_stag'):
@@ -230,10 +236,10 @@ class WRFReader(Reader):
 
     def write(self, w: Writer):
         # Discovert which variables to include
-        if config.volumetric == 'extrude':
-            allowed_types = {'volumetric', 'planar'}
+        if config.volumetric == 'volumetric':
+            allowed_types = {'volumetric'}
         else:
-            allowed_types = {config.volumetric}
+            allowed_types = {'volumetric', 'planar'}
         variables = [
             variable for variable in self.nc.variables
             if self.variable_type(variable) in allowed_types
