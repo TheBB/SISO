@@ -192,21 +192,20 @@ class WRFReader(Reader):
             ]).reshape((-1, nnodes)).T
 
         # Assemble structured or unstructured patch and return
-        if config.periodic:
-            cells, celltype = self.periodic_mesh()
-            return UnstructuredPatch(('geometry',), nodes, cells, celltype=celltype)
-        if config.volumetric == 'planar':
+        if config.periodic and config.volumetric == 'planar':
+            return UnstructuredPatch(('geometry',), nodes, self.periodic_planar_mesh(), celltype=Quad())
+        elif config.periodic:
+            return UnstructuredPatch(('geometry',), nodes, self.periodic_volumetric_mesh(), celltype=Hex())
+        elif config.volumetric == 'planar':
             return StructuredPatch(('geometry',), nodes, self.planar_shape, celltype=Quad())
         else:
             return StructuredPatch(('geometry',), nodes, self.volumetric_shape, celltype=Hex())
 
-    def periodic_mesh(self):
-        """Compute cell topology and cell type for the periodic unstructured
-        case, with polar points.
+    def periodic_planar_mesh(self):
+        """Compute cell topology for the periodic planar unstructured case,
+        with polar points.
         """
         assert config.periodic
-
-        # TODO: Make this work with volumetric grids
         assert config.volumetric == 'planar'
 
         # Construct the basic structured mesh.  Note that our nodes
@@ -232,7 +231,41 @@ class WRFReader(Reader):
         appendix = structured_cells((1, self.nlongitude), 2, nodemap)
         cells = np.append(cells, appendix, axis=0)
 
-        return cells, Quad()
+        return cells
+
+    def periodic_volumetric_mesh(self):
+        """Compute cell topology for the periodic volumetric unstructured
+        case, with polar points.
+        """
+        assert config.periodic
+        assert config.volumetric != 'planar'
+
+        # Construct the basic structured mesh.  Note that our nodes
+        # are stored in order: vertical, S/N, W/E
+        cells = structured_cells(self.volumetric_shape, 3)
+
+        # Increment indices by two for every vertical layer, to
+        # account for the polar points
+        cells += cells // (self.nlatitude * self.nlongitude) * 2
+
+        # Append a layer of cells for periodicity in the longitude direction
+        nodemap = mknodemap((self.nvertical, self.nlatitude, 2), (173, 19, 18))
+        appendix = structured_cells((self.nvertical - 1, self.nlatitude - 1, 1), 3, nodemap)
+        cells = np.append(cells, appendix, axis=0)
+
+        # Append a layer of cells tying the southern boundary to the south pole
+        nodemap = mknodemap((self.nvertical, 2, self.nlongitude + 1), (173, 171, 1), periodic=(2,))
+        nodemap[:,1] = (nodemap[:,1] - 171) // 173 * 173 + 171
+        appendix = structured_cells((self.nvertical - 1, 1, self.nlongitude), 3, nodemap)
+        cells = np.append(cells, appendix, axis=0)
+
+        # Append a layer of cells tying the northern boundary to the north pole
+        nodemap = mknodemap((self.nvertical, 2, self.nlongitude + 1), (173, -20, 1), periodic=(2,), init=172)
+        nodemap[:,0] = (nodemap[:,0] - 172) // 173 * 173 + 172
+        appendix = structured_cells((self.nvertical - 1, 1, self.nlongitude), 3, nodemap)
+        cells = np.append(cells, appendix, axis=0)
+
+        return cells
 
     def write(self, w: Writer):
         # Discovert which variables to include
