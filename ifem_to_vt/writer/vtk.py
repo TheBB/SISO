@@ -188,7 +188,7 @@ class PVDWriter(VTUWriter):
 
     def __init__(self, outpath: Path):
         self.rootfile = outpath
-        super().__init__(outpath.with_suffix('') / 'data.vtu')
+        super().__init__(outpath.with_suffix(f'{outpath.suffix}-data') / 'data.vtu')
 
     def __enter__(self):
         super().__enter__()

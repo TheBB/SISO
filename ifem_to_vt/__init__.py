@@ -32,6 +32,18 @@ class Config:
     # the IFEM reader.
     geometry_basis = None
 
+    # Volumetric/surface field behaviour. Used by the WRF reader.
+    # - volumetric: only include volumetric fields
+    # - planar: only include surface fields
+    # - extrude: include all, extruding surface fields upwards
+    volumetric = 'volumetric'
+
+    # Global or local mapping behaviour. Used by the WRF reader.
+    mapping = 'local'
+
+    # Hint to the reader that the data may be periodic. Used by the
+    # WRF reader.
+    periodic = False
 
     def __init__(self):
         self._required_keys = set()

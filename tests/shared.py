@@ -116,6 +116,8 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
 
 # List of test cases
 FORMATS = ['vtk', 'vtu', 'pvd', 'vtf']
+
+# General tests of IFEM, LR, G2 and SIMRA readers and VTK, VTF, VTU and PVD readers
 testcase('hdf5/Annulus.hdf5', 3, FORMATS)
 testcase('hdf5/Cavity-mixed.hdf5', 1, FORMATS)
 testcase('hdf5/Cavity3D-compatible.hdf5', 1, FORMATS)
@@ -137,6 +139,19 @@ testcase('lr/backstep-3.lr', None, FORMATS)
 testcase('lr/cube-3.lr', None, FORMATS)
 testcase('res/box/box.res', None, FORMATS)
 
+# WRF reader to PVD writer with various CLI options
+for n in ['eastward', 'northward', 'outward']:
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], suffix='-volumetric')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', suffix='-planar')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', suffix='-extrude')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--global', suffix='-volumetric-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', '--global', suffix='-planar-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--global', suffix='-extrude-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', '--global', '--periodic', suffix='-planar-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--volumetric', '--global', '--periodic', suffix='-volumetric-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--global', '--periodic', suffix='-extrude-periodic')
+
+# Miscellaneous CLI options
 testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
 testcase('hdf5/Annulus.hdf5', 3, FORMATS, '--nvis', '2', suffix='-with-nvis')
 testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis')
