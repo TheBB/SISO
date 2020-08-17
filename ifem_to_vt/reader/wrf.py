@@ -166,10 +166,11 @@ class WRFReader(Reader):
         clon, clat = np.cos(lon), np.cos(lat)
         slon, slat = np.sin(lon), np.sin(lat)
         lon1, lat1 = np.ones_like(lon), np.ones_like(lat)
+
         rot = np.array([
-            [clat * clon, slat * clon, -slon * lat1],
-            [clat * slon, slat * slon, clon * lat1],
-            [slat * lon1, -clat * lon1, np.zeros_like(lon) * np.zeros_like(lat)],
+            [-slon * lat1, -slat * clon, clat * clon],
+            [clon * lat1, -slat * slon, clat * slon],
+            [np.zeros_like(lat * lon), clat * lon1, slat * lon1]
         ])
 
         # Apply rotation to data
