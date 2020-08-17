@@ -41,7 +41,44 @@ Writer = ConfigTarget.Writer
 
 
 
-class Config:
+class Setting:
+
+    def __init__(self, default, *targets, name=None):
+        self.default = default
+        self.targets = targets
+        self.name = name
+
+
+class ConfigMeta(type):
+    """Metaclass for the Config class.  Collects metadata about settings."""
+
+    def __new__(cls, clsname, bases, attrs):
+        sources = dict()
+        names = dict()
+        targets = dict()
+        defaults = dict()
+
+        for key, value in attrs.items():
+            if not isinstance(value, Setting):
+                continue
+            defaults[key] = value.default
+            sources[key] = ConfigSource.Default
+            targets[key] = value.targets
+
+            if value.name:
+                names[key] = value.name
+            else:
+                names[key] = f'--{key}'
+
+        attrs['_value_sources'] = sources
+        attrs['_canonical_names'] = names
+        attrs['_targets'] = targets
+        attrs.update(defaults)
+
+        return super().__new__(cls, clsname, bases, attrs)
+
+
+class Config(metaclass=ConfigMeta):
     """Configuration object that should be shared between reader and
     writer.  It is initialized by the main function, but may have its
     attributes manipulated by either reader or writer depending on
@@ -49,83 +86,49 @@ class Config:
     """
 
     # Number of subdivisions for additional resolution.
-    nvis = 1
+    nvis = Setting(1)
 
     # Whether the data set contains multiple time steps.
-    multiple_timesteps = True
+    multiple_timesteps = Setting(True, Writer)
 
     # Whether to copy only the final time step.
-    only_final_timestep = False
+    only_final_timestep = Setting(False, Reader, name='--last')
 
     # Output mode. Used by the VTK and VTF writers.
-    output_mode = 'binary'
+    output_mode = Setting('binary', Writer, name='--mode')
 
     # Input endianness indicator. Used by the SIMRA reader.
-    input_endianness = 'native'
+    input_endianness = Setting('native', Reader, name='--endianness')
 
-    # List of basis objects to copy to output. Used by the IFEM
-    # reader.
-    only_bases = ()
+    # List of basis objects to copy to output. Used by the IFEM reader.
+    only_bases = Setting((), Reader, name='--basis')
 
-    # Which basis should be used to represent the geometry. Used by
-    # the IFEM reader.
-    geometry_basis = None
+    # Which basis should be used to represent the geometry. Used by the IFEM reader.
+    geometry_basis = Setting(None, Reader, name='--geometry')
 
     # Volumetric/surface field behaviour. Used by the WRF reader.
     # - volumetric: only include volumetric fields
     # - planar: only include surface fields
     # - extrude: include all, extruding surface fields upwards
-    volumetric = 'volumetric'
+    volumetric = Setting('volumetric', Reader, name='--volumetric/planar/extrude')
 
     # Global or local mapping behaviour. Used by the WRF reader.
-    mapping = 'local'
+    mapping = Setting('local', Reader, name='--local/global')
 
-    # Hint to the reader that the data may be periodic. Used by the
-    # WRF reader.
-    periodic = False
-
-    # Keeps track of which keys come from which source
-    _value_sources: Dict[str, ConfigSource]
-
-    # Keeps track of which intended targets each option has
-    _targets: Dict[str, Tuple[ConfigTarget]] = {
-        'only_final_timestep': (Reader,),
-        'input_endianness': (Reader,),
-        'only_bases': (Reader,),
-        'geometry_basis': (Reader,),
-        'volumetric': (Reader,),
-        'mapping': (Reader,),
-        'periodic': (Reader,),
-
-        'output_mode': (Writer,),
-        'multiple_timesteps': (Writer,),
-    }
-
-    # Maps attribute names to CLI arguments for the benefit of the user
-    _canonical_names: Dict[str, str] = {
-        'only_bases': '--basis',
-        'geometry_basis': '--geometry',
-        'only_final_timestep': '--last',
-        'input_endianness': '--endianness',
-        'output_mode': '--mode',
-        'volumetric': '--volumetric/planar/extrude',
-        'mapping': '--local/global',
-    }
-
-    def __init__(self):
-        self._value_sources = dict()
+    # Hint to the reader that the data may be periodic. Used by the WRF reader.
+    periodic = Setting(False, Reader)
 
     def cname(self, key: str) -> str:
         """Get the canonical name of a setting."""
-        return self._canonical_names.get(key, f'--{key}')
+        return self._canonical_names[key]
 
     def source(self, key: str) -> ConfigSource:
         """Get the source of a setting."""
-        return self._value_sources.get(key, ConfigSource.Default)
+        return self._value_sources[key]
 
     def target_compatible(self, key: str, target: ConfigTarget) -> bool:
         """Check if a setting is intended for a target."""
-        return target in self._targets.get(key, ())
+        return target in self._targets[key]
 
     def upgrade_source(self, key: str, source: ConfigSource):
         """Override the source of a setting. This will only ever increase the
@@ -149,7 +152,7 @@ class Config:
             else:
                 raise ValueError(f"Incompatibility with setting '{self.cname(key)}'")
 
-        elif current_source == ConfigSource.User and value != current_value:
+        elif current_source == User and value != current_value:
             log.warning(f"Setting '{self.cname(key)}' was overridden from {current_value} to {value}")
             if reason is not None:
                 log.warning(f"Reason: {reason}")
@@ -164,7 +167,7 @@ class Config:
         different values, an error will be thrown.
         """
         for key, value in kwargs.items():
-            self.assign(key, value, ConfigSource.Required, reason)
+            self.assign(key, value, Required, reason)
 
     def require_in(self, reason: Optional[str] = None, **kwargs: Tuple[Any]):
         """Ensure some settings to be one of a given set of options.
@@ -172,12 +175,10 @@ class Config:
         required to have different values, an error will be thrown."""
         for key, values in kwargs.items():
             if getattr(self, key) not in values:
-                self.assign(key, values[0], ConfigSource.Required, reason)
+                self.assign(key, values[0], Required, reason)
 
-    def ensure_limited(self, target: ConfigTarget, *args: str,
-                       reason: Optional[str] = None,
-                       lower: ConfigSource = ConfigSource.User,
-                       upper: ConfigSource = ConfigSource.User):
+    def ensure_limited(self, target: ConfigTarget, *args: str, reason: Optional[str] = None,
+                       lower: ConfigSource = User, upper: ConfigSource = User):
         """Ensure that the set of explicitly sourced settings for a given
         target is limited to only those given.  If not, an error will
         be thrown.  By default, checks the user-provided settings.
@@ -191,7 +192,7 @@ class Config:
                     raise ValueError(f"'{self.cname(key)}' should not have been set")
 
     @contextmanager
-    def __call__(self, source: ConfigSource = ConfigSource.User, **kwargs: Any):
+    def __call__(self, source: ConfigSource = User, **kwargs: Any):
         """Context manager for running code with different settings."""
         prev = dict(self.__dict__)
         prev_sources = dict(self._value_sources)
