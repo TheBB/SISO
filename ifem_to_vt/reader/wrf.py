@@ -3,14 +3,16 @@ from pathlib import Path
 import netCDF4
 from numpy import newaxis as __
 import numpy as np
+from scipy.spatial.transform import Rotation
+import treelog as log
 
 from typing import Optional
-from ..typing import Shape
+from ..typing import Shape, Array2D
 
 from .. import config
 from .reader import Reader
 from ..writer import Writer
-from ..geometry import Quad, Hex, StructuredPatch, UnstructuredPatch
+from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
 from ..fields import SimpleFieldPatch
 from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap
 
@@ -40,6 +42,8 @@ class WRFReader(Reader):
         # Disable periodicity except in global mapping
         if config.mapping == 'local':
             config.require(periodic=False)
+        else:
+            log.warning("Global mapping of WRF data is experimental, please do not use indiscriminately")
 
     def __enter__(self):
         self.nc = netCDF4.Dataset(self.filename, 'r').__enter__()
@@ -76,7 +80,31 @@ class WRFReader(Reader):
     def volumetric_shape(self) -> Shape:
         return (self.nvertical - 1, *self.planar_shape)
 
-    def variable_at(self, name: str, stepid: int, extrude_if_planar: bool = False) -> np.ndarray:
+    def rotation(self) -> Rotation:
+        """Return a rotation object that maps grid-specific "local" spherical
+        coordinates to global (conventional) latitude and longitude.
+        """
+        intrinsic = 360 * np.ceil(self.nlongitude / 2) / self.nlongitude
+        return Rotation.from_euler('ZYZ', [-self.nc.STAND_LON, -self.nc.MOAD_CEN_LAT, intrinsic], degrees=True)
+
+    def cartesian_field(self, data: Array2D) -> Array2D:
+        """Convert a vector field in spherical coordinates to Cartesian
+        coordinates.
+        """
+        data = data.reshape((-1, self.nlatitude, self.nlongitude, 3))
+        lon = np.deg2rad(np.linspace(0, 360, self.nlongitude, endpoint=False)[__, :])
+        lat = np.deg2rad(np.linspace(-90, 90, 2 * self.nlatitude + 1)[1::2][:, __])
+        clon, clat = np.cos(lon), np.cos(lat)
+        slon, slat = np.sin(lon), np.sin(lat)
+        lon1, lat1 = np.ones_like(lon), np.ones_like(lat)
+        rot = np.array([
+            [clat * clon, slat * clon, -slon * lat1],
+            [clat * slon, slat * slon, clon * lat1],
+            [slat * lon1, -clat * lon1, np.zeros_like(lon) * np.zeros_like(lat)],
+        ])
+        return np.einsum('mnjk,ijkn->ijkm', rot, data)
+
+    def variable_at(self, name: str, stepid: int, extrude_if_planar: bool = False, include_poles: bool = True) -> np.ndarray:
         time, *dimensions = self.nc[name].dimensions
         dimensions = list(dimensions)
         assert time == 'Time'
@@ -95,12 +123,13 @@ class WRFReader(Reader):
                 dimensions[i] = dim[:-5]
 
         # If periodic, compute polar values
-        if config.periodic and name in ('XLONG', 'XLAT'):
-            south = angle_mean_deg(data[0])
-            north = angle_mean_deg(data[-1])
-        elif config.periodic:
-            south = np.mean(data[...,  0, :], axis=-1)
-            north = np.mean(data[..., -1, :], axis=-1)
+        if include_poles and config.periodic:
+            if name in ('XLONG', 'XLAT'):
+                south = angle_mean_deg(data[0])
+                north = angle_mean_deg(data[-1])
+            else:
+                south = np.mean(data[...,  0, :], axis=-1)
+                north = np.mean(data[..., -1, :], axis=-1)
 
         # Flatten the horizontals but leave the verticals intact
         if len(dimensions) == 3:
@@ -109,7 +138,7 @@ class WRFReader(Reader):
             data = data.flatten()
 
         # If periodic, append previously computed polar values
-        if config.periodic:
+        if include_poles and config.periodic:
             appendix = np.array([south, north]).T
             data = np.append(data, appendix, axis=-1)
 
@@ -249,26 +278,61 @@ class WRFReader(Reader):
         cells += cells // (self.nlatitude * self.nlongitude) * 2
 
         # Append a layer of cells for periodicity in the longitude direction
-        nodemap = mknodemap((self.nvertical, self.nlatitude, 2), (173, 19, 18))
+        nhorizontal = self.nplanar + 2
+        nodemap = mknodemap((self.nvertical, self.nlatitude, 2), (nhorizontal, self.nlongitude, self.nlongitude - 1))
         appendix = structured_cells((self.nvertical - 1, self.nlatitude - 1, 1), 3, nodemap)
         cells = np.append(cells, appendix, axis=0)
 
         # Append a layer of cells tying the southern boundary to the south pole
-        nodemap = mknodemap((self.nvertical, 2, self.nlongitude + 1), (173, 171, 1), periodic=(2,))
-        nodemap[:,1] = (nodemap[:,1] - 171) // 173 * 173 + 171
+        pole_id = self.nplanar
+        nodemap = mknodemap((self.nvertical, 2, self.nlongitude + 1), (self.nplanar + 2, pole_id, 1), periodic=(2,))
+        nodemap[:,1] = (nodemap[:,1] - pole_id) // nhorizontal * nhorizontal + pole_id
         appendix = structured_cells((self.nvertical - 1, 1, self.nlongitude), 3, nodemap)
         cells = np.append(cells, appendix, axis=0)
 
         # Append a layer of cells tying the northern boundary to the north pole
-        nodemap = mknodemap((self.nvertical, 2, self.nlongitude + 1), (173, -20, 1), periodic=(2,), init=172)
-        nodemap[:,0] = (nodemap[:,0] - 172) // 173 * 173 + 172
+        pole_id = self.nplanar + 1
+        nodemap = mknodemap((self.nvertical, 2, self.nlongitude + 1), (nhorizontal, -self.nlongitude - 1, 1),
+                            periodic=(2,), init=pole_id)
+        nodemap[:,0] = (nodemap[:,0] - pole_id) // nhorizontal * nhorizontal + pole_id
         appendix = structured_cells((self.nvertical - 1, 1, self.nlongitude), 3, nodemap)
         cells = np.append(cells, appendix, axis=0)
 
         return cells
 
+    def velocity_field(self, patch: Patch, stepid: int) -> SimpleFieldPatch:
+        kwargs = {
+            'include_poles': config.mapping == 'local',
+            'extrude_if_planar': config.volumetric == 'extrude',
+        }
+        data = np.array([self.variable_at(x, stepid, **kwargs).reshape(-1) for x in 'UVW']).T
+
+        if config.mapping == 'local':
+            return SimpleFieldPatch('WIND', patch, data)
+
+        # Convert spherical coordinates to Cartesian
+        data = self.cartesian_field(data)
+
+        # Extract mean values at poles
+        if config.periodic:
+            south = np.mean(data[:, 0, ...], axis=-2)[:, __, :]
+            north = np.mean(data[:, -1, ...], axis=-2)[:, __, :]
+
+        # Flatten the horizontal directions
+        data = data.reshape((-1, self.nlatitude * self.nlongitude, 3))
+
+        # Append mean values at poles
+        if config.periodic:
+            data = np.append(data, south, axis=1)
+            data = np.append(data, north, axis=1)
+
+        # Rotate to final coordinate system
+        data = data.reshape(-1, 3)
+        data = self.rotation().apply(data)
+        return SimpleFieldPatch('WIND', patch, data)
+
     def write(self, w: Writer):
-        # Discovert which variables to include
+        # Discover which variables to include
         if config.volumetric == 'volumetric':
             allowed_types = {'volumetric'}
         else:
@@ -277,6 +341,8 @@ class WRFReader(Reader):
             variable for variable in self.nc.variables
             if self.variable_type(variable) in allowed_types
         ]
+
+        velocity = all(x in variables for x in 'UVW')
 
         # Write data for each step
         for stepid in range(self.nsteps):
@@ -291,5 +357,8 @@ class WRFReader(Reader):
                 data = data.reshape(patch.num_nodes, -1)
                 field = SimpleFieldPatch(variable, patch, data)
                 w.update_field(field)
+
+            if velocity:
+                w.update_field(self.velocity_field(patch, stepid))
 
             w.finalize_step()
