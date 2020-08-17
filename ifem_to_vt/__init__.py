@@ -135,7 +135,7 @@ class Config:
                 raise ValueError(f"Incompatibility with setting '{key}'")
 
         elif current_source == ConfigSource.User and value != current_value:
-            log.warning(f"Setting '{key}' was overridden")
+            log.warning(f"Setting '{key}' was overridden from {current_value} to {value}")
             if reason is not None:
                 log.warning(f"Reason: {reason}")
 
@@ -150,6 +150,14 @@ class Config:
         """
         for key, value in kwargs.items():
             self.assign(key, value, ConfigSource.Required, reason)
+
+    def require_in(self, reason: Optional[str] = None, **kwargs: Tuple[Any]):
+        """Ensure some settings to be one of a given set of options.
+        If not, choose the first one.  If they have previously been
+        required to have different values, an error will be thrown."""
+        for key, values in kwargs.items():
+            if getattr(self, key) not in values:
+                self.assign(key, values[0], ConfigSource.Required, reason)
 
     def ensure_limited(self, target: ConfigTarget, *args: str,
                        reason: Optional[str] = None,

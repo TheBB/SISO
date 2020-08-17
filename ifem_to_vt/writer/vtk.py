@@ -52,8 +52,7 @@ class VTKWriter(Writer):
         return data
 
     def validate(self):
-        if not config.output_mode in ('ascii', 'binary'):
-            raise ValueError(f"VTK format does not support '{config.output_mode}' mode")
+        config.require_in(reason="not supported by VTK", output_mode=('binary', 'ascii'))
 
     def get_writer(self):
         writer = vtk.vtkStructuredGridWriter() if self.is_structured() else vtk.vtkUnstructuredGridWriter()
@@ -164,8 +163,7 @@ class VTUWriter(VTKWriter):
         return results
 
     def validate(self):
-        if not config.output_mode in ('appended', 'ascii', 'binary'):
-            raise ValueError("VTU format does not support '{}' mode".format(self.config.output_mode))
+        config.require_in(reason="not supported by VTF", output_mode=('binary', 'ascii', 'appended'))
 
     def get_writer(self):
         writer = vtk.vtkXMLUnstructuredGridWriter()
