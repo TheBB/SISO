@@ -84,7 +84,7 @@ class WRFReader(Reader):
 
         # Disable periodicity except in global mapping
         if config.mapping == 'local':
-            config.require(periodic=False)
+            config.require(periodic=False, reason="WRF does not support periodic local grids, try with --global")
         else:
             log.warning("Global mapping of WRF data is experimental, please do not use indiscriminately")
 

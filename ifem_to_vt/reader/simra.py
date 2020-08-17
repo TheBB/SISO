@@ -36,7 +36,7 @@ class SIMRAReader(Reader):
             return False
 
     def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None):
-        config.require(multiple_timesteps=False)
+        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
         self.result_fn = Path(result_fn)
         self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
 

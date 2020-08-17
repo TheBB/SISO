@@ -23,7 +23,7 @@ class PureGeometryReader(Reader, ABC):
 
     def __init__(self, filename: Path):
         self.filename = filename
-        config.require(multiple_timesteps=False)
+        config.require(multiple_timesteps=False, reason="Pure geometry files do not support multiple timesteps")
 
     @abstractmethod
     def patches(self) -> Iterable[Patch]:
