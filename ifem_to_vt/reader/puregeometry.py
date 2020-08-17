@@ -6,7 +6,7 @@ from splipy.io import G2
 
 from typing import Iterable
 
-from .. import config
+from .. import config, ConfigTarget
 from ..geometry import Patch, SplinePatch, LRPatch
 from .reader import Reader
 
@@ -23,7 +23,11 @@ class PureGeometryReader(Reader, ABC):
 
     def __init__(self, filename: Path):
         self.filename = filename
-        config.require(multiple_timesteps=False)
+
+    def validate(self):
+        super().validate()
+        config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
+        config.ensure_limited(ConfigTarget.Reader, reason=f"not supported by {self.reader_name}")
 
     @abstractmethod
     def patches(self) -> Iterable[Patch]:

@@ -4,7 +4,7 @@ from scipy.io import FortranFile
 
 from typing import Optional
 
-from .. import config
+from .. import config, ConfigTarget
 from ..fields import SimpleFieldPatch
 from ..geometry import UnstructuredPatch, Hex
 from .reader import Reader
@@ -36,7 +36,6 @@ class SIMRAReader(Reader):
             return False
 
     def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None):
-        config.require(multiple_timesteps=False)
         self.result_fn = Path(result_fn)
         self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
 
@@ -46,6 +45,11 @@ class SIMRAReader(Reader):
         endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
         self.f4_type = f'{endian}f4'
         self.u4_type = f'{endian}u4'
+
+    def validate(self):
+        super().validate()
+        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
+        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
 
     def __enter__(self):
         self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()

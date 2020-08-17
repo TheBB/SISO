@@ -48,9 +48,8 @@ class Writer(ABC):
         self.geometry = GeometryManager()
         self.outpath = Path(outpath)
 
-    @abstractmethod
-    def validate_mode(self):
-        """Raise an error if the configured output mode is inadmissible."""
+    def validate(self):
+        """Raise an error if config options are invalid."""
         pass
 
     def make_filename(self, root: Optional[Path] = None, with_step: bool = False, indexing: int = 1):

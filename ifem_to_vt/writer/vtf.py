@@ -49,9 +49,8 @@ class VTFWriter(Writer):
         self.field_blocks = dict()
         self.dirty_geometry = False
 
-    def validate_mode(self):
-        if config.output_mode not in ('ascii', 'binary'):
-            raise ValueError("VTF format does not support '{}' mode".format(config.output_mode))
+    def validate(self):
+        config.require_in(reason="not supported by VTF", output_mode=('binary', 'ascii'))
 
     def __enter__(self) -> 'Writer':
         super().__enter__()

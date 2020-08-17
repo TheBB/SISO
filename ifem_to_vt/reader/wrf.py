@@ -9,7 +9,7 @@ import treelog as log
 from typing import Optional
 from ..typing import Shape, Array2D
 
-from .. import config
+from .. import config, ConfigTarget
 from .reader import Reader
 from ..writer import Writer
 from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
@@ -82,11 +82,19 @@ class WRFReader(Reader):
     def __init__(self, filename: Path):
         self.filename = filename
 
+    def validate(self):
+        super().validate()
+
         # Disable periodicity except in global mapping
         if config.mapping == 'local':
-            config.require(periodic=False)
+            config.require(periodic=False, reason="WRF does not support periodic local grids, try with --global")
         else:
             log.warning("Global mapping of WRF data is experimental, please do not use indiscriminately")
+
+        config.ensure_limited(
+            ConfigTarget.Reader, 'volumetric', 'mapping', 'periodic',
+            reason="not supported by WRF"
+        )
 
     def __enter__(self):
         self.nc = netCDF4.Dataset(self.filename, 'r').__enter__()

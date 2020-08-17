@@ -7,7 +7,7 @@ import warnings
 import click
 import treelog as log
 
-from . import config
+from . import config, ConfigSource
 from ifem_to_vt.reader import Reader
 from ifem_to_vt.writer import Writer
 
@@ -32,25 +32,42 @@ class RichOutputLog(log.RichOutputLog):
         click.echo(message, file=self.stream, nl=False)
 
 
+class Option(click.Option):
+    """A custom option class that tracks which options have been
+    explicitly set by the user, and stores them in a special attribute
+    attached to the context object."""
+
+    def process_value(self, ctx, value):
+        if value is not None:
+            if not hasattr(ctx, 'explicit_options'):
+                ctx.explicit_options = set()
+            ctx.explicit_options.add(self.name)
+        return super().process_value(ctx, value)
+
+
+def tracked_option(*args, **kwargs):
+    return click.option(*args, **kwargs, cls=Option)
+
+
 @click.command()
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd', 'nc']), required=False, help='Output format.')
 
 # Options that are forwarded to config
-@click.option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
-@click.option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
-@click.option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
-@click.option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
-@click.option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
-@click.option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
-@click.option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
-              default='binary', help='Output mode.')
+@tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
+@tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
+@tracked_option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
+@tracked_option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
+@tracked_option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
+@tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
+                default='binary', help='Output mode.')
 
-@click.option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
-@click.option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
-@click.option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
+@tracked_option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
+@tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
+@tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
-@click.option('--local', 'mapping', flag_value='local', help='Local (cartesian) mapping.', default=True)
-@click.option('--global', 'mapping', flag_value='global', help='Global (spherical) mapping.')
+@tracked_option('--local', 'mapping', flag_value='local', help='Local (cartesian) mapping.', default=True)
+@tracked_option('--global', 'mapping', flag_value='global', help='Global (spherical) mapping.')
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
@@ -64,8 +81,10 @@ class RichOutputLog(log.RichOutputLog):
 @click.argument('infile', type=str, required=True)
 @click.argument('outfile', type=str, required=False)
 
+@click.pass_context
+
 @suppress_warnings
-def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
+def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
     # Set up logging
     if rich:
         logger = RichOutputLog(sys.stdout)
@@ -89,12 +108,19 @@ def convert(verbosity, rich, infile, fmt, outfile, **kwargs):
 
     try:
         # The config can influence the choice of readers or writers,
-        # so apply it first
-        with config(**kwargs):
+        # so apply it first.  Since kwargs may include options that
+        # are not explicity set by the user, we set the source to
+        # Default, and later use the upgrade_source method.
+        with config(source=ConfigSource.Default, **kwargs):
+            for option in ctx.explicit_options:
+                config.upgrade_source(option, ConfigSource.User)
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
             with ReaderClass(infile) as r, WriterClass(outfile) as w:
+                r.validate()
+                w.validate()
                 r.write(w)
+
     except Exception as e:
         if verbosity == 'debug':
             # In debug mode, allow exceptions to filter through in raw form

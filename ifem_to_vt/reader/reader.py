@@ -28,3 +28,7 @@ class Reader(ABC):
             else:
                 log.debug(f"Rejecting reader: {cls.reader_name}")
         raise TypeError(f"Unable to find any applicable readers for {filename}")
+
+    def validate(self):
+        """Raise an error if config options are invalid."""
+        pass

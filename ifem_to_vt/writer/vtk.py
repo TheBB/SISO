@@ -51,9 +51,8 @@ class VTKWriter(Writer):
             data[I, J] = 0.0
         return data
 
-    def validate_mode(self):
-        if not config.output_mode in ('ascii', 'binary'):
-            raise ValueError(f"VTK format does not support '{config.output_mode}' mode")
+    def validate(self):
+        config.require_in(reason="not supported by VTK", output_mode=('binary', 'ascii'))
 
     def get_writer(self):
         writer = vtk.vtkStructuredGridWriter() if self.is_structured() else vtk.vtkUnstructuredGridWriter()
@@ -163,9 +162,8 @@ class VTUWriter(VTKWriter):
     def nan_filter(self, results):
         return results
 
-    def validate_mode(self):
-        if not config.output_mode in ('appended', 'ascii', 'binary'):
-            raise ValueError("VTU format does not support '{}' mode".format(self.config.output_mode))
+    def validate(self):
+        config.require_in(reason="not supported by VTF", output_mode=('binary', 'ascii', 'appended'))
 
     def get_writer(self):
         writer = vtk.vtkXMLUnstructuredGridWriter()
@@ -199,10 +197,13 @@ class PVDWriter(VTUWriter):
 
     def __exit__(self, type_, value, backtrace):
         super().__exit__(type_, value, backtrace)
-        self.pvd.write('  </Collection>\n')
-        self.pvd.write('</VTKFile>\n')
-        self.pvd.close()
-        log.user(self.rootfile)
+        if value is not None:
+            self.pvd.close()
+        else:
+            self.pvd.write('  </Collection>\n')
+            self.pvd.write('</VTKFile>\n')
+            self.pvd.close()
+            log.user(self.rootfile)
 
     def make_filename(self, *args, **kwargs):
         filename = super().make_filename(*args, **kwargs)

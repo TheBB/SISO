@@ -11,7 +11,7 @@ from typing import Dict, Set, Optional, List, Any, Iterable, Tuple
 from ..typing import Array2D
 
 from .reader import Reader
-from .. import config
+from .. import config, ConfigTarget
 from ..util import ensure_ncomps
 from ..fields import SimpleFieldPatch, CombinedFieldPatch, FieldType, Scalar, Displacement
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
@@ -341,6 +341,13 @@ class IFEMReader(Reader):
         self.filename = filename
         self.bases = dict()
         self.fields = dict()
+
+    def validate(self):
+        super().validate()
+        config.ensure_limited(
+            ConfigTarget.Reader, 'only_final_timestep', 'only_bases', 'geometry_basis',
+            reason="not supported by IFEM"
+        )
 
     def __enter__(self):
         self.h5 = h5py.File(str(self.filename), 'r').__enter__()
