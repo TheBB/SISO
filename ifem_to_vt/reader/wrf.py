@@ -82,6 +82,9 @@ class WRFReader(Reader):
     def __init__(self, filename: Path):
         self.filename = filename
 
+    def validate(self):
+        super().validate()
+
         # Disable periodicity except in global mapping
         if config.mapping == 'local':
             config.require(periodic=False, reason="WRF does not support periodic local grids, try with --global")

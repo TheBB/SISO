@@ -51,7 +51,7 @@ class VTKWriter(Writer):
             data[I, J] = 0.0
         return data
 
-    def validate_mode(self):
+    def validate(self):
         if not config.output_mode in ('ascii', 'binary'):
             raise ValueError(f"VTK format does not support '{config.output_mode}' mode")
 
@@ -163,7 +163,7 @@ class VTUWriter(VTKWriter):
     def nan_filter(self, results):
         return results
 
-    def validate_mode(self):
+    def validate(self):
         if not config.output_mode in ('appended', 'ascii', 'binary'):
             raise ValueError("VTU format does not support '{}' mode".format(self.config.output_mode))
 

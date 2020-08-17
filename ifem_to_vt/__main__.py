@@ -117,7 +117,10 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
             with ReaderClass(infile) as r, WriterClass(outfile) as w:
+                r.validate()
+                w.validate()
                 r.write(w)
+
     except Exception as e:
         if verbosity == 'debug':
             # In debug mode, allow exceptions to filter through in raw form
