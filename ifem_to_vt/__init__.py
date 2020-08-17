@@ -101,8 +101,23 @@ class Config:
         'multiple_timesteps': (Writer,),
     }
 
+    # Maps attribute names to CLI arguments for the benefit of the user
+    _canonical_names: Dict[str, str] = {
+        'only_bases': '--basis',
+        'geometry_basis': '--geometry',
+        'only_final_timestep': '--last',
+        'input_endianness': '--endianness',
+        'output_mode': '--mode',
+        'volumetric': '--volumetric/planar/extrude',
+        'mapping': '--local/global',
+    }
+
     def __init__(self):
         self._value_sources = dict()
+
+    def cname(self, key: str) -> str:
+        """Get the canonical name of a setting."""
+        return self._canonical_names.get(key, f'--{key}')
 
     def source(self, key: str) -> ConfigSource:
         """Get the source of a setting."""
@@ -119,7 +134,7 @@ class Config:
         """
         current_source = self.source(key)
         if current_source > source:
-            raise ValueError(f"Attempted to downgrade source of {key}")
+            raise ValueError(f"Attempted to downgrade source of {self.cname(key)}")
         self._value_sources[key] = source
 
     def assign(self, key: str, value: Any, source: ConfigSource, reason: Optional[str] = None):
@@ -130,12 +145,12 @@ class Config:
         current_value = getattr(self, key)
         if current_source == ConfigSource.Required and value != current_value:
             if reason is not None:
-                raise ValueError(f"Incompatibility with setting '{key}': {reason}")
+                raise ValueError(f"Incompatibility with setting '{self.cname(key)}': {reason}")
             else:
-                raise ValueError(f"Incompatibility with setting '{key}'")
+                raise ValueError(f"Incompatibility with setting '{self.cname(key)}'")
 
         elif current_source == ConfigSource.User and value != current_value:
-            log.warning(f"Setting '{key}' was overridden from {current_value} to {value}")
+            log.warning(f"Setting '{self.cname(key)}' was overridden from {current_value} to {value}")
             if reason is not None:
                 log.warning(f"Reason: {reason}")
 
@@ -171,9 +186,9 @@ class Config:
         for key, source in self._value_sources.items():
             if self.target_compatible(key, target) and lower <= source <= upper and key not in args:
                 if reason is not None:
-                    raise ValueError(f"'{key}' should not have been set ({reason})")
+                    raise ValueError(f"'{self.cname(key)}' should not have been set ({reason})")
                 else:
-                    raise ValueError(f"'{key}' should not have been set")
+                    raise ValueError(f"'{self.cname(key)}' should not have been set")
 
     @contextmanager
     def __call__(self, source: ConfigSource = ConfigSource.User, **kwargs: Any):
