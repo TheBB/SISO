@@ -4,7 +4,7 @@ from scipy.io import FortranFile
 
 from typing import Optional
 
-from .. import config
+from .. import config, ConfigTarget
 from ..fields import SimpleFieldPatch
 from ..geometry import UnstructuredPatch, Hex
 from .reader import Reader
@@ -49,6 +49,7 @@ class SIMRAReader(Reader):
     def validate(self):
         super().validate()
         config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
+        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
 
     def __enter__(self):
         self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()

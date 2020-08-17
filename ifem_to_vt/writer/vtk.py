@@ -199,10 +199,13 @@ class PVDWriter(VTUWriter):
 
     def __exit__(self, type_, value, backtrace):
         super().__exit__(type_, value, backtrace)
-        self.pvd.write('  </Collection>\n')
-        self.pvd.write('</VTKFile>\n')
-        self.pvd.close()
-        log.user(self.rootfile)
+        if value is not None:
+            self.pvd.close()
+        else:
+            self.pvd.write('  </Collection>\n')
+            self.pvd.write('</VTKFile>\n')
+            self.pvd.close()
+            log.user(self.rootfile)
 
     def make_filename(self, *args, **kwargs):
         filename = super().make_filename(*args, **kwargs)

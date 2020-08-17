@@ -1,7 +1,7 @@
 from contextlib import contextmanager
-from enum import IntEnum
+from enum import IntEnum, Enum
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 import treelog as log
 
@@ -22,6 +22,24 @@ class ConfigSource(IntEnum):
     # needed: an error must be thrown instead.
     Required = 2
 
+Default = ConfigSource.Default
+User = ConfigSource.User
+Required = ConfigSource.Required
+
+
+class ConfigTarget(Enum):
+    """Simple enum that tracks the intended target of a config option."""
+
+    # Option intended for readers
+    Reader = 0
+
+    # Option intended for writers
+    Writer = 1
+
+Reader = ConfigTarget.Reader
+Writer = ConfigTarget.Writer
+
+
 
 class Config:
     """Configuration object that should be shared between reader and
@@ -29,7 +47,6 @@ class Config:
     attributes manipulated by either reader or writer depending on
     their needs.
     """
-
 
     # Number of subdivisions for additional resolution.
     nvis = 1
@@ -70,12 +87,30 @@ class Config:
     # Keeps track of which keys come from which source
     _value_sources: Dict[str, ConfigSource]
 
+    # Keeps track of which intended targets each option has
+    _targets: Dict[str, Tuple[ConfigTarget]] = {
+        'only_final_timestep': (Reader,),
+        'input_endianness': (Reader,),
+        'only_bases': (Reader,),
+        'geometry_basis': (Reader,),
+        'volumetric': (Reader,),
+        'mapping': (Reader,),
+        'periodic': (Reader,),
+
+        'output_mode': (Writer,),
+        'multiple_timesteps': (Writer,),
+    }
+
     def __init__(self):
         self._value_sources = dict()
 
     def source(self, key: str) -> ConfigSource:
         """Get the source of a setting."""
         return self._value_sources.get(key, ConfigSource.Default)
+
+    def target_compatible(self, key: str, target: ConfigTarget) -> bool:
+        """Check if a setting is intended for a target."""
+        return target in self._targets.get(key, ())
 
     def upgrade_source(self, key: str, source: ConfigSource):
         """Override the source of a setting. This will only ever increase the
@@ -115,6 +150,22 @@ class Config:
         """
         for key, value in kwargs.items():
             self.assign(key, value, ConfigSource.Required, reason)
+
+    def ensure_limited(self, target: ConfigTarget, *args: str,
+                       reason: Optional[str] = None,
+                       lower: ConfigSource = ConfigSource.User,
+                       upper: ConfigSource = ConfigSource.User):
+        """Ensure that the set of explicitly sourced settings for a given
+        target is limited to only those given.  If not, an error will
+        be thrown.  By default, checks the user-provided settings.
+        """
+        args = set(args)
+        for key, source in self._value_sources.items():
+            if self.target_compatible(key, target) and lower <= source <= upper and key not in args:
+                if reason is not None:
+                    raise ValueError(f"'{key}' should not have been set ({reason})")
+                else:
+                    raise ValueError(f"'{key}' should not have been set")
 
     @contextmanager
     def __call__(self, source: ConfigSource = ConfigSource.User, **kwargs: Any):
