@@ -18,8 +18,6 @@ def last(iterable: Iterable[T]) -> Iterable[T]:
 def pipeline(reader: Reader, writer: Writer):
     """Main driver for moving data from reader to writer."""
 
-    first = True
-
     if config.only_final_timestep:
         config.require(multiple_timesteps=False)
 
@@ -27,6 +25,7 @@ def pipeline(reader: Reader, writer: Writer):
     if config.only_final_timestep:
         steps = last(steps)
 
+    first = True
     for stepid, stepdata in log.iter.plain('Step', steps):
         writer.add_step(**stepdata)
 
