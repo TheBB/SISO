@@ -4,7 +4,8 @@ from pathlib import Path
 import lrspline
 from splipy.io import G2
 
-from typing import Iterable
+from typing import Iterable, Tuple
+from ..typing import StepData
 
 from .. import config, ConfigTarget
 from ..geometry import Patch, SplinePatch, LRPatch
@@ -28,6 +29,9 @@ class PureGeometryReader(Reader, ABC):
         super().validate()
         config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
         config.ensure_limited(ConfigTarget.Reader, reason=f"not supported by {self.reader_name}")
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        yield (0, dict())
 
     @abstractmethod
     def patches(self) -> Iterable[Patch]:

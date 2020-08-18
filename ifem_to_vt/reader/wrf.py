@@ -6,8 +6,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import treelog as log
 
-from typing import Optional
-from ..typing import Shape, Array2D
+from typing import Optional, Tuple, Iterable
+from ..typing import Shape, Array2D, StepData
 
 from .. import config, ConfigTarget
 from .reader import Reader
@@ -107,6 +107,10 @@ class WRFReader(Reader):
     def nsteps(self) -> int:
         """Number of time steps in the dataset."""
         return len(self.nc.dimensions['Time'])
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        for stepid in range(self.nsteps):
+            yield stepid, {'time': self.nc['XTIME'][stepid] * 60}
 
     @property
     def nlat(self) -> int:

@@ -8,7 +8,7 @@ import numpy as np
 import treelog as log
 
 from typing import Dict, Set, Optional, List, Any, Iterable, Tuple
-from ..typing import Array2D
+from ..typing import Array2D, StepData
 
 from .reader import Reader
 from .. import config, ConfigTarget
@@ -76,7 +76,7 @@ class StandardBasis(Basis):
         # Find out at which steps this basis updates, and how many patches it has
         self.update_steps = set()
         self.npatches = 0
-        for i in reader.steps():
+        for i, _ in reader.steps():
             subpath = self.group_path(i)
             if subpath not in reader.h5:
                 continue
@@ -192,7 +192,7 @@ class StandardField(SimpleField):
 
         # Find out at which steps this field updates
         subpath = self.group_path
-        self.update_steps = {i for i in reader.steps() if self.group_path(i) in reader.h5}
+        self.update_steps = {i for i, _ in reader.steps() if self.group_path(i) in reader.h5}
 
         # Calculate number of components
         stepid = next(iter(self.update_steps))
@@ -377,11 +377,7 @@ class IFEMReader(Reader):
         """Return number of steps in the data set."""
         return len(self.h5)
 
-    def steps(self) -> Iterable[int]:
-        """Yield a sequence of step IDs."""
-        yield from range(self.nsteps)
-
-    def stepdata(self, stepid: int) -> Dict[str, Any]:
+    def stepdata(self, stepid: int) -> StepData:
         """Return the data associated with a step (time, eigenvalue or
         frequency).
         """
@@ -391,17 +387,22 @@ class IFEMReader(Reader):
             time = float(stepid)
         return {'time': time}
 
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        """Yield a sequence of step IDs."""
+        for stepid in range(self.nsteps):
+            yield stepid, self.stepdata(stepid)
+
     def outputsteps(self) -> Iterable[Tuple[int, Dict[str, Any]]]:
         """Yield an iterator of timesteps to be sent to the writer, together
         with step data.  This obeys the setting of
         config.only_final_timestep."""
         if config.only_final_timestep:
-            for stepid in self.steps():
+            for stepid, stepdata in self.steps():
                 pass
-            yield stepid, self.stepdata(stepid)
+            yield stepid, stepdata
         else:
-            for stepid in self.steps():
-                yield stepid, self.stepdata(stepid)
+            for stepid, stepdata in self.steps():
+                yield stepid, stepdata
 
     def init_bases(self, basisnames: Optional[Set[str]] = None, constructor: type = StandardBasis):
         """Populate the contents of self.bases.
@@ -440,7 +441,7 @@ class IFEMReader(Reader):
 
     def init_fields(self):
         """Discover fields and populate the contents of self.fields."""
-        for stepid in self.steps():
+        for stepid, _ in self.steps():
             stepgrp = self.h5[str(stepid)]
             for basisname, basisgrp in stepgrp.items():
                 if basisname not in self.bases:

@@ -1,14 +1,17 @@
 from pathlib import Path
 
+import numpy as np
 from scipy.io import FortranFile
 
-from typing import Optional
+from typing import Optional, Iterable, Tuple
+from ..typing import StepData
 
 from .. import config, ConfigTarget
 from ..fields import SimpleFieldPatch
 from ..geometry import UnstructuredPatch, Hex
 from .reader import Reader
 from ..writer import Writer
+from ..util import save_excursion
 
 
 
@@ -43,8 +46,8 @@ class SIMRAReader(Reader):
             raise IOError(f"Unable to find mesh file: {self.mesh_fn}")
 
         endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
-        self.f4_type = f'{endian}f4'
-        self.u4_type = f'{endian}u4'
+        self.f4_type = np.dtype(f'{endian}f4')
+        self.u4_type = np.dtype(f'{endian}u4')
 
     def validate(self):
         super().validate()
@@ -59,6 +62,14 @@ class SIMRAReader(Reader):
     def __exit__(self, *args):
         self.mesh.__exit__(*args)
         self.result.__exit__(*args)
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        # This is slightly hacky, but grabs the time value for the
+        # next timestep without reading the whole dataset
+        with save_excursion(self.result._fp):
+            self.result._read_size()
+            time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
+        yield (0, {'time': time})
 
     def write(self, w: Writer):
         npts, nelems, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
