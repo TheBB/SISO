@@ -8,6 +8,7 @@ import click
 import treelog as log
 
 from . import config, ConfigSource
+from .pipeline import pipeline
 from ifem_to_vt.reader import Reader
 from ifem_to_vt.writer import Writer
 
@@ -116,10 +117,10 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
                 config.upgrade_source(option, ConfigSource.User)
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
-            with ReaderClass(infile) as r, WriterClass(outfile) as w:
-                r.validate()
-                w.validate()
-                r.write(w)
+            with ReaderClass(infile) as reader, WriterClass(outfile) as writer:
+                reader.validate()
+                writer.validate()
+                pipeline(reader, writer)
 
     except Exception as e:
         if verbosity == 'debug':
