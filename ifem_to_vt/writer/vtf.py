@@ -8,7 +8,7 @@ import treelog as log
 from typing import Optional, List, Dict, Any, Tuple, Type
 
 from .. import config
-from ..fields import AbstractFieldPatch, CombinedFieldPatch, SimpleFieldPatch
+from ..fields import FieldPatch, CombinedFieldPatch, SimpleFieldPatch
 from ..geometry import Patch, UnstructuredPatch
 from .writer import Writer
 
@@ -120,7 +120,7 @@ class VTFWriter(Writer):
         self.dirty_geometry = False
         super().finalize_geometry()
 
-    def update_field(self, field: AbstractFieldPatch):
+    def update_field(self, field: FieldPatch):
         patchid = super().update_field(field)
         field.ensure_ncomps(3, allow_scalar=True)
         data = field.tesselate()

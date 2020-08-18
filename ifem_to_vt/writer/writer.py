@@ -9,7 +9,7 @@ from ..typing import Array2D
 
 from .. import config
 from ..geometry import Patch, GeometryManager
-from ..fields import AbstractFieldPatch, SimpleFieldPatch, CombinedFieldPatch
+from ..fields import FieldPatch, SimpleFieldPatch, CombinedFieldPatch
 from ..util import subclasses
 
 
@@ -98,7 +98,7 @@ class Writer(ABC):
         assert not self.geometry_finalized
         self.geometry_finalized = True
 
-    def update_field(self, field: AbstractFieldPatch):
+    def update_field(self, field: FieldPatch):
         """Call this method after finalize_geometry to issue updates to fields
         which are defined on patches.  This method only returns the
         global patch ID.  It should be reimplemented in subclasses.
