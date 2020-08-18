@@ -1,15 +1,30 @@
 import treelog as log
 
+from typing import TypeVar, Iterable
+
 from . import config
 from .reader import Reader
 from .writer import Writer
+
+
+T = TypeVar('T')
+def last(iterable: Iterable[T]) -> Iterable[T]:
+    """Yield only the last element in an iterable."""
+    for x in iterable:
+        pass
+    yield x
 
 
 def pipeline(reader: Reader, writer: Writer):
     """Main driver for moving data from reader to writer."""
 
     first = True
-    for stepid, stepdata in log.iter.plain('Step', reader.steps()):
+
+    steps = reader.steps()
+    if config.only_final_timestep:
+        steps = last(steps)
+
+    for stepid, stepdata in log.iter.plain('Step', steps):
         writer.add_step(**stepdata)
 
         for patch in reader.geometry(stepid, force=first):

@@ -151,10 +151,10 @@ for n in ['eastward', 'northward', 'outward']:
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--volumetric', '--global', '--periodic', suffix='-volumetric-periodic')
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--global', '--periodic', suffix='-extrude-periodic')
 
-# # Miscellaneous CLI options
-# testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
-# testcase('hdf5/Annulus.hdf5', 3, FORMATS, '--nvis', '2', suffix='-with-nvis')
-# testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis')
+# Miscellaneous CLI options
+testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
+testcase('hdf5/Annulus.hdf5', 3, FORMATS, '--nvis', '2', suffix='-with-nvis')
+testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis')
 
 
 def compare_vtk_data(out, ref):
