@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from itertools import product
 
 import numpy as np
@@ -155,3 +156,13 @@ def structured_cells(cellshape, pardim, nodemap=None):
 def angle_mean_deg(data):
     data = np.deg2rad(data)
     return np.rad2deg(np.arctan2(np.mean(np.sin(data)), np.mean(np.cos(data))))
+
+
+@contextmanager
+def save_excursion(fp):
+    assert fp.seekable()
+    ptr = fp.tell()
+    try:
+        yield
+    finally:
+        fp.seek(ptr)

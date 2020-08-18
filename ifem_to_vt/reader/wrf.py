@@ -1,3 +1,4 @@
+from functools import lru_cache
 from pathlib import Path
 
 import netCDF4
@@ -6,14 +7,14 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import treelog as log
 
-from typing import Optional
-from ..typing import Shape, Array2D
+from typing import Optional, Tuple, Iterable, List
+from ..typing import Shape, Array2D, StepData
 
 from .. import config, ConfigTarget
 from .reader import Reader
 from ..writer import Writer
 from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
-from ..fields import SimpleFieldPatch
+from ..fields import Field, FieldPatch, SimpleFieldPatch
 from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap
 
 
@@ -63,6 +64,43 @@ MEAN_EARTH_RADIUS = 6_371_000
 # Good luck.
 
 
+class WRFScalarField(Field):
+
+    reader: 'WRFReader'
+    decompose = False
+    ncomps = 1
+    cells = False
+
+    def __init__(self, name: str, reader: 'WRFReader'):
+        self.name = name
+        self.reader = reader
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        patch = self.reader.patch_at(stepid)
+        data = self.reader.variable_at(self.name, stepid, config.volumetric == 'extrude')
+        data = data.reshape(patch.num_nodes, -1)
+        yield SimpleFieldPatch(self.name, patch, data)
+
+
+class WRFVectorField(Field):
+
+    reader: 'WRFReader'
+    components: List[str]
+    decompose = False
+    cells = False
+
+    def __init__(self, name: str, components: List[str], reader: 'WRFReader'):
+        self.name = name
+        self.components = components
+        self.reader = reader
+        self.ncomps = len(components)
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        patch = self.reader.patch_at(stepid)
+        yield self.reader.velocity_field(patch, stepid)
+
+
+
 class WRFReader(Reader):
 
     reader_name = "WRF"
@@ -107,6 +145,10 @@ class WRFReader(Reader):
     def nsteps(self) -> int:
         """Number of time steps in the dataset."""
         return len(self.nc.dimensions['Time'])
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        for stepid in range(self.nsteps):
+            yield stepid, {'time': self.nc['XTIME'][stepid] * 60}
 
     @property
     def nlat(self) -> int:
@@ -272,6 +314,7 @@ class WRFReader(Reader):
 
         return None
 
+    @lru_cache(1)
     def patch_at(self, stepid: int) -> Patch:
         """Construct the patch object at the given time step.  This method
         handles all variations of mesh options.
@@ -441,36 +484,18 @@ class WRFReader(Reader):
         data = self.rotation().apply(data)
         return SimpleFieldPatch('WIND', patch, data)
 
-    def write(self, w: Writer):
-        # Discover which variables to include
+    def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
+        yield self.patch_at(stepid)
+
+    def fields(self) -> Iterable[Field]:
         if config.volumetric == 'volumetric':
             allowed_types = {'volumetric'}
         else:
             allowed_types = {'volumetric', 'planar'}
-        variables = [
-            variable for variable in self.nc.variables
-            if self.variable_type(variable) in allowed_types
-        ]
 
-        # Write velocity if all its components have been discovered to
-        # be writable
-        velocity = all(x in variables for x in 'UVW')
+        for variable in self.nc.variables:
+            if self.variable_type(variable) in allowed_types:
+                yield WRFScalarField(variable, self)
 
-        # Write data for each step
-        for stepid in range(self.nsteps):
-            w.add_step(time=float(stepid))
-
-            patch = self.patch_at(stepid)
-            w.update_geometry(patch)
-            w.finalize_geometry()
-
-            for variable in variables:
-                data = self.variable_at(variable, stepid, config.volumetric == 'extrude')
-                data = data.reshape(patch.num_nodes, -1)
-                field = SimpleFieldPatch(variable, patch, data)
-                w.update_field(field)
-
-            if velocity:
-                w.update_field(self.velocity_field(patch, stepid))
-
-            w.finalize_step()
+        if all(self.variable_type(x) in allowed_types for x in 'UVW'):
+            yield WRFVectorField('WIND', ['U', 'V', 'W'], self)

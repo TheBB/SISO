@@ -4,10 +4,12 @@ from pathlib import Path
 import lrspline
 from splipy.io import G2
 
-from typing import Iterable
+from typing import Iterable, Tuple
+from ..typing import StepData
 
 from .. import config, ConfigTarget
 from ..geometry import Patch, SplinePatch, LRPatch
+from ..fields import Field
 from .reader import Reader
 
 
@@ -29,16 +31,11 @@ class PureGeometryReader(Reader, ABC):
         config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
         config.ensure_limited(ConfigTarget.Reader, reason=f"not supported by {self.reader_name}")
 
-    @abstractmethod
-    def patches(self) -> Iterable[Patch]:
-        pass
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        yield (0, {'time': 0.0})
 
-    def write(self, w):
-        w.add_step(time=0.0)
-        for patch in self.patches():
-            w.update_geometry(patch)
-        w.finalize_geometry()
-        w.finalize_step()
+    def fields(self) -> Iterable[Field]:
+        return; yield
 
 
 class G2Reader(PureGeometryReader):
@@ -53,7 +50,7 @@ class G2Reader(PureGeometryReader):
     def __exit__(self, *args):
         self.g2.__exit__(*args)
 
-    def patches(self):
+    def geometry(self, stepid: int, force: bool = False):
         for i, patch in enumerate(self.g2.read()):
             yield SplinePatch((i,), patch)
 
@@ -70,6 +67,6 @@ class LRReader(PureGeometryReader):
     def __exit__(self, *args):
         self.lr.__exit__(*args)
 
-    def patches(self):
+    def geometry(self, stepid: int, force: bool = False):
         for i, patch in enumerate(lrspline.LRSplineObject.read_many(self.lr)):
             yield LRPatch((i,), patch)

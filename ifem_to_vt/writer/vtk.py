@@ -15,7 +15,7 @@ from typing import Optional, Dict
 from ..typing import Array2D
 
 from .. import config
-from ..fields import AbstractFieldPatch
+from ..fields import FieldPatch
 from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
 from ..util import ensure_ncomps
 from .writer import Writer
@@ -74,7 +74,7 @@ class VTKWriter(Writer):
             patchid = super().update_geometry(patch)
         self.patches[patchid] = patch
 
-    def update_field(self, field: AbstractFieldPatch):
+    def update_field(self, field: FieldPatch):
         patchid = super().update_field(field)
         field.ensure_ncomps(3, allow_scalar=True)
         data = field.tesselate()

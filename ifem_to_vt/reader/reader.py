@@ -1,8 +1,14 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from inspect import isabstract
 from pathlib import Path
 
 import treelog as log
+
+from typing import Iterable, Tuple
+from ..typing import StepData
+
+from ..geometry import Patch
+from ..fields import Field, FieldPatch
 
 from ..util import subclasses
 
@@ -31,4 +37,27 @@ class Reader(ABC):
 
     def validate(self):
         """Raise an error if config options are invalid."""
+        pass
+
+    @abstractmethod
+    def __enter__(self):
+        pass
+
+    @abstractmethod
+    def __exit__(self, *args):
+        pass
+
+    @abstractmethod
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        """Iterate over all steps with associated data."""
+        pass
+
+    @abstractmethod
+    def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
+        """Iterate over all geometry patches at a timestep."""
+        pass
+
+    @abstractmethod
+    def fields(self) -> Iterable[Field]:
+        """Iterate over all fields."""
         pass

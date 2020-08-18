@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from itertools import chain
+from itertools import chain, count
 from pathlib import Path
 
 import h5py
@@ -8,12 +8,12 @@ import numpy as np
 import treelog as log
 
 from typing import Dict, Set, Optional, List, Any, Iterable, Tuple
-from ..typing import Array2D
+from ..typing import Array2D, StepData
 
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..util import ensure_ncomps
-from ..fields import SimpleFieldPatch, CombinedFieldPatch, FieldType, Scalar, Displacement
+from ..fields import Field as AbstractField, FieldPatch, SimpleFieldPatch, CombinedFieldPatch, FieldType, Scalar, Displacement
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
 from ..writer import Writer
 
@@ -76,7 +76,7 @@ class StandardBasis(Basis):
         # Find out at which steps this basis updates, and how many patches it has
         self.update_steps = set()
         self.npatches = 0
-        for i in reader.steps():
+        for i, _ in reader.steps():
             subpath = self.group_path(i)
             if subpath not in reader.h5:
                 continue
@@ -116,15 +116,7 @@ class EigenBasis(Basis):
 # ----------------------------------------------------------------------
 
 
-class Field(ABC):
-
-    name: str
-
-    # True if the field is defined on cells as opposed to nodes
-    cells: bool
-
-    # Number of components in the source data
-    ncomps: int
+class Field(AbstractField):
 
     def __init__(self, name: str, cells: bool):
         self.name = name
@@ -139,35 +131,23 @@ class Field(ABC):
     def update_at(self, stepid: int) -> bool:
         pass
 
-    @abstractmethod
-    def update(self, w: Writer, stepid: int):
-        pass
-
 
 class SimpleField(Field):
 
     basis: Basis
-
-    # True if vector-valued fields can be decomposed into scalars
     decompose: bool = True
-
-    fieldtype: Optional[FieldType]
 
     @property
     def basisname(self) -> str:
         return self.basis.name
 
-    def update(self, w: Writer, stepid: int):
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        if not force and not self.update_at(stepid):
+            return
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
             coeffs = self.coeffs(stepid, patchid)
-            w.update_field(SimpleFieldPatch(self.name, patch, coeffs, cells=self.cells, fieldtype=self.fieldtype))
-
-            if self.decompose and self.ncomps > 1:
-                for i, subscript in zip(range(self.ncomps), 'xyz'):
-                    w.update_field(SimpleFieldPatch(
-                        f'{self.name}_{subscript}', patch, coeffs[...,i:i+1], cells=self.cells
-                    ))
+            yield SimpleFieldPatch(self.name, patch, coeffs, cells=self.cells, fieldtype=self.fieldtype)
 
     @abstractmethod
     def coeffs(self, stepid: int, patchid: int) -> Array2D:
@@ -190,12 +170,8 @@ class StandardField(SimpleField):
         self.fieldtype = None
         self.reader = reader
 
-        # Find out at which steps this field updates
-        subpath = self.group_path
-        self.update_steps = {i for i in reader.steps() if self.group_path(i) in reader.h5}
-
         # Calculate number of components
-        stepid = next(iter(self.update_steps))
+        stepid = next(i for i in count() if self.update_at(i))
         patch = self.basis.patch_at(stepid, 0)
         denominator = patch.num_cells if cells else patch.num_nodes
         ncoeffs = len(self.reader.h5[self.coeff_path(stepid, 0)])
@@ -207,7 +183,7 @@ class StandardField(SimpleField):
         self.ncomps = ncoeffs // denominator
 
     def update_at(self, stepid: int) -> bool:
-        return stepid in self.update_steps
+        return self.group_path(stepid) in self.reader.h5
 
     def group_path(self, stepid: int) -> str:
         celltype = 'knotspan' if self.cells else 'fields'
@@ -224,6 +200,7 @@ class StandardField(SimpleField):
 class CombinedField(Field):
 
     sources: List[SimpleField]
+    decompose: bool = False
 
     def __init__(self, name: str, sources: List[SimpleField]):
         cells = set(s.cells for s in sources)
@@ -241,19 +218,15 @@ class CombinedField(Field):
     def update_at(self, stepid: int) -> bool:
         return any(src.update_at(stepid) for src in self.sources)
 
-    def update(self, w, stepid):
-        # Assume all bases have the same number of patches,
-        # so just grab the indices from the first one
-
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        if not force and not self.update_at(stepid):
+            return
         for patchid in range(self.sources[0].basis.npatches):
             patches, results = [], []
             for src in self.sources:
-                patch = src.basis.patch_at(stepid, patchid)
-                patches.append(patch)
-                coeffs = src.coeffs(stepid, patchid)
-                results.append(coeffs)
-
-            w.update_field(CombinedFieldPatch(self.name, patches, results, cells=self.cells))
+                patches.append(src.basis.patch_at(stepid, patchid))
+                results.append(src.coeffs(stepid, patchid))
+            yield CombinedFieldPatch(self.name, patches, results, cells=self.cells)
 
 
 class SplitField(SimpleField):
@@ -340,12 +313,12 @@ class IFEMReader(Reader):
     def __init__(self, filename: Path):
         self.filename = filename
         self.bases = dict()
-        self.fields = dict()
+        self._fields = dict()
 
     def validate(self):
         super().validate()
         config.ensure_limited(
-            ConfigTarget.Reader, 'only_final_timestep', 'only_bases', 'geometry_basis',
+            ConfigTarget.Reader, 'only_bases', 'geometry_basis',
             reason="not supported by IFEM"
         )
 
@@ -355,7 +328,7 @@ class IFEMReader(Reader):
         # Populate self.bases
         self.init_bases()
 
-        # Populate self.fields
+        # Populate self._fields
         # This is a complicated process broken down into steps
         self.init_fields()
         self.log_fields()
@@ -365,7 +338,7 @@ class IFEMReader(Reader):
 
         # Create geometry manager
         geometry_basis = config.geometry_basis or next(iter(self.bases))
-        self.geometry = GeometryManager(self.bases[geometry_basis])
+        self.geometry_mgr = GeometryManager(self.bases[geometry_basis])
 
         return self
 
@@ -377,11 +350,7 @@ class IFEMReader(Reader):
         """Return number of steps in the data set."""
         return len(self.h5)
 
-    def steps(self) -> Iterable[int]:
-        """Yield a sequence of step IDs."""
-        yield from range(self.nsteps)
-
-    def stepdata(self, stepid: int) -> Dict[str, Any]:
+    def stepdata(self, stepid: int) -> StepData:
         """Return the data associated with a step (time, eigenvalue or
         frequency).
         """
@@ -391,17 +360,10 @@ class IFEMReader(Reader):
             time = float(stepid)
         return {'time': time}
 
-    def outputsteps(self) -> Iterable[Tuple[int, Dict[str, Any]]]:
-        """Yield an iterator of timesteps to be sent to the writer, together
-        with step data.  This obeys the setting of
-        config.only_final_timestep."""
-        if config.only_final_timestep:
-            for stepid in self.steps():
-                pass
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        """Yield a sequence of step IDs."""
+        for stepid in range(self.nsteps):
             yield stepid, self.stepdata(stepid)
-        else:
-            for stepid in self.steps():
-                yield stepid, self.stepdata(stepid)
 
     def init_bases(self, basisnames: Optional[Set[str]] = None, constructor: type = StandardBasis):
         """Populate the contents of self.bases.
@@ -440,22 +402,22 @@ class IFEMReader(Reader):
 
     def init_fields(self):
         """Discover fields and populate the contents of self.fields."""
-        for stepid in self.steps():
+        for stepid, _ in self.steps():
             stepgrp = self.h5[str(stepid)]
             for basisname, basisgrp in stepgrp.items():
                 if basisname not in self.bases:
                     continue
 
                 for fieldname in basisgrp.get('fields', ()):
-                    if fieldname not in self.fields and basisname in self.bases:
-                        self.fields[fieldname] = StandardField(fieldname, self.bases[basisname], self)
+                    if fieldname not in self._fields and basisname in self.bases:
+                        self._fields[fieldname] = StandardField(fieldname, self.bases[basisname], self)
                 for fieldname in basisgrp.get('knotspan', ()):
-                    if fieldname not in self.fields and basisname in self.bases:
-                        self.fields[fieldname] = StandardField(fieldname, self.bases[basisname], self, cells=True)
+                    if fieldname not in self._fields and basisname in self.bases:
+                        self._fields[fieldname] = StandardField(fieldname, self.bases[basisname], self, cells=True)
 
     def log_fields(self):
         """Print brief field information to log.debug."""
-        for field in self.fields.values():
+        for field in self._fields.values():
             log.debug(f"Field '{field.name}' lives on {field.basisname} with {field.ncomps} component(s)")
 
     def split_fields(self):
@@ -463,7 +425,7 @@ class IFEMReader(Reader):
         e.g. u_y&&T -> u_y, T .
         """
         to_add, to_del = [], []
-        for fname in self.fields:
+        for fname in self._fields:
             if '&&' not in fname:
                 continue
             splitnames = [s.strip() for s in fname.split('&&')]
@@ -473,26 +435,26 @@ class IFEMReader(Reader):
                 prefix, splitnames[0] = splitnames[0].split(' ', 1)
                 splitnames = ['{} {}'.format(prefix, name) for name in splitnames]
 
-            if any(splitname in self.fields for splitname in splitnames):
+            if any(splitname in self._fields for splitname in splitnames):
                 log.warning(f"Unable to split '{fname}', some fields already exist".format(fname))
                 continue
 
             for i, splitname in enumerate(splitnames):
-                to_add.append(SplitField(splitname, self.fields[fname], i))
+                to_add.append(SplitField(splitname, self._fields[fname], i))
             to_del.append(fname)
 
         for fname in to_del:
-            del self.fields[fname]
+            del self._fields[fname]
         for field in to_add:
-            self.fields[field.name] = field
+            self._fields[field.name] = field
 
     def combine_fields(self):
         """Combine fields which have the same suffix to a unified vectorized field, e.g.
         u_x, u_y, u_z -> u.
         """
         candidates = dict()
-        for fname in self.fields:
-            if len(fname) > 2 and fname[-2] == '_' and fname[-1] in 'xyz' and fname[:-2] not in self.fields:
+        for fname in self._fields:
+            if len(fname) > 2 and fname[-2] == '_' and fname[-1] in 'xyz' and fname[:-2] not in self._fields:
                 candidates.setdefault(fname[:-2], []).append(fname)
 
         for fname, sourcenames in candidates.items():
@@ -500,31 +462,28 @@ class IFEMReader(Reader):
                 continue
 
             sourcesnames = sorted(sourcenames, key=lambda s: s[-1])
-            sources = [self.fields[s] for s in sourcenames]
+            sources = [self._fields[s] for s in sourcenames]
             sourcenames = ', '.join(sourcenames)
             try:
-                self.fields[fname] = CombinedField(fname, sources)
+                self._fields[fname] = CombinedField(fname, sources)
                 log.info(f"Creating combined field {sourcenames} -> {fname}")
             except AssertionError:
                 log.warning("Unable to combine fields {sourcenames} -> {fname}")
 
     def sort_fields(self):
         """Sort fields by name."""
-        fields = sorted(self.fields.values(), key=lambda f: f.name)
+        fields = sorted(self._fields.values(), key=lambda f: f.name)
         fields = sorted(fields, key=lambda f: f.cells)
-        self.fields = {f.name: f for f in fields}
+        self._fields = {f.name: f for f in fields}
 
-    def write(self, w: Writer):
-        for stepid, time in log.iter.plain('Step', self.outputsteps()):
-            w.add_step(**time)
-            self.geometry.update(w, stepid)
+    def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
+        if not self.geometry_mgr.basis.update_at(stepid) and not force:
+            return
+        for patchid in range(self.geometry_mgr.basis.npatches):
+            yield self.geometry_mgr.basis.patch_at(stepid, patchid)
 
-            for field in self.fields.values():
-                if field.update_at(stepid) or config.only_final_timestep:
-                    log.info('Updating {} ({})'.format(field.name, field.basisname))
-                    field.update(w, stepid)
-
-            w.finalize_step()
+    def fields(self) -> Iterable[AbstractField]:
+        yield from self._fields.values()
 
 
 class EigenField(StandardField):
@@ -584,4 +543,4 @@ class IFEMEigenReader(IFEMReader):
 
     def init_fields(self):
         basis = next(iter(self.bases.values()))
-        self.fields['Mode Shape'] = EigenField('Mode Shape', basis, self)
+        self._fields['Mode Shape'] = EigenField('Mode Shape', basis, self)

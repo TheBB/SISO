@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 
 import numpy as np
+import treelog as log
 
-from typing import List
+from typing import List, Optional, Iterable, Tuple
 from .typing import Array2D
 
 from .geometry import Patch
@@ -47,7 +48,7 @@ class Displacement(FieldType):
 # ----------------------------------------------------------------------
 
 
-class AbstractFieldPatch(ABC):
+class FieldPatch(ABC):
 
     cells: bool
     name: str
@@ -79,13 +80,45 @@ class AbstractFieldPatch(ABC):
     def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
         pass
 
+    @abstractmethod
+    def pick_component(self, index: int, name: str) -> 'FieldPatch':
+        pass
+
+
+class Field(ABC):
+
+    name: str
+
+    fieldtype: Optional[FieldType]
+
+    # True if the field is defined on cells as opposed to nodes
+    cells: bool
+
+    # Number of components
+    ncomps: int
+
+    # True of vector fields can be decomposed to scalars
+    decompose: bool
+
+    @abstractmethod
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        pass
+
+    def decompositions(self) -> Iterable[Tuple[int, str]]:
+        if not self.decompose or self.ncomps == 1:
+            return
+        if self.ncomps > 3:
+            log.warning(f"Attempted to decompose {self.name}, ignoring extra components")
+        for index, suffix in zip(range(self.ncomps), 'xyz'):
+            yield index, f'{self.name}_{suffix}'
+
 
 
 # Simple field
 # ----------------------------------------------------------------------
 
 
-class SimpleFieldPatch(AbstractFieldPatch):
+class SimpleFieldPatch(FieldPatch):
 
     patch: Patch
     data: Array2D
@@ -110,13 +143,16 @@ class SimpleFieldPatch(AbstractFieldPatch):
     def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
         self.data = ensure_ncomps(self.data, ncomps, allow_scalar)
 
+    def pick_component(self, index: int, name: str) -> FieldPatch:
+        return SimpleFieldPatch(name, self.patch, self.data[:, index:index+1], cells=self.cells, fieldtype=Scalar())
+
 
 
 # Combined field
 # ----------------------------------------------------------------------
 
 
-class CombinedFieldPatch(AbstractFieldPatch):
+class CombinedFieldPatch(FieldPatch):
 
     patches: List[Patch]
     data: List[Array2D]
@@ -150,3 +186,13 @@ class CombinedFieldPatch(AbstractFieldPatch):
         last = self.data[-1]
         self.data.append(np.zeros((last.shape[0], ncomps - current_comps), dtype=last.dtype))
         self.patches.append(self.patches[-1])
+
+    def pick_component(self, index: int, name: str) -> FieldPatch:
+        sourceid = 0
+        while index >= self.data[sourceid].shape[1]:
+            index -= self.data[sourceid].shape[1]
+            sourceid += 1
+        return SimpleFieldPatch(
+            name, self.patches[sourceid], self.data[sourceid][:, index:index+1],
+            cells=self.cells, fieldtype=Scalar()
+        )
