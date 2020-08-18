@@ -365,18 +365,6 @@ class IFEMReader(Reader):
         for stepid in range(self.nsteps):
             yield stepid, self.stepdata(stepid)
 
-    def outputsteps(self) -> Iterable[Tuple[int, Dict[str, Any]]]:
-        """Yield an iterator of timesteps to be sent to the writer, together
-        with step data.  This obeys the setting of
-        config.only_final_timestep."""
-        if config.only_final_timestep:
-            for stepid, stepdata in self.steps():
-                pass
-            yield stepid, stepdata
-        else:
-            for stepid, stepdata in self.steps():
-                yield stepid, stepdata
-
     def init_bases(self, basisnames: Optional[Set[str]] = None, constructor: type = StandardBasis):
         """Populate the contents of self.bases.
 
