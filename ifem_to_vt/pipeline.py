@@ -20,6 +20,9 @@ def pipeline(reader: Reader, writer: Writer):
 
     first = True
 
+    if config.only_final_timestep:
+        config.require(multiple_timesteps=False)
+
     steps = reader.steps()
     if config.only_final_timestep:
         steps = last(steps)

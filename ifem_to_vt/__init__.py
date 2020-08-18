@@ -36,8 +36,12 @@ class ConfigTarget(Enum):
     # Option intended for writers
     Writer = 1
 
+    # Option intended for the pipeline layer
+    Pipeline = 2
+
 Reader = ConfigTarget.Reader
 Writer = ConfigTarget.Writer
+Pipeline = ConfigTarget.Pipeline
 
 
 
@@ -92,7 +96,7 @@ class Config(metaclass=ConfigMeta):
     multiple_timesteps = Setting(True, Writer)
 
     # Whether to copy only the final time step.
-    only_final_timestep = Setting(False, Reader, name='--last')
+    only_final_timestep = Setting(False, Pipeline, name='--last')
 
     # Output mode. Used by the VTK and VTF writers.
     output_mode = Setting('binary', Writer, name='--mode')

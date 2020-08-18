@@ -318,7 +318,7 @@ class IFEMReader(Reader):
     def validate(self):
         super().validate()
         config.ensure_limited(
-            ConfigTarget.Reader, 'only_final_timestep', 'only_bases', 'geometry_basis',
+            ConfigTarget.Reader, 'only_bases', 'geometry_basis',
             reason="not supported by IFEM"
         )
 

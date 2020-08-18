@@ -59,7 +59,7 @@ class Writer(ABC):
         """
         if root is None:
             root = self.outpath
-        if not (with_step and config.multiple_timesteps and not config.only_final_timestep):
+        if not (with_step and config.multiple_timesteps):
             return root
         return root.with_name(f'{root.stem}-{self.stepid + indexing}').with_suffix(root.suffix)
 
