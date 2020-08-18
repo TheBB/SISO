@@ -112,7 +112,7 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         # are not explicity set by the user, we set the source to
         # Default, and later use the upgrade_source method.
         with config(source=ConfigSource.Default, **kwargs):
-            for option in ctx.explicit_options:
+            for option in getattr(ctx, 'explicit_options', set()):
                 config.upgrade_source(option, ConfigSource.User)
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
