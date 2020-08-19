@@ -140,6 +140,42 @@ class ComponentField(Field):
 
 
 
+# Combined field
+# ----------------------------------------------------------------------
+
+
+class CombinedField(Field):
+
+    decompose = False
+
+    sources: List[Field]
+
+    def __init__(self, name: str, sources: List[Field]):
+        self.name = name
+
+        cells = set(source.cells for source in sources)
+        if len(cells) > 1:
+            sources = ', '.join(source.name for source in sources)
+            raise TypeError(f"Attempted to combine incompatible fields: {sources}")
+        self.cells = next(iter(cells))
+
+        self.fieldtype = None
+        self.ncomps = sum(source.ncomps for source in sources)
+        self.sources = sources
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        subpatch_iters = zip(*(source.patches(stepid, force=force) for source in self.sources))
+        for subpatches in subpatch_iters:
+            patches, data = [], []
+            for fieldpatch in subpatches:
+                if not isinstance(fieldpatch, SimpleFieldPatch):
+                    raise TypeError(f"While forming combined field {self.name}, found nontrivial components")
+                patches.append(fieldpatch.patch)
+                data.append(fieldpatch.data)
+            yield CombinedFieldPatch(self.name, patches, data)
+
+
+
 # Simple field patch
 # ----------------------------------------------------------------------
 

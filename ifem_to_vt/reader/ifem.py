@@ -13,7 +13,7 @@ from ..typing import Array2D, StepData
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..util import ensure_ncomps
-from ..fields import Field as AbstractField, FieldPatch, SimpleFieldPatch, CombinedFieldPatch, FieldType, Scalar, Displacement
+from ..fields import Field as AbstractField, ComponentField, CombinedField, FieldPatch, SimpleFieldPatch, FieldType, Displacement
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
 from ..writer import Writer
 
@@ -197,62 +197,6 @@ class StandardField(SimpleField):
         return coeffs.reshape((-1, self.ncomps))
 
 
-class CombinedField(Field):
-
-    sources: List[SimpleField]
-    decompose: bool = False
-
-    def __init__(self, name: str, sources: List[SimpleField]):
-        cells = set(s.cells for s in sources)
-        assert len(cells) == 1
-
-        self.name = name
-        self.cells = next(iter(cells))
-        self.ncomps = sum(src.ncomps for src in sources)
-        self.sources = sources
-
-    @property
-    def basisname(self) -> str:
-        return ','.join(source.basisname for source in self.sources)
-
-    def update_at(self, stepid: int) -> bool:
-        return any(src.update_at(stepid) for src in self.sources)
-
-    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
-        if not force and not self.update_at(stepid):
-            return
-        for patchid in range(self.sources[0].basis.npatches):
-            patches, results = [], []
-            for src in self.sources:
-                patches.append(src.basis.patch_at(stepid, patchid))
-                results.append(src.coeffs(stepid, patchid))
-            yield CombinedFieldPatch(self.name, patches, results, cells=self.cells)
-
-
-class SplitField(SimpleField):
-
-    source: SimpleField
-    index: int
-
-    def __init__(self, name, source, index):
-        self.name = name
-        self.source = source
-        self.index = index
-        self.ncomps = 1
-
-        self.basis = source.basis
-        self.cells = source.cells
-        self.decompose = False
-        self.fieldtype = Scalar()
-
-    def update_at(self, stepid: int) -> bool:
-        return self.source.update_at(stepid)
-
-    def coeffs(self, stepid: int, patchid: int) -> Array2D:
-        coeffs = self.source.coeffs(stepid, patchid)
-        return coeffs[:, self.index:self.index+1]
-
-
 
 # Geometry manager
 # ----------------------------------------------------------------------
@@ -298,7 +242,8 @@ class IFEMReader(Reader):
     h5: h5py.File
 
     bases: Dict[str, Basis]
-    fields: Dict[str, Field]
+    _fields: Dict[str, Field]
+    _field_basis: Dict[str, str]
 
     @classmethod
     def applicable(cls, filename: Path) -> bool:
@@ -314,6 +259,7 @@ class IFEMReader(Reader):
         self.filename = filename
         self.bases = dict()
         self._fields = dict()
+        self._field_basis = dict()
 
     def validate(self):
         super().validate()
@@ -364,6 +310,9 @@ class IFEMReader(Reader):
         for stepid in range(self.nsteps):
             yield stepid, self.stepdata(stepid)
 
+    def field_basis(self, fieldname: str) -> Basis:
+        return self.bases[self._field_basis[fieldname]]
+
     def init_bases(self, basisnames: Optional[Set[str]] = None, constructor: type = StandardBasis):
         """Populate the contents of self.bases.
 
@@ -410,9 +359,11 @@ class IFEMReader(Reader):
                 for fieldname in basisgrp.get('fields', ()):
                     if fieldname not in self._fields and basisname in self.bases:
                         self._fields[fieldname] = StandardField(fieldname, self.bases[basisname], self)
+                        self._field_basis[fieldname] = basisname
                 for fieldname in basisgrp.get('knotspan', ()):
                     if fieldname not in self._fields and basisname in self.bases:
                         self._fields[fieldname] = StandardField(fieldname, self.bases[basisname], self, cells=True)
+                        self._field_basis[fieldname] = basisname
 
     def split_fields(self):
         """Split fields which are stored inline to separate scalar fields,
@@ -434,7 +385,8 @@ class IFEMReader(Reader):
                 continue
 
             for i, splitname in enumerate(splitnames):
-                to_add.append(SplitField(splitname, self._fields[fname], i))
+                to_add.append(ComponentField(splitname, self._fields[fname], i))
+                self._field_basis[splitname] = self._field_basis[fname]
             to_del.append(fname)
 
         for fname in to_del:
@@ -458,11 +410,8 @@ class IFEMReader(Reader):
             sourcesnames = sorted(sourcenames, key=lambda s: s[-1])
             sources = [self._fields[s] for s in sourcenames]
             sourcenames = ', '.join(sourcenames)
-            try:
-                self._fields[fname] = CombinedField(fname, sources)
-                log.info(f"Creating combined field {sourcenames} -> {fname}")
-            except AssertionError:
-                log.warning("Unable to combine fields {sourcenames} -> {fname}")
+            self._fields[fname] = CombinedField(fname, sources)
+            log.info(f"Creating combined field {sourcenames} -> {fname}")
 
     def sort_fields(self):
         """Sort fields by name."""
