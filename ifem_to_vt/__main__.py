@@ -40,8 +40,6 @@ class Option(click.Option):
     attached to the context object."""
 
     def process_value(self, ctx, value):
-        if self.multiple and value is not None:
-            value = list(split_commas(value))
         if value is not None:
             if not hasattr(ctx, 'explicit_options'):
                 ctx.explicit_options = set()
@@ -66,8 +64,8 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
 
-@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.', default=None)
 @tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
+@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
 
 @tracked_option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
@@ -114,7 +112,9 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         outfile = Path(infile.name).with_suffix(f'.{fmt}')
 
     # Handle default values of multi-valued options that should be
-    # distinguished from empty
+    # distinguished from empty, as well as comma splitting
+    for k in ['field_filter', 'only_bases']:
+        kwargs[k] = tuple(split_commas(kwargs[k]))
     explicit_options = getattr(ctx, 'explicit_options', set())
     if 'field_filter' not in explicit_options:
         kwargs['field_filter'] = None
