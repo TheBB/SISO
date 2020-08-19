@@ -95,11 +95,11 @@ class Config(metaclass=ConfigMeta):
     # Which fields to include
     field_filter = Setting(None, Pipeline, name='--filter')
 
-    # Whether the data set contains multiple time steps.
-    multiple_timesteps = Setting(True, Writer)
-
     # Whether to copy only the final time step.
     only_final_timestep = Setting(False, Pipeline, name='--last')
+
+    # Whether the data set contains multiple time steps.
+    multiple_timesteps = Setting(True, Writer)
 
     # Output mode. Used by the VTK and VTF writers.
     output_mode = Setting('binary', Writer, name='--mode')
