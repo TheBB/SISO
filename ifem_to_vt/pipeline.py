@@ -1,3 +1,4 @@
+from operator import attrgetter
 import treelog as log
 
 from typing import TypeVar, Iterable, List
@@ -16,17 +17,23 @@ def last(iterable: Iterable[T]) -> Iterable[T]:
     yield x
 
 
+def discover_decompositions(fields: List[Field]) -> Iterable[Field]:
+    for field in fields:
+        yield field
+        for subfield in field.decompositions():
+            log.debug(f"Discovered decomposed scalar field '{subfield.name}'")
+            yield subfield
+
+
 def discover_fields(reader: Reader) -> List[Field]:
     fields: List[Field] = []
     for field in reader.fields():
         fields.append(field)
         log.debug(f"Discovered field '{field.name}' with {field.ncomps} component(s)")
 
-        for subfield in field.decompositions():
-            fields.append(subfield)
-            log.debug(f"Discovered decomposed scalar field '{subfield.name}'")
-
-    return fields
+    fields = sorted(fields, key=attrgetter('name'))
+    fields = sorted(fields, key=attrgetter('cells'))
+    return list(discover_decompositions(fields))
 
 
 def pipeline(reader: Reader, writer: Writer):

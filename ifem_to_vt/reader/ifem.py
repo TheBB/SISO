@@ -241,7 +241,6 @@ class IFEMReader(Reader):
         self.init_fields()
         self.split_fields()
         self.combine_fields()
-        self.sort_fields()
 
         # Create geometry manager
         geometry_basis_name = config.geometry_basis or next(iter(self.bases))
@@ -374,12 +373,6 @@ class IFEMReader(Reader):
             sourcenames = ', '.join(sourcenames)
             self._fields[fname] = CombinedField(fname, sources)
             log.info(f"Creating combined field {sourcenames} -> {fname}")
-
-    def sort_fields(self):
-        """Sort fields by name."""
-        fields = sorted(self._fields.values(), key=lambda f: f.name)
-        fields = sorted(fields, key=lambda f: f.cells)
-        self._fields = {f.name: f for f in fields}
 
     def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
         if not self.geometry_basis.update_at(stepid) and not force:
