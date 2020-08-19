@@ -27,7 +27,7 @@ install:
   - conda list
 
 script:
-  - pip install --editable '.[testing,deploy]'
+  - pip install --editable '.[testing]'
   - pytest
 
 jobs:
@@ -39,7 +39,9 @@ jobs:
     - stage: deploy
       name: Build and deploy Linux wheels
       services: docker
-      script: python -m cibuildwheel --output-dir wheelhouse
+      script:
+        - pip install --editable '.[deploy]'
+        - python -m cibuildwheel --output-dir wheelhouse
       after_success: python -m twine upload --skip-existing wheelhouse/*.whl
 
 notifications:
