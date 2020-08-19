@@ -104,17 +104,43 @@ class Field(ABC):
     def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
         pass
 
-    def decompositions(self) -> Iterable[Tuple[int, str]]:
+    def decompositions(self) -> Iterable['Field']:
         if not self.decompose or self.ncomps == 1:
             return
         if self.ncomps > 3:
             log.warning(f"Attempted to decompose {self.name}, ignoring extra components")
         for index, suffix in zip(range(self.ncomps), 'xyz'):
-            yield index, f'{self.name}_{suffix}'
+            subname = f'{self.name}_{suffix}'
+            yield ComponentField(subname, self, index)
 
 
 
-# Simple field
+# Component field
+# ----------------------------------------------------------------------
+
+
+class ComponentField(Field):
+
+    ncomps = 1
+    decompose = False
+    fieldtype = Scalar()
+
+    source: Field
+    index: int
+
+    def __init__(self, name: str, source: Field, index: int):
+        self.name = name
+        self.cells = source.cells
+        self.source = source
+        self.index = index
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        for patch in self.source.patches(stepid, force=force):
+            yield patch.pick_component(self.index, self.name)
+
+
+
+# Simple field patch
 # ----------------------------------------------------------------------
 
 
@@ -148,7 +174,7 @@ class SimpleFieldPatch(FieldPatch):
 
 
 
-# Combined field
+# Combined field patch
 # ----------------------------------------------------------------------
 
 
