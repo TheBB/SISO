@@ -104,17 +104,79 @@ class Field(ABC):
     def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
         pass
 
-    def decompositions(self) -> Iterable[Tuple[int, str]]:
+    def decompositions(self) -> Iterable['Field']:
         if not self.decompose or self.ncomps == 1:
             return
         if self.ncomps > 3:
             log.warning(f"Attempted to decompose {self.name}, ignoring extra components")
         for index, suffix in zip(range(self.ncomps), 'xyz'):
-            yield index, f'{self.name}_{suffix}'
+            subname = f'{self.name}_{suffix}'
+            yield ComponentField(subname, self, index)
 
 
 
-# Simple field
+# Component field
+# ----------------------------------------------------------------------
+
+
+class ComponentField(Field):
+
+    ncomps = 1
+    decompose = False
+    fieldtype = Scalar()
+
+    source: Field
+    index: int
+
+    def __init__(self, name: str, source: Field, index: int):
+        self.name = name
+        self.cells = source.cells
+        self.source = source
+        self.index = index
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        for patch in self.source.patches(stepid, force=force):
+            yield patch.pick_component(self.index, self.name)
+
+
+
+# Combined field
+# ----------------------------------------------------------------------
+
+
+class CombinedField(Field):
+
+    decompose = False
+
+    sources: List[Field]
+
+    def __init__(self, name: str, sources: List[Field]):
+        self.name = name
+
+        cells = set(source.cells for source in sources)
+        if len(cells) > 1:
+            sources = ', '.join(source.name for source in sources)
+            raise TypeError(f"Attempted to combine incompatible fields: {sources}")
+        self.cells = next(iter(cells))
+
+        self.fieldtype = None
+        self.ncomps = sum(source.ncomps for source in sources)
+        self.sources = sources
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        subpatch_iters = zip(*(source.patches(stepid, force=force) for source in self.sources))
+        for subpatches in subpatch_iters:
+            patches, data = [], []
+            for fieldpatch in subpatches:
+                if not isinstance(fieldpatch, SimpleFieldPatch):
+                    raise TypeError(f"While forming combined field {self.name}, found nontrivial components")
+                patches.append(fieldpatch.patch)
+                data.append(fieldpatch.data)
+            yield CombinedFieldPatch(self.name, patches, data)
+
+
+
+# Simple field patch
 # ----------------------------------------------------------------------
 
 
@@ -148,7 +210,7 @@ class SimpleFieldPatch(FieldPatch):
 
 
 
-# Combined field
+# Combined field patch
 # ----------------------------------------------------------------------
 
 

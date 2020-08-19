@@ -13,7 +13,7 @@ from ..typing import Array2D, StepData
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..util import ensure_ncomps
-from ..fields import Field as AbstractField, FieldPatch, SimpleFieldPatch, CombinedFieldPatch, FieldType, Scalar, Displacement
+from ..fields import Field, ComponentField, CombinedField, FieldPatch, SimpleFieldPatch, FieldType, Displacement
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
 from ..writer import Writer
 
@@ -112,56 +112,14 @@ class EigenBasis(Basis):
 
 
 
-# Field superclasses
+# Fields
 # ----------------------------------------------------------------------
 
 
-class Field(AbstractField):
-
-    def __init__(self, name: str, cells: bool):
-        self.name = name
-        self.cells = cells
-
-    @property
-    @abstractmethod
-    def basisname(self) -> str:
-        pass
-
-    @abstractmethod
-    def update_at(self, stepid: int) -> bool:
-        pass
-
-
-class SimpleField(Field):
+class IFEMField(Field):
 
     basis: Basis
-    decompose: bool = True
-
-    @property
-    def basisname(self) -> str:
-        return self.basis.name
-
-    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
-        if not force and not self.update_at(stepid):
-            return
-        for patchid in range(self.basis.npatches):
-            patch = self.basis.patch_at(stepid, patchid)
-            coeffs = self.coeffs(stepid, patchid)
-            yield SimpleFieldPatch(self.name, patch, coeffs, cells=self.cells, fieldtype=self.fieldtype)
-
-    @abstractmethod
-    def coeffs(self, stepid: int, patchid: int) -> Array2D:
-        pass
-
-
-
-# Concrete field classes
-# ----------------------------------------------------------------------
-
-
-class StandardField(SimpleField):
-
-    update_steps: Set[int]
+    decompose = True
 
     def __init__(self, name: str, basis: Basis, reader: 'IFEMReader', cells: bool = False):
         self.name = name
@@ -182,6 +140,18 @@ class StandardField(SimpleField):
             )
         self.ncomps = ncoeffs // denominator
 
+    @property
+    def basisname(self) -> str:
+        return self.basis.name
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+        if not force and not self.update_at(stepid):
+            return
+        for patchid in range(self.basis.npatches):
+            patch = self.basis.patch_at(stepid, patchid)
+            coeffs = self.coeffs(stepid, patchid)
+            yield SimpleFieldPatch(self.name, patch, coeffs, cells=self.cells, fieldtype=self.fieldtype)
+
     def update_at(self, stepid: int) -> bool:
         return self.group_path(stepid) in self.reader.h5
 
@@ -197,92 +167,26 @@ class StandardField(SimpleField):
         return coeffs.reshape((-1, self.ncomps))
 
 
-class CombinedField(Field):
+class EigenField(IFEMField):
 
-    sources: List[SimpleField]
-    decompose: bool = False
-
-    def __init__(self, name: str, sources: List[SimpleField]):
-        cells = set(s.cells for s in sources)
-        assert len(cells) == 1
-
-        self.name = name
-        self.cells = next(iter(cells))
-        self.ncomps = sum(src.ncomps for src in sources)
-        self.sources = sources
-
-    @property
-    def basisname(self) -> str:
-        return ','.join(source.basisname for source in self.sources)
-
-    def update_at(self, stepid: int) -> bool:
-        return any(src.update_at(stepid) for src in self.sources)
-
-    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
-        if not force and not self.update_at(stepid):
-            return
-        for patchid in range(self.sources[0].basis.npatches):
-            patches, results = [], []
-            for src in self.sources:
-                patches.append(src.basis.patch_at(stepid, patchid))
-                results.append(src.coeffs(stepid, patchid))
-            yield CombinedFieldPatch(self.name, patches, results, cells=self.cells)
-
-
-class SplitField(SimpleField):
-
-    source: SimpleField
-    index: int
-
-    def __init__(self, name, source, index):
-        self.name = name
-        self.source = source
-        self.index = index
-        self.ncomps = 1
-
-        self.basis = source.basis
-        self.cells = source.cells
+    def __init__(self, name: str, basis: Basis, reader: 'IFEMReader'):
+        super().__init__(name, basis, reader, cells=False)
+        self.fieldtype = Displacement()
         self.decompose = False
-        self.fieldtype = Scalar()
 
-    def update_at(self, stepid: int) -> bool:
-        return self.source.update_at(stepid)
+    def group_path(self, stepid: int) -> str:
+        return f'0/{self.basis.name}/Eigenmode/{stepid+1}'
+
+    def coeff_path(self, stepid: int, patchid: int) -> str:
+        return f'{self.group_path(stepid)}/{patchid+1}'
 
     def coeffs(self, stepid: int, patchid: int) -> Array2D:
-        coeffs = self.source.coeffs(stepid, patchid)
-        return coeffs[:, self.index:self.index+1]
-
-
-
-# Geometry manager
-# ----------------------------------------------------------------------
-
-
-class GeometryManager:
-
-    basis: Basis
-    written: bool
-
-    def __init__(self, basis: Basis):
-        self.basis = basis
-        self.written = False
-        log.info(f"Using {basis.name} for geometry")
-
-    def update(self, w: Writer, stepid: int):
-        if not self.basis.update_at(stepid) and self.written:
-            w.finalize_geometry()
-            return
-
-        log.info("Updating geometry")
-
-        # FIXME: Here, all patches are updated whenever any of them are updated.
-        # Maybe overkill.
-        for patchid in range(self.basis.npatches):
-            patch = self.basis.patch_at(stepid, patchid)
-            w.update_geometry(patch)
-
-        w.finalize_geometry()
-        self.written = True
+        coeffs = super().coeffs(stepid, patchid)
+        coeffs = ensure_ncomps(coeffs, 3, False)
+        if self.ncomps == 1:
+            coeffs[:, -1] = coeffs[:, 0].copy()
+            coeffs[:, 0] = 0
+        return coeffs
 
 
 
@@ -298,7 +202,10 @@ class IFEMReader(Reader):
     h5: h5py.File
 
     bases: Dict[str, Basis]
-    fields: Dict[str, Field]
+    _fields: Dict[str, Field]
+    _field_basis: Dict[str, str]
+
+    geometry_basis: Basis
 
     @classmethod
     def applicable(cls, filename: Path) -> bool:
@@ -314,6 +221,7 @@ class IFEMReader(Reader):
         self.filename = filename
         self.bases = dict()
         self._fields = dict()
+        self._field_basis = dict()
 
     def validate(self):
         super().validate()
@@ -331,14 +239,12 @@ class IFEMReader(Reader):
         # Populate self._fields
         # This is a complicated process broken down into steps
         self.init_fields()
-        self.log_fields()
         self.split_fields()
         self.combine_fields()
-        self.sort_fields()
 
         # Create geometry manager
-        geometry_basis = config.geometry_basis or next(iter(self.bases))
-        self.geometry_mgr = GeometryManager(self.bases[geometry_basis])
+        geometry_basis_name = config.geometry_basis or next(iter(self.bases))
+        self.geometry_basis = self.bases[geometry_basis_name]
 
         return self
 
@@ -364,6 +270,9 @@ class IFEMReader(Reader):
         """Yield a sequence of step IDs."""
         for stepid in range(self.nsteps):
             yield stepid, self.stepdata(stepid)
+
+    def field_basis(self, fieldname: str) -> Basis:
+        return self.bases[self._field_basis[fieldname]]
 
     def init_bases(self, basisnames: Optional[Set[str]] = None, constructor: type = StandardBasis):
         """Populate the contents of self.bases.
@@ -410,15 +319,12 @@ class IFEMReader(Reader):
 
                 for fieldname in basisgrp.get('fields', ()):
                     if fieldname not in self._fields and basisname in self.bases:
-                        self._fields[fieldname] = StandardField(fieldname, self.bases[basisname], self)
+                        self._fields[fieldname] = IFEMField(fieldname, self.bases[basisname], self)
+                        self._field_basis[fieldname] = basisname
                 for fieldname in basisgrp.get('knotspan', ()):
                     if fieldname not in self._fields and basisname in self.bases:
-                        self._fields[fieldname] = StandardField(fieldname, self.bases[basisname], self, cells=True)
-
-    def log_fields(self):
-        """Print brief field information to log.debug."""
-        for field in self._fields.values():
-            log.debug(f"Field '{field.name}' lives on {field.basisname} with {field.ncomps} component(s)")
+                        self._fields[fieldname] = IFEMField(fieldname, self.bases[basisname], self, cells=True)
+                        self._field_basis[fieldname] = basisname
 
     def split_fields(self):
         """Split fields which are stored inline to separate scalar fields,
@@ -440,7 +346,8 @@ class IFEMReader(Reader):
                 continue
 
             for i, splitname in enumerate(splitnames):
-                to_add.append(SplitField(splitname, self._fields[fname], i))
+                to_add.append(ComponentField(splitname, self._fields[fname], i))
+                self._field_basis[splitname] = self._field_basis[fname]
             to_del.append(fname)
 
         for fname in to_del:
@@ -464,48 +371,17 @@ class IFEMReader(Reader):
             sourcesnames = sorted(sourcenames, key=lambda s: s[-1])
             sources = [self._fields[s] for s in sourcenames]
             sourcenames = ', '.join(sourcenames)
-            try:
-                self._fields[fname] = CombinedField(fname, sources)
-                log.info(f"Creating combined field {sourcenames} -> {fname}")
-            except AssertionError:
-                log.warning("Unable to combine fields {sourcenames} -> {fname}")
-
-    def sort_fields(self):
-        """Sort fields by name."""
-        fields = sorted(self._fields.values(), key=lambda f: f.name)
-        fields = sorted(fields, key=lambda f: f.cells)
-        self._fields = {f.name: f for f in fields}
+            self._fields[fname] = CombinedField(fname, sources)
+            log.info(f"Creating combined field {sourcenames} -> {fname}")
 
     def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
-        if not self.geometry_mgr.basis.update_at(stepid) and not force:
+        if not self.geometry_basis.update_at(stepid) and not force:
             return
-        for patchid in range(self.geometry_mgr.basis.npatches):
-            yield self.geometry_mgr.basis.patch_at(stepid, patchid)
+        for patchid in range(self.geometry_basis.npatches):
+            yield self.geometry_basis.patch_at(stepid, patchid)
 
-    def fields(self) -> Iterable[AbstractField]:
+    def fields(self) -> Iterable[Field]:
         yield from self._fields.values()
-
-
-class EigenField(StandardField):
-
-    def __init__(self, name: str, basis: Basis, reader: 'IFEMReader'):
-        super().__init__(name, basis, reader, cells=False)
-        self.fieldtype = Displacement()
-        self.decompose = False
-
-    def group_path(self, stepid: int) -> str:
-        return f'0/{self.basis.name}/Eigenmode/{stepid+1}'
-
-    def coeff_path(self, stepid: int, patchid: int) -> str:
-        return f'{self.group_path(stepid)}/{patchid+1}'
-
-    def coeffs(self, stepid: int, patchid: int) -> Array2D:
-        coeffs = super().coeffs(stepid, patchid)
-        coeffs = ensure_ncomps(coeffs, 3, False)
-        if self.ncomps == 1:
-            coeffs[:, -1] = coeffs[:, 0].copy()
-            coeffs[:, 0] = 0
-        return coeffs
 
 
 class IFEMEigenReader(IFEMReader):

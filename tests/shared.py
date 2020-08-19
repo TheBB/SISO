@@ -164,10 +164,10 @@ def compare_vtk_data(out, ref):
     assert out.GetNumberOfArrays() == ref.GetNumberOfArrays()
     narrays = out.GetNumberOfArrays()
     for i in range(narrays):
-        assert out.GetArrayName(i) == ref.GetArrayName(i)
+        name = ref.GetArrayName(i)
         np.testing.assert_allclose(
-            vtknp.vtk_to_numpy(out.GetArray(i)),
-            vtknp.vtk_to_numpy(ref.GetArray(i)),
+            vtknp.vtk_to_numpy(out.GetAbstractArray(name)),
+            vtknp.vtk_to_numpy(ref.GetAbstractArray(i)),
             atol=1e-15,
         )
 
