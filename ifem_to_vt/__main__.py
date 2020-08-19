@@ -57,7 +57,6 @@ def tracked_option(*args, **kwargs):
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd', 'nc']), required=False, help='Output format.')
 
 # Options that are forwarded to config
-@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.', default=None)
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
 @tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
 @tracked_option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
@@ -66,6 +65,9 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
+
+@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.', default=None)
+@tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
 
 @tracked_option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
