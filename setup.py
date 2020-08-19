@@ -10,7 +10,7 @@ with open(Path(__file__).parent / 'README.rst') as f:
 setup(
     name='IFEM-to-VT',
     version='1.1.0',
-    description='Converts IFEM result files to VT* formats.',
+    description='Convert between different mesh data formats',
     long_description_content_type='text/x-rst',
     long_description=desc,
     maintainer='Eivind Fonn',
