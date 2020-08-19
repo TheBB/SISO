@@ -190,38 +190,6 @@ class EigenField(IFEMField):
 
 
 
-# Geometry manager
-# ----------------------------------------------------------------------
-
-
-class GeometryManager:
-
-    basis: Basis
-    written: bool
-
-    def __init__(self, basis: Basis):
-        self.basis = basis
-        self.written = False
-        log.info(f"Using {basis.name} for geometry")
-
-    def update(self, w: Writer, stepid: int):
-        if not self.basis.update_at(stepid) and self.written:
-            w.finalize_geometry()
-            return
-
-        log.info("Updating geometry")
-
-        # FIXME: Here, all patches are updated whenever any of them are updated.
-        # Maybe overkill.
-        for patchid in range(self.basis.npatches):
-            patch = self.basis.patch_at(stepid, patchid)
-            w.update_geometry(patch)
-
-        w.finalize_geometry()
-        self.written = True
-
-
-
 # Reader classes
 # ----------------------------------------------------------------------
 
@@ -236,6 +204,8 @@ class IFEMReader(Reader):
     bases: Dict[str, Basis]
     _fields: Dict[str, Field]
     _field_basis: Dict[str, str]
+
+    geometry_basis: Basis
 
     @classmethod
     def applicable(cls, filename: Path) -> bool:
@@ -274,8 +244,8 @@ class IFEMReader(Reader):
         self.sort_fields()
 
         # Create geometry manager
-        geometry_basis = config.geometry_basis or next(iter(self.bases))
-        self.geometry_mgr = GeometryManager(self.bases[geometry_basis])
+        geometry_basis_name = config.geometry_basis or next(iter(self.bases))
+        self.geometry_basis = self.bases[geometry_basis_name]
 
         return self
 
@@ -412,10 +382,10 @@ class IFEMReader(Reader):
         self._fields = {f.name: f for f in fields}
 
     def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
-        if not self.geometry_mgr.basis.update_at(stepid) and not force:
+        if not self.geometry_basis.update_at(stepid) and not force:
             return
-        for patchid in range(self.geometry_mgr.basis.npatches):
-            yield self.geometry_mgr.basis.patch_at(stepid, patchid)
+        for patchid in range(self.geometry_basis.npatches):
+            yield self.geometry_basis.patch_at(stepid, patchid)
 
     def fields(self) -> Iterable[Field]:
         yield from self._fields.values()
