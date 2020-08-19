@@ -26,9 +26,11 @@ def discover_decompositions(fields: List[Field]) -> Iterable[Field]:
 
 
 def discover_fields(reader: Reader) -> List[Field]:
-    fields: List[Field] = []
-    for field in reader.fields():
-        fields.append(field)
+    fields = list(reader.fields())
+    if config.field_filter is not None:
+        fields = [field for field in fields if field.name in config.field_filter]
+
+    for field in fields:
         log.debug(f"Discovered field '{field.name}' with {field.ncomps} component(s)")
 
     fields = sorted(fields, key=attrgetter('name'))

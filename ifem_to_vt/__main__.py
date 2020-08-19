@@ -9,6 +9,7 @@ import treelog as log
 
 from . import config, ConfigSource
 from .pipeline import pipeline
+from .util import split_commas
 from ifem_to_vt.reader import Reader
 from ifem_to_vt.writer import Writer
 
@@ -63,6 +64,9 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
 
+@tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
+@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
+
 @tracked_option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
@@ -107,13 +111,21 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         fmt = fmt or 'pvd'
         outfile = Path(infile.name).with_suffix(f'.{fmt}')
 
+    # Handle default values of multi-valued options that should be
+    # distinguished from empty, as well as comma splitting
+    for k in ['field_filter', 'only_bases']:
+        kwargs[k] = tuple(split_commas(kwargs[k]))
+    explicit_options = getattr(ctx, 'explicit_options', set())
+    if 'field_filter' not in explicit_options:
+        kwargs['field_filter'] = None
+
     try:
         # The config can influence the choice of readers or writers,
         # so apply it first.  Since kwargs may include options that
         # are not explicity set by the user, we set the source to
         # Default, and later use the upgrade_source method.
         with config(source=ConfigSource.Default, **kwargs):
-            for option in getattr(ctx, 'explicit_options', set()):
+            for option in explicit_options:
                 config.upgrade_source(option, ConfigSource.User)
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)

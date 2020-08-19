@@ -166,3 +166,8 @@ def save_excursion(fp):
         yield
     finally:
         fp.seek(ptr)
+
+
+def split_commas(strings: Iterable[str]) -> Iterable[str]:
+    for s in strings:
+        yield from s.split(',')

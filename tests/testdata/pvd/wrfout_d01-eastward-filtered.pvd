@@ -1,0 +1,8 @@
+<VTKFile type="Collection">
+  <Collection>
+    <DataSet timestep="0.0" part="0" file="wrfout_d01-eastward-filtered.pvd-data/data-1.vtu" />
+    <DataSet timestep="3600.0" part="0" file="wrfout_d01-eastward-filtered.pvd-data/data-2.vtu" />
+    <DataSet timestep="7200.0" part="0" file="wrfout_d01-eastward-filtered.pvd-data/data-3.vtu" />
+    <DataSet timestep="10800.0" part="0" file="wrfout_d01-eastward-filtered.pvd-data/data-4.vtu" />
+  </Collection>
+</VTKFile>
