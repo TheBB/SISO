@@ -92,6 +92,9 @@ class Config(metaclass=ConfigMeta):
     # Number of subdivisions for additional resolution.
     nvis = Setting(1)
 
+    # Which fields to include
+    field_filter = Setting(None, Pipeline, name='--filter')
+
     # Whether the data set contains multiple time steps.
     multiple_timesteps = Setting(True, Writer)
 

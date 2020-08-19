@@ -9,6 +9,7 @@ import treelog as log
 
 from . import config, ConfigSource
 from .pipeline import pipeline
+from .util import split_commas
 from ifem_to_vt.reader import Reader
 from ifem_to_vt.writer import Writer
 
@@ -39,6 +40,8 @@ class Option(click.Option):
     attached to the context object."""
 
     def process_value(self, ctx, value):
+        if self.multiple and value is not None:
+            value = list(split_commas(value))
         if value is not None:
             if not hasattr(ctx, 'explicit_options'):
                 ctx.explicit_options = set()
@@ -54,6 +57,7 @@ def tracked_option(*args, **kwargs):
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd', 'nc']), required=False, help='Output format.')
 
 # Options that are forwarded to config
+@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
 @tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
 @tracked_option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
