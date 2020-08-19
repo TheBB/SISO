@@ -331,7 +331,6 @@ class IFEMReader(Reader):
         # Populate self._fields
         # This is a complicated process broken down into steps
         self.init_fields()
-        self.log_fields()
         self.split_fields()
         self.combine_fields()
         self.sort_fields()
@@ -414,11 +413,6 @@ class IFEMReader(Reader):
                 for fieldname in basisgrp.get('knotspan', ()):
                     if fieldname not in self._fields and basisname in self.bases:
                         self._fields[fieldname] = StandardField(fieldname, self.bases[basisname], self, cells=True)
-
-    def log_fields(self):
-        """Print brief field information to log.debug."""
-        for field in self._fields.values():
-            log.debug(f"Field '{field.name}' lives on {field.basisname} with {field.ncomps} component(s)")
 
     def split_fields(self):
         """Split fields which are stored inline to separate scalar fields,
