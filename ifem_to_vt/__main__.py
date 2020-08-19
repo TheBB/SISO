@@ -57,7 +57,7 @@ def tracked_option(*args, **kwargs):
 @click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd', 'nc']), required=False, help='Output format.')
 
 # Options that are forwarded to config
-@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
+@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.', default=None)
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
 @tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
 @tracked_option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
@@ -111,13 +111,19 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         fmt = fmt or 'pvd'
         outfile = Path(infile.name).with_suffix(f'.{fmt}')
 
+    # Handle default values of multi-valued options that should be
+    # distinguished from empty
+    explicit_options = getattr(ctx, 'explicit_options', set())
+    if 'field_filter' not in explicit_options:
+        kwargs['field_filter'] = None
+
     try:
         # The config can influence the choice of readers or writers,
         # so apply it first.  Since kwargs may include options that
         # are not explicity set by the user, we set the source to
         # Default, and later use the upgrade_source method.
         with config(source=ConfigSource.Default, **kwargs):
-            for option in getattr(ctx, 'explicit_options', set()):
+            for option in explicit_options:
                 config.upgrade_source(option, ConfigSource.User)
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
