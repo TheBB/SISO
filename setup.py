@@ -8,14 +8,14 @@ with open(Path(__file__).parent / 'README.rst') as f:
     desc = f.read()
 
 setup(
-    name='CICO',
+    name='SISO',
     version='2.1.0',
     description='Convert between different mesh data formats',
     long_description_content_type='text/x-rst',
     long_description=desc,
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
-    packages=['cico', 'cico.writer', 'cico.reader'],
+    packages=['siso', 'siso.writer', 'siso.reader'],
     install_requires=[
         'click',
         'dataclasses',
@@ -36,8 +36,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'ifem-to-vt=cico.__main__:deprecated',
-            'cico=cico.__main__:convert'
+            'ifem-to-vt=siso.__main__:deprecated',
+            'siso=siso.__main__:convert'
         ],
     },
 )

@@ -16,7 +16,7 @@ os:
 stages:
   - test
   - name: deploy
-    if: tag IS PRESENT AND repo = TheBB/CICO
+    if: tag IS PRESENT AND repo = TheBB/SISO
 
 before_install:
   - source ./ci/before_install.sh

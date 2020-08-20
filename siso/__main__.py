@@ -145,7 +145,7 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
 
 
 def deprecated():
-    print("ifem-to-vt is deprecated, please launch with 'cico'\n\n", file=sys.stderr)
+    print("ifem-to-vt is deprecated, please launch with 'siso'\n\n", file=sys.stderr)
     convert()
 
 

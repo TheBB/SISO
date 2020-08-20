@@ -1,15 +1,15 @@
 ====
-CICO
+SISO
 ====
 
-.. image:: https://badge.fury.io/py/CICO.svg
-   :target: https://badge.fury.io/py/CICO
+.. image:: https://badge.fury.io/py/SISO.svg
+   :target: https://badge.fury.io/py/SISO
 
-.. image:: https://travis-ci.org/TheBB/CICO.svg?branch=master
-   :target: https://travis-ci.org/TheBB/CICO
+.. image:: https://travis-ci.org/TheBB/SISO.svg?branch=master
+   :target: https://travis-ci.org/TheBB/SISO
 
 
-CICO is a tool for converting between various data formats used for
+SISO is a tool for converting between various data formats used for
 storing simulation results.
 
 Supported readers:
@@ -34,7 +34,7 @@ Installation
 
 It is recommended to install with PIP::
 
-  pip install --user CICO
+  pip install --user SISO
 
 
 To install from source::
@@ -42,10 +42,10 @@ To install from source::
   pip install --user .
 
 
-CICO requires Python 3.  It is possible that, on your system, *pip*
+SISO requires Python 3.  It is possible that, on your system, *pip*
 refers to Python 2.  In this case, do::
 
-  pip3 install --user CICO
+  pip3 install --user SISO
 
 
 or::
@@ -53,7 +53,7 @@ or::
   pip3 install --user .
 
 
-CICO requires the numpy_, H5Py_, VTK_ and LRSplines_ libraries, all of
+SISO requires the numpy_, H5Py_, VTK_ and LRSplines_ libraries, all of
 which contain compiled components.  In ideal circumstances, they
 should be installed automatically from PyPi with the above commands,
 but circumstances are not always ideal.  For example, VTK is, as of
@@ -63,10 +63,10 @@ documentation of the respective libraries.
 
 VTF support is not available out-of-the-box because it depends on
 proprietary libaries.  If these libraries are available on your
-system, you may install VTFWriter_ manually.  If it is present, CICO
+system, you may install VTFWriter_ manually.  If it is present, SISO
 should enable VTF support automatically.
 
-Upon successful installation, a *cico* executable should be installed
+Upon successful installation, a *siso* executable should be installed
 in ``~/.local/bin``, or the binary path of the current Python
 environment.  To run it, ensure that this directory is in your
 ``PATH``.
@@ -77,19 +77,19 @@ Usage
 
 Basic usage is::
 
-  cico INFILE.hdf5 [OUTFILE]
+  siso INFILE.hdf5 [OUTFILE]
 
 
 For help with relevant command-line-options please consult::
 
-  cico --help
+  siso --help
 
 
 If the output filename is specified, the format will be determined
 from its extension, unless specifically overriden with ``-f`` or
 ``--fmt``::
 
-  cico -f vtu INFILE.hdf5
+  siso -f vtu INFILE.hdf5
 
 
 Some options are only available for certain input or output formats,
@@ -110,7 +110,7 @@ The verbosity of standard output can be changed with ``--debug`` (use
 for bug reports), ``--info`` (default), ``--user``, ``--warning`` and
 ``--error``.
 
-CICO will try to use rich formatted output by default.  Switch this
+SISO will try to use rich formatted output by default.  Switch this
 off with ``--no-rich``.
 
 
@@ -154,7 +154,7 @@ fields, as well as the surface slice of volumetric fields.  If
 fields, as well as planar fields interpreted as constants in the
 vertical direction.
 
-If ``--periodic`` is given, CICO will interpret the mesh as a global
+If ``--periodic`` is given, SISO will interpret the mesh as a global
 grid and attempt to tie it together in the longitudinal axis and at
 the poles.  This only works together with ``--global``.
 

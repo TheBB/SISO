@@ -12,7 +12,7 @@ from typing import List, Optional, Iterator, Tuple
 import vtk
 import vtk.util.numpy_support as vtknp
 
-from cico.__main__ import convert
+from siso.__main__ import convert
 
 
 @contextmanager
