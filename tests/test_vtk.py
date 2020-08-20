@@ -4,7 +4,6 @@ import pytest
 from click.testing import CliRunner
 
 from .shared import TESTCASES, compare_vtk_unstructured, PreparedTestCase
-from ifem_to_vt.__main__ import convert
 
 import vtk
 

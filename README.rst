@@ -1,16 +1,16 @@
-==========
-IFEM-to-VT
-==========
+====
+CICO
+====
 
-.. image:: https://badge.fury.io/py/IFEM-to-VT.svg
-   :target: https://badge.fury.io/py/IFEM-to-VT
+.. image:: https://badge.fury.io/py/CICO.svg
+   :target: https://badge.fury.io/py/CICO
 
-.. image:: https://travis-ci.org/TheBB/IFEM-to-VT.svg?branch=master
-   :target: https://travis-ci.org/TheBB/IFEM-to-VT
+.. image:: https://travis-ci.org/TheBB/CICO.svg?branch=master
+   :target: https://travis-ci.org/TheBB/CICO
 
 
-IFEM-to-VT is a tool for converting between various data formats used
-for storing simulation results.
+CICO is a tool for converting between various data formats used for
+storing simulation results.
 
 Supported readers:
 
@@ -34,7 +34,7 @@ Installation
 
 It is recommended to install with PIP::
 
-  pip install --user IFEM-to-VT
+  pip install --user CICO
 
 
 To install from source::
@@ -42,10 +42,10 @@ To install from source::
   pip install --user .
 
 
-IFEM-to-VT requires Python 3.  It is possible that, on your system,
-*pip* refers to Python 2.  In this case, do::
+CICO requires Python 3.  It is possible that, on your system, *pip*
+refers to Python 2.  In this case, do::
 
-  pip3 install --user IFEM-to-VT
+  pip3 install --user CICO
 
 
 or::
@@ -53,8 +53,8 @@ or::
   pip3 install --user .
 
 
-IFEM-to-VT requires the numpy_, H5Py_, VTK_ and LRSplines_ libraries, all
-of which contain compiled components.  In ideal circumstances, they
+CICO requires the numpy_, H5Py_, VTK_ and LRSplines_ libraries, all of
+which contain compiled components.  In ideal circumstances, they
 should be installed automatically from PyPi with the above commands,
 but circumstances are not always ideal.  For example, VTK is, as of
 the time of writing, not available for Python 3.8 on PyPi.  If
@@ -63,12 +63,12 @@ documentation of the respective libraries.
 
 VTF support is not available out-of-the-box because it depends on
 proprietary libaries.  If these libraries are available on your
-system, you may install VTFWriter_ manually.  If it is present,
-IFEM-to-VT should enable VTF support automatically.
+system, you may install VTFWriter_ manually.  If it is present, CICO
+should enable VTF support automatically.
 
-Upon successful installation, an *ifem-to-vt* executable should be
-installed in ``~/.local/bin``, or the binary path of the current
-Python environment.  To run it, ensure that this directory is in your
+Upon successful installation, a *cico* executable should be installed
+in ``~/.local/bin``, or the binary path of the current Python
+environment.  To run it, ensure that this directory is in your
 ``PATH``.
 
 
@@ -77,19 +77,19 @@ Usage
 
 Basic usage is::
 
-  ifem-to-vt INFILE.hdf5 [OUTFILE]
+  cico INFILE.hdf5 [OUTFILE]
 
 
 For help with relevant command-line-options please consult::
 
-  ifem-to-vt --help
+  cico --help
 
 
 If the output filename is specified, the format will be determined
 from its extension, unless specifically overriden with ``-f`` or
 ``--fmt``::
 
-  ifem-to-vt -f vtu INFILE.hdf5
+  cico -f vtu INFILE.hdf5
 
 
 Some options are only available for certain input or output formats,
@@ -110,8 +110,8 @@ The verbosity of standard output can be changed with ``--debug`` (use
 for bug reports), ``--info`` (default), ``--user``, ``--warning`` and
 ``--error``.
 
-IFEM-to-VT will try to use rich formatted output by default.  Switch
-this off with ``--no-rich``.
+CICO will try to use rich formatted output by default.  Switch this
+off with ``--no-rich``.
 
 
 
@@ -154,9 +154,9 @@ fields, as well as the surface slice of volumetric fields.  If
 fields, as well as planar fields interpreted as constants in the
 vertical direction.
 
-If ``--periodic`` is given, IFEM-to-VT will interpret the mesh as a
-global grid and attempt to tie it together in the longitudinal axis
-and at the poles.  This only works together with ``--global``.
+If ``--periodic`` is given, CICO will interpret the mesh as a global
+grid and attempt to tie it together in the longitudinal axis and at
+the poles.  This only works together with ``--global``.
 
 
 

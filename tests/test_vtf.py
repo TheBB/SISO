@@ -6,7 +6,6 @@ import numpy as np
 from click.testing import CliRunner
 
 from .shared import TESTCASES, PreparedTestCase
-from ifem_to_vt.__main__ import convert
 
 try:
     import vtfwriter

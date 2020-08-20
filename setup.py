@@ -8,14 +8,14 @@ with open(Path(__file__).parent / 'README.rst') as f:
     desc = f.read()
 
 setup(
-    name='IFEM-to-VT',
+    name='CICO',
     version='2.0.2',
     description='Convert between different mesh data formats',
     long_description_content_type='text/x-rst',
     long_description=desc,
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
-    packages=['ifem_to_vt', 'ifem_to_vt.writer', 'ifem_to_vt.reader'],
+    packages=['cico', 'cico.writer', 'cico.reader'],
     install_requires=[
         'click',
         'dataclasses',
@@ -36,7 +36,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'ifem-to-vt=ifem_to_vt.__main__:convert',
+            'ifem-to-vt=cico.__main__:deprecated',
+            'cico=cico.__main__:convert'
         ],
     },
 )

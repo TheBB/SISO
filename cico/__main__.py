@@ -10,8 +10,8 @@ import treelog as log
 from . import config, ConfigSource
 from .pipeline import pipeline
 from .util import split_commas
-from ifem_to_vt.reader import Reader
-from ifem_to_vt.writer import Writer
+from .reader import Reader
+from .writer import Writer
 
 
 def suppress_warnings(func):
@@ -142,6 +142,11 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
             log.error(f"Error: {e}")
             log.error("More information may be available with --debug")
         sys.exit(1)
+
+
+def deprecated():
+    print("ifem-to-vt is deprecated, please launch with 'cico'\n\n", file=sys.stderr)
+    convert()
 
 
 if __name__ == '__main__':
