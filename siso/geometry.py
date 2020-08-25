@@ -10,7 +10,7 @@ from splipy import SplineObject, BSplineBasis
 import treelog as log
 
 from typing import Tuple, Any, Union, IO, Dict, Hashable, List
-from .typing import Array2D, BoundingBox, PatchID, Shape
+from .typing import Array2D, BoundingBox, PatchKey, Shape
 
 from . import config
 
@@ -54,7 +54,7 @@ class Hex(CellType):
 
 class Patch(ABC):
 
-    key: PatchID
+    key: PatchKey
 
     @property
     @abstractmethod
@@ -135,7 +135,7 @@ class UnstructuredPatch(Patch):
 
     _cells: Array2D
 
-    def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D, celltype: CellType):
+    def __init__(self, key: PatchKey, nodes: Array2D, cells: Array2D, celltype: CellType):
         assert nodes.ndim == cells.ndim == 2
         self.key = key
         self.nodes = nodes
@@ -148,7 +148,7 @@ class UnstructuredPatch(Patch):
         return self._cells
 
     @classmethod
-    def from_lagrangian(cls, key: PatchID, data: Union[bytes, str]) -> 'UnstructuredPatch':
+    def from_lagrangian(cls, key: PatchKey, data: Union[bytes, str]) -> 'UnstructuredPatch':
         if isinstance(data, bytes):
             data = data.decode()
         assert isinstance(data, str)
@@ -222,7 +222,7 @@ class StructuredPatch(UnstructuredPatch):
 
     shape: Shape
 
-    def __init__(self, key: PatchID, nodes: Array2D, shape: Shape, celltype: CellType):
+    def __init__(self, key: PatchKey, nodes: Array2D, shape: Shape, celltype: CellType):
         self.key = key
         self.nodes = nodes
         self.celltype = celltype
@@ -247,7 +247,7 @@ class StructuredPatch(UnstructuredPatch):
 
 class LRPatch(Patch):
 
-    def __init__(self, key: PatchID, obj: Union[bytes, str, lr.LRSplineObject]):
+    def __init__(self, key: PatchKey, obj: Union[bytes, str, lr.LRSplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -359,7 +359,7 @@ class G2Object(splipy.io.G2):
 class SplinePatch(Patch):
     """A representation of a Splipy SplineObject."""
 
-    def __init__(self, key: PatchID, obj: Union[bytes, str, SplineObject]):
+    def __init__(self, key: PatchKey, obj: Union[bytes, str, SplineObject]):
         if isinstance(obj, bytes):
             obj = obj.decode()
         if isinstance(obj, str):
@@ -461,26 +461,38 @@ class TensorTesselator(Tesselator):
 
 class GeometryManager:
 
-    patch_keys: Dict[PatchID, int]
+    patch_keys: Dict[PatchKey, int]
     bounding_boxes: Dict[BoundingBox, int]
 
     def __init__(self):
         self.patch_keys = dict()
         self.bounding_boxes = dict()
 
-    def update(self, patch: Patch):
-        if patch.key not in self.patch_keys:
+    def id_by_key(self, key: PatchKey):
+        while key:
+            try:
+                return self.patch_keys[key]
+            except KeyError:
+                key = key[:-1]
+        raise KeyError
+
+    def update(self, patch: Patch) -> int:
+        try:
+            patchid = self.id_by_key(patch.key)
+        except KeyError:
             patchid = len(self.patch_keys)
             log.debug(f"New unique patch detected, assigned ID {patchid}")
             self.patch_keys[patch.key] = patchid
-        else:
-            patchid = self.patch_keys[patch.key]
         self.bounding_boxes[patch.bounding_box] = patchid
         return patchid
 
-    def global_id(self, patch: Patch):
+    def global_id(self, patch: Patch) -> int:
         try:
-            return self.bounding_boxes[patch.bounding_box]
+            patchid = self.id_by_key(patch.key)
         except KeyError:
-            log.error("Unable to find corresponding geometry patch")
-            return None
+            try:
+                patchid = self.bounding_boxes[patch.bounding_box]
+                self.patch_keys[patch.key] = patchid
+            except KeyError:
+                raise ValueError(f"Unable to find corresponding geometry patch for {patch.key}")
+        return patchid
