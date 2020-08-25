@@ -2,15 +2,18 @@ from collections import defaultdict, OrderedDict
 from pathlib import Path
 
 from dataclasses import dataclass
+import numpy as np
 from singledispatchmethod import singledispatchmethod
 import treelog as log
 
 from typing import Optional, List, Dict, Any, Tuple, Type
+from ..typing import Array2D
 
 from .. import config
-from ..fields import FieldPatch, CombinedFieldPatch, SimpleFieldPatch
+from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
 from ..geometry import Patch, UnstructuredPatch
-from .writer import Writer
+from ..util import ensure_ncomps
+from .writer import TesselatedWriter
 
 try:
     import vtfwriter as vtf
@@ -26,7 +29,7 @@ class Field:
     steps: Dict[int, List['vtf.ResultBlock']]
 
 
-class VTFWriter(Writer):
+class VTFWriter(TesselatedWriter):
 
     writer_name = "VTF"
 
@@ -83,16 +86,7 @@ class VTFWriter(Writer):
         super().add_step(**stepdata)
         self.steps.append(stepdata)
 
-    @singledispatchmethod
-    def update_geometry(self, patch: Patch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
-        return self.update_geometry(patch.tesselate(), patchid=patchid)
-
-    @update_geometry.register(UnstructuredPatch)
-    def _(self, patch: UnstructuredPatch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
+    def _update_geometry(self, patchid: int, patch: UnstructuredPatch):
         patch.ensure_ncomps(3, allow_scalar=False)
 
         # If we haven't seen this patch before, assert that it's the
@@ -120,13 +114,11 @@ class VTFWriter(Writer):
         self.dirty_geometry = False
         super().finalize_geometry()
 
-    def update_field(self, field: FieldPatch):
-        patchid = super().update_field(field)
-        field.ensure_ncomps(3, allow_scalar=True)
-        data = field.tesselate()
+    def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
+        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
 
         nblock, eblock = self.geometry_blocks[patchid]
-        with self.out.ResultBlock(cells=field.cells, vector=field.num_comps>1) as rblock:
+        with self.out.ResultBlock(cells=field.cells, vector=field.is_vector) as rblock:
             rblock.SetResults(data.flat)
             rblock.BindBlock(eblock if field.cells else nblock)
 

@@ -8,7 +8,7 @@ from typing import Iterable, Tuple
 from ..typing import StepData
 
 from ..geometry import Patch
-from ..fields import Field, FieldPatch
+from ..fields import Field
 
 from ..util import subclasses
 

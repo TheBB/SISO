@@ -11,14 +11,14 @@ import vtk.util.numpy_support as vnp
 
 from dataclasses import dataclass
 
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from ..typing import Array2D
 
 from .. import config
-from ..fields import FieldPatch
+from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
 from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
 from ..util import ensure_ncomps
-from .writer import Writer
+from .writer import TesselatedWriter
 
 
 
@@ -28,7 +28,7 @@ class Field:
     data: Dict[int, Array2D]
 
 
-class VTKWriter(Writer):
+class VTKWriter(TesselatedWriter):
 
     writer_name = "VTK"
 
@@ -62,22 +62,11 @@ class VTKWriter(Writer):
             writer.SetFileTypeToBinary()
         return writer
 
-    @singledispatchmethod
-    def update_geometry(self, patch: Patch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
-        return self.update_geometry(patch.tesselate(), patchid=patchid)
-
-    @update_geometry.register(UnstructuredPatch)
-    def _(self, patch: UnstructuredPatch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
+    def _update_geometry(self, patchid: int, patch: Patch):
         self.patches[patchid] = patch
 
-    def update_field(self, field: FieldPatch):
-        patchid = super().update_field(field)
-        field.ensure_ncomps(3, allow_scalar=True)
-        data = field.tesselate()
+    def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
+        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
         self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
 
     def is_structured(self) -> bool:

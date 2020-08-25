@@ -14,7 +14,7 @@ from .. import config, ConfigTarget
 from .reader import Reader
 from ..writer import Writer
 from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
-from ..fields import Field, FieldPatch, SimpleFieldPatch
+from ..fields import Field, SimpleField
 from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap
 
 
@@ -64,7 +64,7 @@ MEAN_EARTH_RADIUS = 6_371_000
 # Good luck.
 
 
-class WRFScalarField(Field):
+class WRFScalarField(SimpleField):
 
     reader: 'WRFReader'
     decompose = False
@@ -75,14 +75,14 @@ class WRFScalarField(Field):
         self.name = name
         self.reader = reader
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
         patch = self.reader.patch_at(stepid)
         data = self.reader.variable_at(self.name, stepid, config.volumetric == 'extrude')
         data = data.reshape(patch.num_nodes, -1)
-        yield SimpleFieldPatch(self.name, patch, data)
+        yield (patch, data)
 
 
-class WRFVectorField(Field):
+class WRFVectorField(SimpleField):
 
     reader: 'WRFReader'
     components: List[str]
@@ -95,9 +95,9 @@ class WRFVectorField(Field):
         self.reader = reader
         self.ncomps = len(components)
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
         patch = self.reader.patch_at(stepid)
-        yield self.reader.velocity_field(patch, stepid)
+        yield patch, self.reader.velocity_field(patch, stepid)
 
 
 
@@ -443,7 +443,7 @@ class WRFReader(Reader):
 
         return cells
 
-    def velocity_field(self, patch: Patch, stepid: int) -> SimpleFieldPatch:
+    def velocity_field(self, patch: Patch, stepid: int) -> Array2D:
         """Compute the velocity field at a given time step.
 
         In the simplest case, this is just a matter of concatenating
@@ -461,7 +461,7 @@ class WRFReader(Reader):
 
         # For local mapping, we're done
         if config.mapping == 'local':
-            return SimpleFieldPatch('WIND', patch, data)
+            return data
 
         # Convert spherical coordinates to the grid's own Cartesian coordinate system
         data = self.cartesian_field(data)
@@ -482,7 +482,7 @@ class WRFReader(Reader):
         # Rotate to final coordinate system
         data = data.reshape(-1, 3)
         data = self.rotation().apply(data)
-        return SimpleFieldPatch('WIND', patch, data)
+        return data
 
     def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
         yield self.patch_at(stepid)
