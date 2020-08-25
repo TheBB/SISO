@@ -18,7 +18,7 @@ from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
 from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
 from ..util import ensure_ncomps
-from .writer import Writer
+from .writer import TesselatedWriter
 
 
 
@@ -28,7 +28,7 @@ class Field:
     data: Dict[int, Array2D]
 
 
-class VTKWriter(Writer):
+class VTKWriter(TesselatedWriter):
 
     writer_name = "VTK"
 
@@ -62,36 +62,10 @@ class VTKWriter(Writer):
             writer.SetFileTypeToBinary()
         return writer
 
-    @singledispatchmethod
-    def update_geometry(self, patch: Patch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
-        return self.update_geometry(patch.tesselate(), patchid=patchid)
-
-    @update_geometry.register(UnstructuredPatch)
-    def _(self, patch: UnstructuredPatch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
+    def _update_geometry(self, patchid: int, patch: Patch):
         self.patches[patchid] = patch
 
-    @singledispatchmethod
-    def update_field(self, field: Field, patch: PatchData, data: FieldData):
-        raise NotImplementedError
-
-    @update_field.register(SimpleField)
-    def _(self, field: SimpleField, patch: Patch, data: Array2D):
-        patchid = self.geometry.global_id(patch)
-        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
-        data = patch.tesselate_field(data, cells=field.cells)
-        self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
-
-    @update_field.register(CombinedField)
-    def _(self, field: CombinedField, patch: List[Patch], data: List[Array2D]):
-        patchid = self.geometry.global_id(patch[0])
-        data = np.hstack([
-            p.tesselate_field(d, cells=field.cells)
-            for p, d in zip(patch, data)
-        ])
+    def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
         self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
 

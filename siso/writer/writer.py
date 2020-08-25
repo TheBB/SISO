@@ -2,14 +2,16 @@ from abc import ABC, abstractmethod
 from inspect import isabstract
 from pathlib import Path
 
+import numpy as np
+from singledispatchmethod import singledispatchmethod
 import treelog as log
 
 from typing import Any, Optional, Dict, Union, List
 from ..typing import Array2D
 
 from .. import config
-from ..geometry import Patch, GeometryManager
-from ..fields import Field, PatchData, FieldData
+from ..geometry import Patch, UnstructuredPatch, GeometryManager
+from ..fields import Field, PatchData, FieldData, SimpleField, CombinedField
 from ..util import subclasses
 
 
@@ -112,3 +114,35 @@ class Writer(ABC):
         assert self.geometry_finalized
         assert not self.step_finalized
         self.step_finalized = True
+
+
+
+class TesselatedWriter(Writer):
+
+    @abstractmethod
+    def _update_geometry(self, patchid: int, patch: UnstructuredPatch):
+        pass
+
+    def update_geometry(self, patch: Patch):
+        patchid = super().update_geometry(patch)
+        self._update_geometry(patchid, patch.tesselate())
+
+    @abstractmethod
+    def _update_field(self, field: Field, patchid: int, data: Array2D):
+        pass
+
+    @singledispatchmethod
+    def update_field(self, field: Field, patch: PatchData, data: FieldData):
+        raise NotImplementedError
+
+    @update_field.register(SimpleField)
+    def _(self, field: SimpleField, patch: Patch, data: Array2D):
+        patchid = self.geometry.global_id(patch)
+        data = patch.tesselate_field(data, cells=field.cells)
+        self._update_field(field, patchid, data)
+
+    @update_field.register(CombinedField)
+    def _(self, field: CombinedField, patch: List[Patch], data: List[Array2D]):
+        patchid = self.geometry.global_id(patch[0])
+        data = np.hstack([p.tesselate_field(d, cells=field.cells) for p, d in zip(patch, data)])
+        self._update_field(field, patchid, data)

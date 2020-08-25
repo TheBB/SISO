@@ -13,7 +13,7 @@ from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
 from ..geometry import Patch, UnstructuredPatch
 from ..util import ensure_ncomps
-from .writer import Writer
+from .writer import TesselatedWriter
 
 try:
     import vtfwriter as vtf
@@ -29,7 +29,7 @@ class Field:
     steps: Dict[int, List['vtf.ResultBlock']]
 
 
-class VTFWriter(Writer):
+class VTFWriter(TesselatedWriter):
 
     writer_name = "VTF"
 
@@ -86,16 +86,7 @@ class VTFWriter(Writer):
         super().add_step(**stepdata)
         self.steps.append(stepdata)
 
-    @singledispatchmethod
-    def update_geometry(self, patch: Patch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
-        return self.update_geometry(patch.tesselate(), patchid=patchid)
-
-    @update_geometry.register(UnstructuredPatch)
-    def _(self, patch: UnstructuredPatch, patchid: Optional[int] = None):
-        if patchid is None:
-            patchid = super().update_geometry(patch)
+    def _update_geometry(self, patchid: int, patch: UnstructuredPatch):
         patch.ensure_ncomps(3, allow_scalar=False)
 
         # If we haven't seen this patch before, assert that it's the
@@ -123,41 +114,7 @@ class VTFWriter(Writer):
         self.dirty_geometry = False
         super().finalize_geometry()
 
-    @singledispatchmethod
-    def update_field(self, field: Field, patch: PatchData, data: FieldData):
-        raise NotImplementedError
-
-    @update_field.register(SimpleField)
-    def _(self, field: SimpleField, patch: Patch, data: Array2D):
-        patchid = self.geometry.global_id(patch)
-        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
-        data = patch.tesselate_field(data, cells=field.cells)
-        print(field.name, field.is_scalar, data.shape)
-
-        nblock, eblock = self.geometry_blocks[patchid]
-        with self.out.ResultBlock(cells=field.cells, vector=field.is_vector) as rblock:
-            rblock.SetResults(data.flat)
-            rblock.BindBlock(eblock if field.cells else nblock)
-
-        if field.name not in self.field_blocks:
-            if field.is_scalar:
-                blocktype = self.out.ScalarBlock
-            elif not field.is_displacement:
-                blocktype = self.out.VectorBlock
-            else:
-                blocktype = self.out.DisplacementBlock
-            self.field_blocks[field.name] = Field(blocktype, {})
-
-        steps = self.field_blocks[field.name].steps
-        steps.setdefault(self.stepid + 1, []).append(rblock)
-
-    @update_field.register(CombinedField)
-    def _(self, field: CombinedField, patch: List[Patch], data: List[Array2D]):
-        patchid = self.geometry.global_id(patch[0])
-        data = np.hstack([
-            p.tesselate_field(d, cells=field.cells)
-            for p, d in zip(patch, data)
-        ])
+    def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
 
         nblock, eblock = self.geometry_blocks[patchid]
