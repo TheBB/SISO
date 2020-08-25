@@ -7,13 +7,13 @@ import h5py
 import numpy as np
 import treelog as log
 
-from typing import Dict, Set, Optional, List, Any, Iterable, Tuple
+from typing import Dict, Set, Optional, Any, Iterable, Tuple
 from ..typing import Array2D, StepData
 
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..util import ensure_ncomps
-from ..fields import Field, ComponentField, CombinedField, FieldPatch, SimpleFieldPatch, FieldType, Displacement
+from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
 from ..writer import Writer
 
@@ -116,7 +116,7 @@ class EigenBasis(Basis):
 # ----------------------------------------------------------------------
 
 
-class IFEMField(Field):
+class IFEMField(SimpleField):
 
     basis: Basis
     decompose = True
@@ -144,13 +144,13 @@ class IFEMField(Field):
     def basisname(self) -> str:
         return self.basis.name
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
         if not force and not self.update_at(stepid):
             return
         for patchid in range(self.basis.npatches):
             patch = self.basis.patch_at(stepid, patchid)
             coeffs = self.coeffs(stepid, patchid)
-            yield SimpleFieldPatch(self.name, patch, coeffs, cells=self.cells, fieldtype=self.fieldtype)
+            yield patch, coeffs
 
     def update_at(self, stepid: int) -> bool:
         return self.group_path(stepid) in self.reader.h5

@@ -11,11 +11,11 @@ import vtk.util.numpy_support as vnp
 
 from dataclasses import dataclass
 
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from ..typing import Array2D
 
 from .. import config
-from ..fields import FieldPatch
+from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
 from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
 from ..util import ensure_ncomps
 from .writer import Writer
@@ -74,10 +74,25 @@ class VTKWriter(Writer):
             patchid = super().update_geometry(patch)
         self.patches[patchid] = patch
 
-    def update_field(self, field: FieldPatch):
-        patchid = super().update_field(field)
-        field.ensure_ncomps(3, allow_scalar=True)
-        data = field.tesselate()
+    @singledispatchmethod
+    def update_field(self, field: Field, patch: PatchData, data: FieldData):
+        raise NotImplementedError
+
+    @update_field.register(SimpleField)
+    def _(self, field: SimpleField, patch: Patch, data: Array2D):
+        patchid = self.geometry.global_id(patch)
+        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
+        data = patch.tesselate_field(data, cells=field.cells)
+        self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
+
+    @update_field.register(CombinedField)
+    def _(self, field: CombinedField, patch: List[Patch], data: List[Array2D]):
+        patchid = self.geometry.global_id(patch[0])
+        data = np.hstack([
+            p.tesselate_field(d, cells=field.cells)
+            for p, d in zip(patch, data)
+        ])
+        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
         self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
 
     def is_structured(self) -> bool:

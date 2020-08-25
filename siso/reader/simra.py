@@ -7,7 +7,7 @@ from typing import Optional, Iterable, Tuple
 from ..typing import StepData, Array2D
 
 from .. import config, ConfigTarget
-from ..fields import Field, FieldPatch, SimpleFieldPatch
+from ..fields import Field, SimpleField
 from ..geometry import Patch, UnstructuredPatch, Hex
 from .reader import Reader
 from ..writer import Writer
@@ -15,7 +15,7 @@ from ..util import save_excursion
 
 
 
-class SIMRAField(Field):
+class SIMRAField(SimpleField):
 
     index: int
     reader: 'SIMRAReader'
@@ -28,9 +28,9 @@ class SIMRAField(Field):
         self.decompose = False
         self.reader = reader
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[FieldPatch]:
-        yield SimpleFieldPatch(
-            self.name, self.reader.patch(),
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+        yield (
+            self.reader.patch(),
             self.reader.data()[:, self.index : self.index + self.ncomps]
         )
 

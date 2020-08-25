@@ -4,12 +4,12 @@ from pathlib import Path
 
 import treelog as log
 
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, Union, List
 from ..typing import Array2D
 
 from .. import config
 from ..geometry import Patch, GeometryManager
-from ..fields import FieldPatch, SimpleFieldPatch, CombinedFieldPatch
+from ..fields import Field, PatchData, FieldData
 from ..util import subclasses
 
 
@@ -98,21 +98,12 @@ class Writer(ABC):
         assert not self.geometry_finalized
         self.geometry_finalized = True
 
-    def update_field(self, field: FieldPatch):
+    @abstractmethod
+    def update_field(self, field: Field, patch: PatchData, data: FieldData):
         """Call this method after finalize_geometry to issue updates to fields
-        which are defined on patches.  This method only returns the
-        global patch ID.  It should be reimplemented in subclasses.
+        which are defined on patches.
         """
-        assert self.geometry_finalized
-        assert not self.step_finalized
-
-        if isinstance(field, SimpleFieldPatch):
-            return self.geometry.global_id(field.patch)
-        if isinstance(field, CombinedFieldPatch):
-            patchids = {self.geometry.global_id(patch) for patch in field.patches}
-            assert len(patchids) == 1
-            return next(iter(patchids))
-        assert False
+        pass
 
     def finalize_step(self):
         """Call this method after all calls to update_field have been issued,

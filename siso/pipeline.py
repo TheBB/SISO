@@ -59,8 +59,8 @@ def pipeline(reader: Reader, writer: Writer):
         writer.finalize_geometry()
 
         for field in fields:
-            for patch in field.patches(stepid, force=first):
-                writer.update_field(patch)
+            for patch, data in field.patches(stepid, force=first):
+                writer.update_field(field, patch, data)
 
         writer.finalize_step()
         first = False
