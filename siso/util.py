@@ -19,6 +19,11 @@ def flatten_2d(array):
     return array.reshape((-1, array.shape[-1]))
 
 
+def transpose_butlast(array):
+    perm = tuple(range(array.ndim - 1))[::-1] + (array.ndim - 1,)
+    return array.transpose(perm)
+
+
 def ensure_ncomps(data, ncomps: int, allow_scalar: bool):
     assert data.ndim == 2
     if data.shape[-1] == 1 and allow_scalar:
@@ -26,6 +31,10 @@ def ensure_ncomps(data, ncomps: int, allow_scalar: bool):
     if data.shape[-1] >= ncomps:
         return data
     return np.hstack([data, np.zeros((data.shape[0], ncomps - data.shape[-1]), dtype=data.dtype)])
+
+
+def bounding_box(data):
+    return tuple((np.min(data[:,i]), np.max(data[:,i])) for i in range(data.shape[1]))
 
 
 T = TypeVar('T')

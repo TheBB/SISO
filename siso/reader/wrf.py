@@ -14,7 +14,7 @@ from .. import config, ConfigTarget
 from .reader import Reader
 from ..writer import Writer
 from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
-from ..fields import Field, SimpleField
+from ..fields import Field, SimpleField, Geometry
 from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap
 
 
@@ -66,10 +66,11 @@ MEAN_EARTH_RADIUS = 6_371_000
 
 class WRFScalarField(SimpleField):
 
-    reader: 'WRFReader'
     decompose = False
     ncomps = 1
     cells = False
+
+    reader: 'WRFReader'
 
     def __init__(self, name: str, reader: 'WRFReader'):
         self.name = name
@@ -84,10 +85,11 @@ class WRFScalarField(SimpleField):
 
 class WRFVectorField(SimpleField):
 
-    reader: 'WRFReader'
     components: List[str]
     decompose = False
     cells = False
+
+    reader: 'WRFReader'
 
     def __init__(self, name: str, components: List[str], reader: 'WRFReader'):
         self.name = name
@@ -98,6 +100,23 @@ class WRFVectorField(SimpleField):
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
         patch = self.reader.patch_at(stepid)
         yield patch, self.reader.velocity_field(patch, stepid)
+
+
+class WRFGeometryField(SimpleField):
+
+    name = 'Geometry'
+    cells = False
+    ncomps = 3
+    _fieldtype = Geometry()
+
+    reader: 'WRFReader'
+
+    def __init__(self, reader: 'WRFReader'):
+        self.reader = reader
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+        patch = self.reader.patch_at(stepid)
+        yield patch, patch.nodes
 
 
 
@@ -488,6 +507,8 @@ class WRFReader(Reader):
         yield self.patch_at(stepid)
 
     def fields(self) -> Iterable[Field]:
+        yield WRFGeometryField(self)
+
         if config.volumetric == 'volumetric':
             allowed_types = {'volumetric'}
         else:

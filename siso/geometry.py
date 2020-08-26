@@ -9,7 +9,7 @@ import splipy.io
 from splipy import SplineObject, BSplineBasis
 import treelog as log
 
-from typing import Tuple, Any, Union, IO, Dict, Hashable, List
+from typing import Tuple, Any, Union, IO, Dict, Hashable, List, Iterable
 from .typing import Array2D, BoundingBox, PatchKey, Shape
 
 from . import config
@@ -17,7 +17,7 @@ from . import config
 from .util import (
     prod, flatten_2d, ensure_ncomps,
     subdivide_face, subdivide_linear, subdivide_volume,
-    structured_cells,
+    structured_cells, bounding_box, transpose_butlast
 )
 
 
@@ -148,7 +148,7 @@ class UnstructuredPatch(Patch):
         return self._cells
 
     @classmethod
-    def from_lagrangian(cls, key: PatchKey, data: Union[bytes, str]) -> 'UnstructuredPatch':
+    def from_lagrangian(cls, key: PatchKey, data: Union[bytes, str]) -> Tuple['UnstructuredPatch', Array2D]:
         if isinstance(data, bytes):
             data = data.decode()
         assert isinstance(data, str)
@@ -178,7 +178,7 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(key, nodes, cells, celltype=Hex())
+        return cls(key, nodes, cells, celltype=Hex()), nodes
 
     @property
     def num_physdim(self) -> int:
@@ -247,17 +247,19 @@ class StructuredPatch(UnstructuredPatch):
 
 class LRPatch(Patch):
 
-    def __init__(self, key: PatchKey, obj: Union[bytes, str, lr.LRSplineObject]):
-        if isinstance(obj, bytes):
-            obj = obj.decode()
-        if isinstance(obj, str):
-            if obj.startswith('# LRSPLINE SURFACE'):
-                obj = lr.LRSplineSurface(obj)
-            elif obj.startswith('# LRSPLINE VOLUME'):
-                obj = lr.LRSplineVolume(obj)
-        assert isinstance(obj, lr.LRSplineObject)
+    obj: lr.LRSplineObject
+
+    def __init__(self, key: PatchKey, obj: lr.LRSplineObject):
         self.obj = obj
         self.key = key
+
+    @classmethod
+    def from_string(cls, key: PatchKey, data: Union[bytes, str]) -> Iterable[Tuple['LRPatch', Array2D]]:
+        if isinstance(data, bytes):
+            data = data.decode()
+        data = StringIO(data)
+        for i, obj in enumerate(lr.LRSplineObject.read_many(data)):
+            yield cls((*key, i), obj), obj.controlpoints.reshape(-1, obj.dimension)
 
     @property
     def num_physdim(self) -> int:
@@ -305,6 +307,7 @@ class LRTesselator(Tesselator):
             subdivider(el, nodes, cells, config.nvis)
         self.nodes = np.array(list(nodes))
         self.cells = np.array(cells, dtype=int)
+        # print(self.cells.reshape(-1, 4))
 
     @singledispatchmethod
     def tesselate(self, patch: Patch) -> UnstructuredPatch:
@@ -328,6 +331,10 @@ class LRTesselator(Tesselator):
         if not cells:
             # Create a new patch with substituted control points, and
             # evaluate it at the predetermined knot values.
+            # np.testing.assert_allclose(coeffs, spline.controlpoints)
+            # np.testing.assert_allclose(coeffs, spline.controlpoints)
+            # print(coeffs)
+            # print(spline.controlpoints)
             newspline = spline.clone()
             newspline.controlpoints = coeffs.reshape((len(spline), -1))
             return np.array([newspline(*node) for node in self.nodes], dtype=float)
@@ -359,16 +366,23 @@ class G2Object(splipy.io.G2):
 class SplinePatch(Patch):
     """A representation of a Splipy SplineObject."""
 
-    def __init__(self, key: PatchKey, obj: Union[bytes, str, SplineObject]):
-        if isinstance(obj, bytes):
-            obj = obj.decode()
-        if isinstance(obj, str):
-            g2data = StringIO(obj)
-            with G2Object(g2data, 'r') as g:
-                obj = g.read()[0]
-        assert isinstance(obj, SplineObject)
+    obj: SplineObject
+
+    def __init__(self, key: PatchKey, obj: SplineObject):
         self.obj = obj
         self.key = key
+
+    @classmethod
+    def from_string(cls, key: PatchKey, data: Union[bytes, str]) -> Iterable[Tuple['SplinePatch', Array2D]]:
+        if isinstance(data, bytes):
+            data = data.decode()
+        g2data = StringIO(data)
+        with G2Object(g2data, 'r') as g:
+            for i, obj in enumerate(g.read()):
+                cps = flatten_2d(transpose_butlast(obj.controlpoints))
+                if obj.rational:
+                    cps = cps[:, :-1]
+                yield cls((*key, i), obj), cps
 
     @property
     def num_physdim(self) -> int:
@@ -451,7 +465,8 @@ class TensorTesselator(Tesselator):
             newspline = SplineObject(bases, coeffs, False, raw=True)
             knots = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in self.knots]
 
-        return flatten_2d(newspline(*knots))
+        data = flatten_2d(newspline(*knots))
+        return data
 
 
 
@@ -462,11 +477,9 @@ class TensorTesselator(Tesselator):
 class GeometryManager:
 
     patch_keys: Dict[PatchKey, int]
-    bounding_boxes: Dict[BoundingBox, int]
 
     def __init__(self):
         self.patch_keys = dict()
-        self.bounding_boxes = dict()
 
     def id_by_key(self, key: PatchKey):
         while key:
@@ -476,23 +489,17 @@ class GeometryManager:
                 key = key[:-1]
         raise KeyError
 
-    def update(self, patch: Patch) -> int:
+    def update(self, patch: Patch, data: Array2D) -> int:
         try:
             patchid = self.id_by_key(patch.key)
         except KeyError:
             patchid = len(self.patch_keys)
             log.debug(f"New unique patch detected, assigned ID {patchid}")
             self.patch_keys[patch.key] = patchid
-        self.bounding_boxes[patch.bounding_box] = patchid
         return patchid
 
     def global_id(self, patch: Patch) -> int:
         try:
-            patchid = self.id_by_key(patch.key)
+            return self.id_by_key(patch.key)
         except KeyError:
-            try:
-                patchid = self.bounding_boxes[patch.bounding_box]
-                self.patch_keys[patch.key] = patchid
-            except KeyError:
-                raise ValueError(f"Unable to find corresponding geometry patch for {patch.key}")
-        return patchid
+            raise ValueError(f"Unable to find corresponding geometry patch for {patch.key}")

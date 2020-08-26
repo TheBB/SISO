@@ -21,30 +21,25 @@ FieldData = Union[Array2D, List[Array2D]]
 
 class FieldType:
 
-    is_vector: bool
-    is_displacement: bool
+    is_vector: bool = False
+    is_displacement: bool = False
+    is_geometry: bool = False
 
     @property
     def is_scalar(cls):
         return not cls.is_vector
 
-
 class Scalar(FieldType):
-
-    is_vector = False
-    is_displacement = False
-
+    pass
 
 class Vector(FieldType):
-
     is_vector = True
-    is_displacement = False
 
-
-class Displacement(FieldType):
-
-    is_vector = True
+class Displacement(Vector):
     is_displacement = True
+
+class Geometry(Vector):
+    is_geometry = True
 
 
 
@@ -90,6 +85,10 @@ class Field(ABC):
     def is_displacement(self) -> bool:
         return self.fieldtype.is_displacement
 
+    @property
+    def is_geometry(self) -> bool:
+        return self.fieldtype.is_geometry
+
     @abstractmethod
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[PatchData, FieldData]]:
         pass
@@ -106,7 +105,7 @@ class SimpleField(Field):
     decompose: bool
 
     def decompositions(self) -> Iterable['ComponentField']:
-        if not self.decompose or self.ncomps == 1:
+        if not self.decompose or self.ncomps == 1 or self.is_geometry:
             return
         if self.ncomps > 3:
             log.warning(f"Attempted to decompose {self.name}, ignoring extra components")

@@ -5,11 +5,11 @@ import lrspline
 from splipy.io import G2
 
 from typing import Iterable, Tuple
-from ..typing import StepData
+from ..typing import StepData, Array2D
 
 from .. import config, ConfigTarget
 from ..geometry import Patch, SplinePatch, LRPatch
-from ..fields import Field
+from ..fields import Field, SimpleField, Geometry
 from .reader import Reader
 
 
@@ -26,6 +26,13 @@ class PureGeometryReader(Reader, ABC):
     def __init__(self, filename: Path):
         self.filename = filename
 
+    def __enter__(self):
+        self.f = open(self.filename).__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self.f.__exit__(*args)
+
     def validate(self):
         super().validate()
         config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
@@ -35,7 +42,26 @@ class PureGeometryReader(Reader, ABC):
         yield (0, {'time': 0.0})
 
     def fields(self) -> Iterable[Field]:
-        return; yield
+        yield PureGeometryField(self)
+
+    @abstractmethod
+    def patches(self) -> Iterable[Tuple[Patch, Array2D]]:
+        pass
+
+
+class PureGeometryField(SimpleField):
+
+    name = 'Geometry'
+    _fieldtype = Geometry()
+    cells = False
+
+    reader: PureGeometryReader
+
+    def __init__(self, reader: PureGeometryReader):
+        self.reader = reader
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+        yield from self.reader.patches()
 
 
 class G2Reader(PureGeometryReader):
@@ -43,16 +69,8 @@ class G2Reader(PureGeometryReader):
     reader_name = "GoTools"
     suffix = '.g2'
 
-    def __enter__(self):
-        self.g2 = G2(str(self.filename)).__enter__()
-        return self
-
-    def __exit__(self, *args):
-        self.g2.__exit__(*args)
-
-    def geometry(self, stepid: int, force: bool = False):
-        for i, patch in enumerate(self.g2.read()):
-            yield SplinePatch((i,), patch)
+    def patches(self):
+        yield from SplinePatch.from_string(('geometry',), self.f.read())
 
 
 class LRReader(PureGeometryReader):
@@ -60,13 +78,5 @@ class LRReader(PureGeometryReader):
     reader_name = "LRSplines"
     suffix = '.lr'
 
-    def __enter__(self):
-        self.lr = open(self.filename).__enter__()
-        return self
-
-    def __exit__(self, *args):
-        self.lr.__exit__(*args)
-
-    def geometry(self, stepid: int, force: bool = False):
-        for i, patch in enumerate(lrspline.LRSplineObject.read_many(self.lr)):
-            yield LRPatch((i,), patch)
+    def patches(self):
+        yield from LRPatch.from_string(('geometry',), self.f.read())

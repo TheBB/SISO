@@ -53,11 +53,6 @@ class Reader(ABC):
         pass
 
     @abstractmethod
-    def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
-        """Iterate over all geometry patches at a timestep."""
-        pass
-
-    @abstractmethod
     def fields(self) -> Iterable[Field]:
         """Iterate over all fields."""
         pass
