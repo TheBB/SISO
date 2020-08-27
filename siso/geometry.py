@@ -10,14 +10,14 @@ from splipy import SplineObject, BSplineBasis
 import treelog as log
 
 from typing import Tuple, Any, Union, IO, Dict, Hashable, List, Iterable
-from .typing import Array2D, BoundingBox, PatchKey, Shape
+from .typing import Array2D, PatchKey, Shape
 
 from . import config
 
 from .util import (
     prod, flatten_2d, ensure_ncomps,
     subdivide_face, subdivide_linear, subdivide_volume,
-    structured_cells, bounding_box, transpose_butlast
+    structured_cells, transpose_butlast
 )
 
 
@@ -58,12 +58,6 @@ class Patch(ABC):
 
     @property
     @abstractmethod
-    def num_physdim(self) -> int:
-        """Number of physical dimensions."""
-        pass
-
-    @property
-    @abstractmethod
     def num_pardim(self) -> int:
         """Number of parametric dimensions."""
         pass
@@ -78,12 +72,6 @@ class Patch(ABC):
     @abstractmethod
     def num_cells(self) -> int:
         """Number of cells."""
-        pass
-
-    @property
-    @abstractmethod
-    def bounding_box(self) -> BoundingBox:
-        """Hashable bounding box."""
         pass
 
     @abstractmethod
@@ -134,12 +122,12 @@ class UnstructuredPatch(Patch):
     celltype: CellType
 
     _cells: Array2D
+    _num_nodes: int
 
-    def __init__(self, key: PatchKey, nodes: Array2D, cells: Array2D, celltype: CellType):
-        assert nodes.ndim == cells.ndim == 2
+    def __init__(self, key: PatchKey, num_nodes: int, cells: Array2D, celltype: CellType):
         self.key = key
-        self.nodes = nodes
         self._cells = cells
+        self._num_nodes = num_nodes
         self.celltype = celltype
         assert cells.shape[-1] == celltype.num_nodes
 
@@ -178,26 +166,15 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(key, np.zeros_like(nodes), cells, celltype=Hex()), nodes
-
-    @property
-    def num_physdim(self) -> int:
-        return self.nodes.shape[-1]
+        return cls(key, nnodes, cells, celltype=Hex()), nodes
 
     @property
     def num_pardim(self) -> int:
         return self.celltype.num_pardim
 
     @property
-    def bounding_box(self) -> BoundingBox:
-        return tuple(
-            (np.min(self.nodes[:,i]), np.max(self.nodes[:,i]))
-            for i in range(self.num_physdim)
-        )
-
-    @property
     def num_nodes(self) -> int:
-        return len(self.nodes)
+        return self._num_nodes
 
     @property
     def num_cells(self) -> int:
@@ -222,14 +199,13 @@ class StructuredPatch(UnstructuredPatch):
 
     shape: Shape
 
-    def __init__(self, key: PatchKey, nodes: Array2D, shape: Shape, celltype: CellType):
+    def __init__(self, key: PatchKey, shape: Shape, celltype: CellType):
         self.key = key
-        self.nodes = nodes
         self.celltype = celltype
         self.shape = shape
+        self._num_nodes = prod(k+1 for k in shape)
         assert celltype.structured
         assert len(shape) == celltype.num_pardim
-        assert prod(k+1 for k in shape) == len(nodes)
 
     @property
     def cells(self) -> Array2D:
@@ -264,19 +240,8 @@ class LRPatch(Patch):
             yield cls((*key, i), obj), cps
 
     @property
-    def num_physdim(self) -> int:
-        return self.obj.dimension
-
-    @property
     def num_pardim(self) -> int:
         return self.obj.pardim
-
-    @property
-    def bounding_box(self) -> BoundingBox:
-        return tuple(
-            (np.min(self.obj.controlpoints[:,i]), np.max(self.obj.controlpoints[:,i]))
-            for i in range(self.num_physdim)
-        )
 
     @property
     def num_nodes(self) -> int:
@@ -309,7 +274,6 @@ class LRTesselator(Tesselator):
             subdivider(el, nodes, cells, config.nvis)
         self.nodes = np.array(list(nodes))
         self.cells = np.array(cells, dtype=int)
-        # print(self.cells.reshape(-1, 4))
 
     @singledispatchmethod
     def tesselate(self, patch: Patch) -> UnstructuredPatch:
@@ -318,9 +282,8 @@ class LRTesselator(Tesselator):
     @tesselate.register(LRPatch)
     def _1(self, patch: LRPatch) -> UnstructuredPatch:
         spline = patch.obj
-        nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
         celltype = Hex() if patch.num_pardim == 3 else Quad()
-        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells, celltype=celltype)
+        return UnstructuredPatch((*patch.key, 'tesselated'), len(self.nodes), self.cells, celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
@@ -333,10 +296,6 @@ class LRTesselator(Tesselator):
         if not cells:
             # Create a new patch with substituted control points, and
             # evaluate it at the predetermined knot values.
-            # np.testing.assert_allclose(coeffs, spline.controlpoints)
-            # np.testing.assert_allclose(coeffs, spline.controlpoints)
-            # print(coeffs)
-            # print(spline.controlpoints)
             newspline = spline.clone()
             newspline.controlpoints = coeffs.reshape((len(spline), -1))
             return np.array([newspline(*node) for node in self.nodes], dtype=float)
@@ -392,19 +351,8 @@ class SplinePatch(Patch):
                 yield cls((*key, i), obj), cps
 
     @property
-    def num_physdim(self) -> int:
-        return self.obj.dimension
-
-    @property
     def num_pardim(self) -> int:
         return self.obj.pardim
-
-    @property
-    def bounding_box(self) -> BoundingBox:
-        return tuple(
-            (np.min(self.obj.controlpoints[...,i]), np.max(self.obj.controlpoints[...,i]))
-            for i in range(self.num_physdim)
-        )
 
     @property
     def num_nodes(self) -> int:
@@ -441,10 +389,9 @@ class TensorTesselator(Tesselator):
 
     @tesselate.register(SplinePatch)
     def _1(self, patch: SplinePatch) -> UnstructuredPatch:
-        nodes = flatten_2d(patch.obj(*self.knots))
         celltype = Hex() if patch.num_pardim == 3 else Quad()
         cellshape = tuple(len(kts) - 1 for kts in self.knots)
-        return StructuredPatch((*patch.key, 'tesselated'), nodes, cellshape, celltype=celltype)
+        return StructuredPatch((*patch.key, 'tesselated'), cellshape, celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:

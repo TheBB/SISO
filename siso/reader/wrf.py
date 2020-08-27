@@ -77,10 +77,9 @@ class WRFScalarField(SimpleField):
         self.reader = reader
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
-        patch = self.reader.patch_at(stepid)
+        patch, _ = self.reader.patch_at(stepid)
         data = self.reader.variable_at(self.name, stepid, config.volumetric == 'extrude')
-        data = data.reshape(patch.num_nodes, -1)
-        yield (patch, data)
+        yield patch, data.reshape(patch.num_nodes, -1)
 
 
 class WRFVectorField(SimpleField):
@@ -98,7 +97,7 @@ class WRFVectorField(SimpleField):
         self.ncomps = len(components)
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
-        patch = self.reader.patch_at(stepid)
+        patch, _ = self.reader.patch_at(stepid)
         yield patch, self.reader.velocity_field(patch, stepid)
 
 
@@ -115,8 +114,8 @@ class WRFGeometryField(SimpleField):
         self.reader = reader
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
-        patch = self.reader.patch_at(stepid)
-        yield patch, patch.nodes
+        patch, nodes = self.reader.patch_at(stepid)
+        yield patch, nodes
 
 
 
@@ -385,13 +384,13 @@ class WRFReader(Reader):
 
         # Assemble structured or unstructured patch and return
         if config.periodic and config.volumetric == 'planar':
-            return UnstructuredPatch(('geometry',), nodes, self.periodic_planar_mesh(), celltype=Quad())
+            return UnstructuredPatch(('geometry',), len(nodes), self.periodic_planar_mesh(), celltype=Quad()), nodes
         elif config.periodic:
-            return UnstructuredPatch(('geometry',), nodes, self.periodic_volumetric_mesh(), celltype=Hex())
+            return UnstructuredPatch(('geometry',), len(nodes), self.periodic_volumetric_mesh(), celltype=Hex()), nodes
         elif config.volumetric == 'planar':
-            return StructuredPatch(('geometry',), nodes, self.planar_shape, celltype=Quad())
+            return StructuredPatch(('geometry',), self.planar_shape, celltype=Quad()), nodes
         else:
-            return StructuredPatch(('geometry',), nodes, self.volumetric_shape, celltype=Hex())
+            return StructuredPatch(('geometry',), self.volumetric_shape, celltype=Hex()), nodes
 
     def periodic_planar_mesh(self):
         """Compute cell topology for the periodic planar unstructured case,

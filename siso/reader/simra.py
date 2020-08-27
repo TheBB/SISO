@@ -31,7 +31,7 @@ class SIMRAField(SimpleField):
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
         yield (
-            self.reader.patch(),
+            self.reader.patch,
             self.reader.data()[:, self.index : self.index + self.ncomps]
         )
 
@@ -49,8 +49,7 @@ class SIMRAGeometryField(SimpleField):
         self.reader = reader
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
-        patch = self.reader.patch()
-        yield patch, patch.nodes
+        yield self.reader.patch, self.reader.coords
 
 
 
@@ -64,7 +63,8 @@ class SIMRAReader(Reader):
     result: FortranFile
     mesh: FortranFile
 
-    _patch: Optional[Patch]
+    patch: Patch
+    coords: Array2D
     _data: Optional[Array2D]
 
     @classmethod
@@ -102,6 +102,7 @@ class SIMRAReader(Reader):
     def __enter__(self):
         self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
         self.mesh = FortranFile(self.mesh_fn, 'r', header_dtype=self.u4_type).__enter__()
+        self.read_patch()
         return self
 
     def __exit__(self, *args):
@@ -116,14 +117,11 @@ class SIMRAReader(Reader):
             time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
         yield (0, {'time': time})
 
-    def patch(self) -> Patch:
-        if self._patch:
-            return self._patch
+    def read_patch(self) -> Patch:
         npts, nelems, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
-        coords = self.mesh.read_reals(self.f4_type).reshape(npts, 3)
+        self.coords = self.mesh.read_reals(self.f4_type).reshape(npts, 3)
         cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-        patch = self._patch = UnstructuredPatch(('geometry',), coords, cells, celltype=Hex())
-        return patch
+        self.patch = UnstructuredPatch(('geometry',), len(self.coords), cells, celltype=Hex())
 
     def data(self) -> Array2D:
         if self._data is not None:
