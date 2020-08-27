@@ -9,8 +9,8 @@ import splipy.io
 from splipy import SplineObject, BSplineBasis
 import treelog as log
 
-from typing import Tuple, Any, Union, IO, Dict, Hashable, List, Iterable
-from .typing import Array2D, PatchKey, Shape
+from typing import Tuple, Any, Union, IO, Dict, List, Iterable, Optional
+from .typing import Array1D, Array2D, PatchKey, Shape, Knots
 
 from . import config
 
@@ -86,10 +86,6 @@ class Patch(ABC):
         """Convert a nodal or cell field to the same representation as
         returned by tesselate.
         """
-        pass
-
-    @abstractmethod
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
         pass
 
 
@@ -188,9 +184,6 @@ class UnstructuredPatch(Patch):
             return coeffs.reshape((self.num_cells, -1))
         return coeffs.reshape((self.num_nodes, -1))
 
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
-        self.nodes = ensure_ncomps(self.nodes, ncomps, allow_scalar)
-
 
 class StructuredPatch(UnstructuredPatch):
     """A patch that represents an structured collection of nodes and
@@ -236,7 +229,7 @@ class LRPatch(Patch):
         data = StringIO(data)
         for i, obj in enumerate(lr.LRSplineObject.read_many(data)):
             cps = obj.controlpoints.reshape(-1, obj.dimension)
-            obj.controlpoints = np.zeros_like(cps)
+            obj.dimension = 0
             yield cls((*key, i), obj), cps
 
     @property
@@ -258,9 +251,6 @@ class LRPatch(Patch):
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         tess = LRTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
-
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
-        self.obj.controlpoints = ensure_ncomps(self.obj.controlpoints, ncomps, allow_scalar)
 
 
 class LRTesselator(Tesselator):
@@ -327,11 +317,13 @@ class G2Object(splipy.io.G2):
 class SplinePatch(Patch):
     """A representation of a Splipy SplineObject."""
 
-    obj: SplineObject
+    bases: List[BSplineBasis]
+    weights: Optional[Array1D]
 
-    def __init__(self, key: PatchKey, obj: SplineObject):
-        self.obj = obj
+    def __init__(self, key: PatchKey, bases: List[BSplineBasis], weights: Optional[Array1D] = None):
         self.key = key
+        self.bases = bases
+        self.weights = weights
 
     @classmethod
     def from_string(cls, key: PatchKey, data: Union[bytes, str]) -> Iterable[Tuple['SplinePatch', Array2D]]:
@@ -341,26 +333,35 @@ class SplinePatch(Patch):
         with G2Object(g2data, 'r') as g:
             for i, obj in enumerate(g.read()):
                 cps = flatten_2d(transpose_butlast(obj.controlpoints))
+                weights = None
                 if obj.rational:
+                    weights = cps[:, -1]
                     cps = cps[:, :-1]
-                cps = np.array(cps)
-                if obj.rational:
-                    obj.controlpoints[...,:-1] = 0
-                else:
-                    obj.controlpoints[...] = 0
-                yield cls((*key, i), obj), cps
+                yield cls((*key, i), obj.bases, weights), cps
 
     @property
     def num_pardim(self) -> int:
-        return self.obj.pardim
+        return len(self.bases)
 
     @property
     def num_nodes(self) -> int:
-        return len(self.obj)
+        return prod(self.nodeshape)
 
     @property
     def num_cells(self) -> int:
-        return prod(len(k) - 1 for k in self.obj.knots())
+        return prod(len(kts) - 1 for kts in self.knots)
+
+    @property
+    def knots(self) -> Knots:
+        return tuple(b.knot_spans() for b in self.bases)
+
+    @property
+    def nodeshape(self) -> Shape:
+        return tuple(b.num_functions() for b in self.bases)
+
+    @property
+    def rational(self) -> bool:
+        return self.weights is not None
 
     def tesselate(self) -> UnstructuredPatch:
         tess = TensorTesselator(self)
@@ -370,18 +371,12 @@ class SplinePatch(Patch):
         tess = TensorTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
 
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
-        if allow_scalar and self.obj.dimension == 1:
-            return
-        self.obj.set_dimension(ncomps)
-
 
 class TensorTesselator(Tesselator):
 
     def __init__(self, patch: SplinePatch):
         super().__init__(patch)
-        knots = patch.obj.knots()
-        self.knots = list(subdivide_linear(kts, config.nvis) for kts in knots)
+        self.knots = list(subdivide_linear(b.knot_spans(), config.nvis) for b in patch.bases)
 
     @singledispatchmethod
     def tesselate(self, patch: Patch) -> Patch:
@@ -398,29 +393,26 @@ class TensorTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate_field.register(SplinePatch)
-    def _2(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
-        spline = patch.obj
-
+    def _(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         if not cells:
             # Create a new patch with substituted control points, and
             # evaluate it at the predetermined knot values.
-            coeffs = splipy.utils.reshape(coeffs, spline.shape, order='F')
-            if spline.rational:
-                coeffs = np.concatenate((coeffs, spline.controlpoints[..., -1, np.newaxis]), axis=-1)
-            newspline = SplineObject(spline.bases, coeffs, spline.rational, raw=True)
+            if patch.weights is not None:
+                coeffs = np.concatenate((coeffs, flatten_2d(patch.weights)), axis=-1)
+            coeffs = splipy.utils.reshape(coeffs, patch.nodeshape, order='F')
+            newspline = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
             knots = self.knots
 
         else:
             # Create a piecewise constant spline object, and evaluate
             # it in cell centers.
-            bases = [BSplineBasis(1, kts) for kts in spline.knots()]
+            bases = [BSplineBasis(1, b.knot_spans()) for b in patch.bases]
             shape = tuple(b.num_functions() for b in bases)
             coeffs = splipy.utils.reshape(coeffs, shape, order='F')
             newspline = SplineObject(bases, coeffs, False, raw=True)
             knots = [[(a+b)/2 for a, b in zip(t[:-1], t[1:])] for t in self.knots]
 
-        data = flatten_2d(newspline(*knots))
-        return data
+        return flatten_2d(newspline(*knots))
 
 
 

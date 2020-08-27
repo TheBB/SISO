@@ -142,8 +142,6 @@ class ComponentField(SimpleField):
 
 class CombinedField(Field):
 
-    decompose = False
-
     sources: List[SimpleField]
 
     def __init__(self, name: str, sources: List[SimpleField]):
