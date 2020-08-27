@@ -116,20 +116,16 @@ class UnstructuredPatch(Patch):
 
     nodes: Array2D
     celltype: CellType
-
-    _cells: Array2D
     _num_nodes: int
+
+    cells: Array2D
 
     def __init__(self, key: PatchKey, num_nodes: int, cells: Array2D, celltype: CellType):
         self.key = key
-        self._cells = cells
+        self.cells = cells
         self._num_nodes = num_nodes
         self.celltype = celltype
         assert cells.shape[-1] == celltype.num_nodes
-
-    @property
-    def cells(self) -> Array2D:
-        return self._cells
 
     @classmethod
     def from_lagrangian(cls, key: PatchKey, data: Union[bytes, str]) -> Tuple['UnstructuredPatch', Array2D]:
@@ -180,9 +176,7 @@ class UnstructuredPatch(Patch):
         return self
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        if cells:
-            return coeffs.reshape((self.num_cells, -1))
-        return coeffs.reshape((self.num_nodes, -1))
+        return coeffs
 
 
 class StructuredPatch(UnstructuredPatch):
@@ -270,7 +264,7 @@ class LRTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate.register(LRPatch)
-    def _1(self, patch: LRPatch) -> UnstructuredPatch:
+    def _(self, patch: LRPatch) -> UnstructuredPatch:
         spline = patch.obj
         celltype = Hex() if patch.num_pardim == 3 else Quad()
         return UnstructuredPatch((*patch.key, 'tesselated'), len(self.nodes), self.cells, celltype=celltype)
@@ -280,7 +274,7 @@ class LRTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate_field.register(LRPatch)
-    def _2(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def _(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
         if not cells:
