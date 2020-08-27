@@ -9,15 +9,15 @@ import splipy.io
 from splipy import SplineObject, BSplineBasis
 import treelog as log
 
-from typing import Tuple, Any, Union, IO, Dict, Hashable, List
-from .typing import Array2D, BoundingBox, PatchID, Shape
+from typing import Tuple, Any, Union, IO, Dict, List, Iterable, Optional
+from .typing import Array1D, Array2D, PatchKey, Shape, Knots
 
 from . import config
 
 from .util import (
     prod, flatten_2d, ensure_ncomps,
     subdivide_face, subdivide_linear, subdivide_volume,
-    structured_cells,
+    structured_cells, transpose_butlast
 )
 
 
@@ -54,13 +54,7 @@ class Hex(CellType):
 
 class Patch(ABC):
 
-    key: PatchID
-
-    @property
-    @abstractmethod
-    def num_physdim(self) -> int:
-        """Number of physical dimensions."""
-        pass
+    key: PatchKey
 
     @property
     @abstractmethod
@@ -80,12 +74,6 @@ class Patch(ABC):
         """Number of cells."""
         pass
 
-    @property
-    @abstractmethod
-    def bounding_box(self) -> BoundingBox:
-        """Hashable bounding box."""
-        pass
-
     @abstractmethod
     def tesselate(self) -> 'UnstructuredPatch':
         """Convert to a suitable discrete representation.
@@ -98,10 +86,6 @@ class Patch(ABC):
         """Convert a nodal or cell field to the same representation as
         returned by tesselate.
         """
-        pass
-
-    @abstractmethod
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
         pass
 
 
@@ -132,23 +116,19 @@ class UnstructuredPatch(Patch):
 
     nodes: Array2D
     celltype: CellType
+    _num_nodes: int
 
-    _cells: Array2D
+    cells: Array2D
 
-    def __init__(self, key: PatchID, nodes: Array2D, cells: Array2D, celltype: CellType):
-        assert nodes.ndim == cells.ndim == 2
+    def __init__(self, key: PatchKey, num_nodes: int, cells: Array2D, celltype: CellType):
         self.key = key
-        self.nodes = nodes
-        self._cells = cells
+        self.cells = cells
+        self._num_nodes = num_nodes
         self.celltype = celltype
         assert cells.shape[-1] == celltype.num_nodes
 
-    @property
-    def cells(self) -> Array2D:
-        return self._cells
-
     @classmethod
-    def from_lagrangian(cls, key: PatchID, data: Union[bytes, str]) -> 'UnstructuredPatch':
+    def from_lagrangian(cls, key: PatchKey, data: Union[bytes, str]) -> Tuple['UnstructuredPatch', Array2D]:
         if isinstance(data, bytes):
             data = data.decode()
         assert isinstance(data, str)
@@ -178,26 +158,15 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(key, nodes, cells, celltype=Hex())
-
-    @property
-    def num_physdim(self) -> int:
-        return self.nodes.shape[-1]
+        return cls(key, nnodes, cells, celltype=Hex()), nodes
 
     @property
     def num_pardim(self) -> int:
         return self.celltype.num_pardim
 
     @property
-    def bounding_box(self) -> BoundingBox:
-        return tuple(
-            (np.min(self.nodes[:,i]), np.max(self.nodes[:,i]))
-            for i in range(self.num_physdim)
-        )
-
-    @property
     def num_nodes(self) -> int:
-        return len(self.nodes)
+        return self._num_nodes
 
     @property
     def num_cells(self) -> int:
@@ -207,12 +176,7 @@ class UnstructuredPatch(Patch):
         return self
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        if cells:
-            return coeffs.reshape((self.num_cells, -1))
-        return coeffs.reshape((self.num_nodes, -1))
-
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
-        self.nodes = ensure_ncomps(self.nodes, ncomps, allow_scalar)
+        return coeffs
 
 
 class StructuredPatch(UnstructuredPatch):
@@ -222,14 +186,13 @@ class StructuredPatch(UnstructuredPatch):
 
     shape: Shape
 
-    def __init__(self, key: PatchID, nodes: Array2D, shape: Shape, celltype: CellType):
+    def __init__(self, key: PatchKey, shape: Shape, celltype: CellType):
         self.key = key
-        self.nodes = nodes
         self.celltype = celltype
         self.shape = shape
+        self._num_nodes = prod(k+1 for k in shape)
         assert celltype.structured
         assert len(shape) == celltype.num_pardim
-        assert prod(k+1 for k in shape) == len(nodes)
 
     @property
     def cells(self) -> Array2D:
@@ -247,32 +210,25 @@ class StructuredPatch(UnstructuredPatch):
 
 class LRPatch(Patch):
 
-    def __init__(self, key: PatchID, obj: Union[bytes, str, lr.LRSplineObject]):
-        if isinstance(obj, bytes):
-            obj = obj.decode()
-        if isinstance(obj, str):
-            if obj.startswith('# LRSPLINE SURFACE'):
-                obj = lr.LRSplineSurface(obj)
-            elif obj.startswith('# LRSPLINE VOLUME'):
-                obj = lr.LRSplineVolume(obj)
-        assert isinstance(obj, lr.LRSplineObject)
+    obj: lr.LRSplineObject
+
+    def __init__(self, key: PatchKey, obj: lr.LRSplineObject):
         self.obj = obj
         self.key = key
 
-    @property
-    def num_physdim(self) -> int:
-        return self.obj.dimension
+    @classmethod
+    def from_string(cls, key: PatchKey, data: Union[bytes, str]) -> Iterable[Tuple['LRPatch', Array2D]]:
+        if isinstance(data, bytes):
+            data = data.decode()
+        data = StringIO(data)
+        for i, obj in enumerate(lr.LRSplineObject.read_many(data)):
+            cps = obj.controlpoints.reshape(-1, obj.dimension)
+            obj.dimension = 0
+            yield cls((*key, i), obj), cps
 
     @property
     def num_pardim(self) -> int:
         return self.obj.pardim
-
-    @property
-    def bounding_box(self) -> BoundingBox:
-        return tuple(
-            (np.min(self.obj.controlpoints[:,i]), np.max(self.obj.controlpoints[:,i]))
-            for i in range(self.num_physdim)
-        )
 
     @property
     def num_nodes(self) -> int:
@@ -289,9 +245,6 @@ class LRPatch(Patch):
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         tess = LRTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
-
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
-        self.obj.controlpoints = ensure_ncomps(self.obj.controlpoints, ncomps, allow_scalar)
 
 
 class LRTesselator(Tesselator):
@@ -311,18 +264,17 @@ class LRTesselator(Tesselator):
         raise NotImplementedError
 
     @tesselate.register(LRPatch)
-    def _1(self, patch: LRPatch) -> UnstructuredPatch:
+    def _(self, patch: LRPatch) -> UnstructuredPatch:
         spline = patch.obj
-        nodes = np.array([spline(*node) for node in self.nodes], dtype=float)
         celltype = Hex() if patch.num_pardim == 3 else Quad()
-        return UnstructuredPatch((*patch.key, 'tesselated'), nodes, self.cells, celltype=celltype)
+        return UnstructuredPatch((*patch.key, 'tesselated'), len(self.nodes), self.cells, celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
     @tesselate_field.register(LRPatch)
-    def _2(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def _(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
         if not cells:
@@ -359,39 +311,51 @@ class G2Object(splipy.io.G2):
 class SplinePatch(Patch):
     """A representation of a Splipy SplineObject."""
 
-    def __init__(self, key: PatchID, obj: Union[bytes, str, SplineObject]):
-        if isinstance(obj, bytes):
-            obj = obj.decode()
-        if isinstance(obj, str):
-            g2data = StringIO(obj)
-            with G2Object(g2data, 'r') as g:
-                obj = g.read()[0]
-        assert isinstance(obj, SplineObject)
-        self.obj = obj
-        self.key = key
+    bases: List[BSplineBasis]
+    weights: Optional[Array1D]
 
-    @property
-    def num_physdim(self) -> int:
-        return self.obj.dimension
+    def __init__(self, key: PatchKey, bases: List[BSplineBasis], weights: Optional[Array1D] = None):
+        self.key = key
+        self.bases = bases
+        self.weights = weights
+
+    @classmethod
+    def from_string(cls, key: PatchKey, data: Union[bytes, str]) -> Iterable[Tuple['SplinePatch', Array2D]]:
+        if isinstance(data, bytes):
+            data = data.decode()
+        g2data = StringIO(data)
+        with G2Object(g2data, 'r') as g:
+            for i, obj in enumerate(g.read()):
+                cps = flatten_2d(transpose_butlast(obj.controlpoints))
+                weights = None
+                if obj.rational:
+                    weights = cps[:, -1]
+                    cps = cps[:, :-1]
+                yield cls((*key, i), obj.bases, weights), cps
 
     @property
     def num_pardim(self) -> int:
-        return self.obj.pardim
-
-    @property
-    def bounding_box(self) -> BoundingBox:
-        return tuple(
-            (np.min(self.obj.controlpoints[...,i]), np.max(self.obj.controlpoints[...,i]))
-            for i in range(self.num_physdim)
-        )
+        return len(self.bases)
 
     @property
     def num_nodes(self) -> int:
-        return len(self.obj)
+        return prod(self.nodeshape)
 
     @property
     def num_cells(self) -> int:
-        return prod(len(k) - 1 for k in self.obj.knots())
+        return prod(len(kts) - 1 for kts in self.knots)
+
+    @property
+    def knots(self) -> Knots:
+        return tuple(b.knot_spans() for b in self.bases)
+
+    @property
+    def nodeshape(self) -> Shape:
+        return tuple(b.num_functions() for b in self.bases)
+
+    @property
+    def rational(self) -> bool:
+        return self.weights is not None
 
     def tesselate(self) -> UnstructuredPatch:
         tess = TensorTesselator(self)
@@ -401,18 +365,12 @@ class SplinePatch(Patch):
         tess = TensorTesselator(self)
         return tess.tesselate_field(self, coeffs, cells=cells)
 
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = True):
-        if allow_scalar and self.obj.dimension == 1:
-            return
-        self.obj.set_dimension(ncomps)
-
 
 class TensorTesselator(Tesselator):
 
     def __init__(self, patch: SplinePatch):
         super().__init__(patch)
-        knots = patch.obj.knots()
-        self.knots = list(subdivide_linear(kts, config.nvis) for kts in knots)
+        self.knots = list(subdivide_linear(b.knot_spans(), config.nvis) for b in patch.bases)
 
     @singledispatchmethod
     def tesselate(self, patch: Patch) -> Patch:
@@ -420,32 +378,29 @@ class TensorTesselator(Tesselator):
 
     @tesselate.register(SplinePatch)
     def _1(self, patch: SplinePatch) -> UnstructuredPatch:
-        nodes = flatten_2d(patch.obj(*self.knots))
         celltype = Hex() if patch.num_pardim == 3 else Quad()
         cellshape = tuple(len(kts) - 1 for kts in self.knots)
-        return StructuredPatch((*patch.key, 'tesselated'), nodes, cellshape, celltype=celltype)
+        return StructuredPatch((*patch.key, 'tesselated'), cellshape, celltype=celltype)
 
     @singledispatchmethod
     def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
     @tesselate_field.register(SplinePatch)
-    def _2(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
-        spline = patch.obj
-
+    def _(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
         if not cells:
             # Create a new patch with substituted control points, and
             # evaluate it at the predetermined knot values.
-            coeffs = splipy.utils.reshape(coeffs, spline.shape, order='F')
-            if spline.rational:
-                coeffs = np.concatenate((coeffs, spline.controlpoints[..., -1, np.newaxis]), axis=-1)
-            newspline = SplineObject(spline.bases, coeffs, spline.rational, raw=True)
+            if patch.weights is not None:
+                coeffs = np.concatenate((coeffs, flatten_2d(patch.weights)), axis=-1)
+            coeffs = splipy.utils.reshape(coeffs, patch.nodeshape, order='F')
+            newspline = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
             knots = self.knots
 
         else:
             # Create a piecewise constant spline object, and evaluate
             # it in cell centers.
-            bases = [BSplineBasis(1, kts) for kts in spline.knots()]
+            bases = [BSplineBasis(1, b.knot_spans()) for b in patch.bases]
             shape = tuple(b.num_functions() for b in bases)
             coeffs = splipy.utils.reshape(coeffs, shape, order='F')
             newspline = SplineObject(bases, coeffs, False, raw=True)
@@ -461,26 +416,30 @@ class TensorTesselator(Tesselator):
 
 class GeometryManager:
 
-    patch_keys: Dict[PatchID, int]
-    bounding_boxes: Dict[BoundingBox, int]
+    patch_keys: Dict[PatchKey, int]
 
     def __init__(self):
         self.patch_keys = dict()
-        self.bounding_boxes = dict()
 
-    def update(self, patch: Patch):
-        if patch.key not in self.patch_keys:
+    def id_by_key(self, key: PatchKey):
+        while key:
+            try:
+                return self.patch_keys[key]
+            except KeyError:
+                key = key[:-1]
+        raise KeyError
+
+    def update(self, patch: Patch, data: Array2D) -> int:
+        try:
+            patchid = self.id_by_key(patch.key)
+        except KeyError:
             patchid = len(self.patch_keys)
             log.debug(f"New unique patch detected, assigned ID {patchid}")
             self.patch_keys[patch.key] = patchid
-        else:
-            patchid = self.patch_keys[patch.key]
-        self.bounding_boxes[patch.bounding_box] = patchid
         return patchid
 
-    def global_id(self, patch: Patch):
+    def global_id(self, patch: Patch) -> int:
         try:
-            return self.bounding_boxes[patch.bounding_box]
+            return self.id_by_key(patch.key)
         except KeyError:
-            log.error("Unable to find corresponding geometry patch")
-            return None
+            raise ValueError(f"Unable to find corresponding geometry patch for {patch.key}")

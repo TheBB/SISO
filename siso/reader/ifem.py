@@ -8,14 +8,51 @@ import numpy as np
 import treelog as log
 
 from typing import Dict, Set, Optional, Any, Iterable, Tuple
-from ..typing import Array2D, StepData
+from ..typing import Array2D, StepData, BoundingBox, PatchKey
 
 from .reader import Reader
 from .. import config, ConfigTarget
-from ..util import ensure_ncomps
-from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement
+from ..util import ensure_ncomps, bounding_box
+from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement, Geometry
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
 from ..writer import Writer
+
+
+
+# PatchCatalogue
+# ----------------------------------------------------------------------
+
+
+class PatchCatalogue:
+
+    ids: Dict[PatchKey, PatchKey]
+    bboxes: Dict[BoundingBox, PatchKey]
+
+    def __init__(self):
+        self.bboxes = dict()
+        self.ids = dict()
+
+    # def known_key(self, key: PatchKey) -> Optional[PatchKey]:
+    #     return self.ids.get(key, None)
+
+    # def default_bbox(self, data: Array2D, oldkey: PatchKey) -> PatchKey:
+    #     bbox = bounding_box(data)
+    #     newkey = self.bboxes.setdefault(bbox, oldkey)
+    #     self.ids[oldkey] = newkey
+    #     return newkey
+
+    def setdefault(self, data: Array2D, oldkey: PatchKey) -> PatchKey:
+        if oldkey in self.ids:
+            return self.ids[oldkey]
+        bbox = bounding_box(data)
+        try:
+            newkey = self.bboxes[bbox]
+            log.debug(f"Patch {oldkey} identified with {newkey}")
+        except KeyError:
+            newkey = oldkey
+        self.ids[oldkey] = newkey
+        self.bboxes[bbox] = newkey
+        return newkey
 
 
 
@@ -47,19 +84,27 @@ class Basis(ABC):
     def num_updates(self) -> int:
         pass
 
-    @lru_cache(24)
-    def patch_at(self, stepid: int, patchid: int) -> Patch:
+    # @lru_cache(24)
+    def patch_at(self, stepid: int, patchid: int) -> Tuple[Patch, Array2D]:
+        oldkey = (self.name, patchid)
+
         while not self.update_at(stepid):
             stepid -= 1
+
         subpath = self.group_path(stepid)
         g2bytes = self.reader.h5[f'{subpath}/{patchid+1}'][:].tobytes()
-        patchkey = (self.name, patchid)
         if g2bytes.startswith(b'# LAGRANGIAN'):
-            return UnstructuredPatch.from_lagrangian(patchkey, g2bytes)
+            patch, nodes = UnstructuredPatch.from_lagrangian(oldkey, g2bytes)
         elif g2bytes.startswith(b'# LRSPLINE'):
-            return LRPatch(patchkey, g2bytes)
+            patch, nodes = next(LRPatch.from_string(oldkey, g2bytes))
         else:
-            return SplinePatch(patchkey, g2bytes)
+            patch, nodes = next(SplinePatch.from_string(oldkey, g2bytes))
+
+        newkey = self.reader.patch_catalogue.setdefault(nodes, patch.key)
+        if newkey != patch.key:
+            patch.key = newkey
+        return patch, nodes
+
 
 
 class StandardBasis(Basis):
@@ -116,6 +161,27 @@ class EigenBasis(Basis):
 # ----------------------------------------------------------------------
 
 
+class IFEMGeometryField(SimpleField):
+
+    basis: Basis
+
+    name = 'geometry'
+    cells = False
+    fieldtype = Geometry()
+
+    def __init__(self, basis: Basis):
+        self.basis = basis
+        # self.ncomps = self.basis.patch_at()
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Field]]:
+        if not force and not self.basis.update_at(stepid):
+            return
+        for patchid in range(self.basis.npatches):
+            patch, coeffs = self.basis.patch_at(stepid, patchid)
+            yield patch, coeffs
+
+
+
 class IFEMField(SimpleField):
 
     basis: Basis
@@ -130,7 +196,7 @@ class IFEMField(SimpleField):
 
         # Calculate number of components
         stepid = next(i for i in count() if self.update_at(i))
-        patch = self.basis.patch_at(stepid, 0)
+        patch, _ = self.basis.patch_at(stepid, 0)
         denominator = patch.num_cells if cells else patch.num_nodes
         ncoeffs = len(self.reader.h5[self.coeff_path(stepid, 0)])
         if ncoeffs % denominator != 0:
@@ -148,7 +214,7 @@ class IFEMField(SimpleField):
         if not force and not self.update_at(stepid):
             return
         for patchid in range(self.basis.npatches):
-            patch = self.basis.patch_at(stepid, patchid)
+            patch, _ = self.basis.patch_at(stepid, patchid)
             coeffs = self.coeffs(stepid, patchid)
             yield patch, coeffs
 
@@ -206,6 +272,7 @@ class IFEMReader(Reader):
     _field_basis: Dict[str, str]
 
     geometry_basis: Basis
+    patch_catalogue: PatchCatalogue
 
     @classmethod
     def applicable(cls, filename: Path) -> bool:
@@ -222,6 +289,7 @@ class IFEMReader(Reader):
         self.bases = dict()
         self._fields = dict()
         self._field_basis = dict()
+        self.patch_catalogue = PatchCatalogue()
 
     def validate(self):
         super().validate()
@@ -374,13 +442,8 @@ class IFEMReader(Reader):
             self._fields[fname] = CombinedField(fname, sources)
             log.info(f"Creating combined field {sourcenames} -> {fname}")
 
-    def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
-        if not self.geometry_basis.update_at(stepid) and not force:
-            return
-        for patchid in range(self.geometry_basis.npatches):
-            yield self.geometry_basis.patch_at(stepid, patchid)
-
     def fields(self) -> Iterable[Field]:
+        yield IFEMGeometryField(self.geometry_basis)
         yield from self._fields.values()
 
 

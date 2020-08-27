@@ -7,25 +7,26 @@ from typing import Optional, Iterable, Tuple
 from ..typing import StepData, Array2D
 
 from .. import config, ConfigTarget
-from ..fields import Field, SimpleField
+from ..fields import Field, SimpleField, Geometry
 from ..geometry import Patch, UnstructuredPatch, Hex
 from .reader import Reader
 from ..writer import Writer
-from ..util import save_excursion
+from ..util import fortran_skip_record, save_excursion, cache
 
 
 
 class SIMRAField(SimpleField):
 
+    cells = False
+    decompose = False
+
     index: int
     reader: 'SIMRAReader'
-    cells = False
 
     def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAReader'):
         self.name = name
         self.index = index
         self.ncomps = ncomps
-        self.decompose = False
         self.reader = reader
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
@@ -33,6 +34,22 @@ class SIMRAField(SimpleField):
             self.reader.patch(),
             self.reader.data()[:, self.index : self.index + self.ncomps]
         )
+
+
+class SIMRAGeometryField(SimpleField):
+
+    name = 'Geometry'
+    cells = False
+    fieldtype = Geometry()
+    ncomps = 3
+
+    reader: 'SIMRAReader'
+
+    def __init__(self, reader: 'SIMRAReader'):
+        self.reader = reader
+
+    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+        yield self.reader.patch(), self.reader.nodes()
 
 
 
@@ -46,8 +63,8 @@ class SIMRAReader(Reader):
     result: FortranFile
     mesh: FortranFile
 
-    _patch: Optional[Patch]
-    _data: Optional[Array2D]
+    f4_type: np.dtype
+    u4_type: np.dtype
 
     @classmethod
     def applicable(self, filename: Path) -> bool:
@@ -73,9 +90,6 @@ class SIMRAReader(Reader):
         self.f4_type = np.dtype(f'{endian}f4')
         self.u4_type = np.dtype(f'{endian}u4')
 
-        self._patch = None
-        self._data = None
-
     def validate(self):
         super().validate()
         config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
@@ -98,27 +112,28 @@ class SIMRAReader(Reader):
             time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
         yield (0, {'time': time})
 
+    @cache(1)
     def patch(self) -> Patch:
-        if self._patch:
-            return self._patch
-        npts, nelems, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
-        coords = self.mesh.read_reals(self.f4_type).reshape(npts, 3)
-        cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-        patch = self._patch = UnstructuredPatch(('geometry',), coords, cells, celltype=Hex())
-        return patch
+        with save_excursion(self.mesh._fp):
+            npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
+            fortran_skip_record(self.mesh)
+            cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
+            return UnstructuredPatch(('geometry',), npts, cells, celltype=Hex())
 
+    @cache(1)
+    def nodes(self) -> Array2D:
+        with save_excursion(self.mesh._fp):
+            npts, _, _, _, _, _ = self.mesh.read_ints(self.u4_type)
+            return self.mesh.read_reals(self.f4_type).reshape(npts, 3)
+
+    @cache(1)
     def data(self) -> Array2D:
-        if self._data is not None:
-            return self._data
         data = self.result.read_reals(dtype=self.f4_type)
         _, data = data[0], data[1:].reshape(-1, 11)
-        self._data = data
         return data
 
-    def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
-        yield self.patch()
-
     def fields(self) -> Iterable[Field]:
+        yield SIMRAGeometryField(self)
         yield SIMRAField('u', 0, 3, self)
         yield SIMRAField('ps', 3, 1, self)
         yield SIMRAField('tk', 4, 1, self)

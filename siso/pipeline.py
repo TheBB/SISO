@@ -1,7 +1,7 @@
 from operator import attrgetter
 import treelog as log
 
-from typing import TypeVar, Iterable, List
+from typing import TypeVar, Iterable, List, Tuple
 
 from . import config
 from .reader import Reader
@@ -25,17 +25,22 @@ def discover_decompositions(fields: List[Field]) -> Iterable[Field]:
             yield subfield
 
 
-def discover_fields(reader: Reader) -> List[Field]:
-    fields = list(reader.fields())
-    if config.field_filter is not None:
-        fields = [field for field in fields if field.name in config.field_filter]
+def discover_fields(reader: Reader) -> Tuple[List[Field], List[Field]]:
+    geometries, fields = [], []
+    for field in reader.fields():
+        if field.is_geometry:
+            geometries.append(field)
+            continue
+        if config.field_filter is not None and field.name not in config.field_filter:
+            continue
+        fields.append(field)
 
     for field in fields:
         log.debug(f"Discovered field '{field.name}' with {field.ncomps} component(s)")
 
     fields = sorted(fields, key=attrgetter('name'))
     fields = sorted(fields, key=attrgetter('cells'))
-    return list(discover_decompositions(fields))
+    return geometries, list(discover_decompositions(fields))
 
 
 def pipeline(reader: Reader, writer: Writer):
@@ -48,14 +53,19 @@ def pipeline(reader: Reader, writer: Writer):
     if config.only_final_timestep:
         steps = last(steps)
 
-    fields = discover_fields(reader)
+    geometries, fields = discover_fields(reader)
+
+    if not geometries:
+        raise TypeError("No geometry found, don't know what to do")
+    geometry = geometries[0]
 
     first = True
     for stepid, stepdata in log.iter.plain('Step', steps):
         writer.add_step(**stepdata)
 
-        for patch in reader.geometry(stepid, force=first):
-            writer.update_geometry(patch)
+        for patch, data in geometry.patches(stepid, force=first):
+            writer.update_geometry(geometry, patch, data)
+            # log.debug(f"Updating geometry {patch.key}")
         writer.finalize_geometry()
 
         for field in fields:

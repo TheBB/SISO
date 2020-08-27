@@ -1,9 +1,66 @@
 from contextlib import contextmanager
+from functools import partial, wraps
 from itertools import product
+from operator import attrgetter
 
+import cachetools
+from cachetools.keys import hashkey
 import numpy as np
+from scipy.io import FortranFile
 
-from typing import Iterable, Type, TypeVar
+from typing import Iterable, Type, TypeVar, Callable, IO
+
+
+
+# Caching
+# ----------------------------------------------------------------------
+
+
+def cache(maxsize: int, method: str = 'lru') -> Callable:
+    def decorator(func: Callable) -> Callable:
+        cache_attr = f'_{func.__name__}_cache'
+        cache_type = getattr(cachetools, f'{method.upper()}Cache')
+
+        cache_decorator = cachetools.cachedmethod(attrgetter(cache_attr))
+        cached_inner = cache_decorator(func)
+
+        @wraps(func)
+        def inner(first, *args, **kwargs):
+            if not hasattr(first, cache_attr):
+                setattr(first, cache_attr, cache_type(maxsize))
+            return cached_inner(first, *args, **kwargs)
+        return inner
+    return decorator
+
+
+
+# Fortran file tools
+# ----------------------------------------------------------------------
+
+
+@contextmanager
+def save_excursion(fp: IO):
+    """Context manager for restoring the position of a file pointer
+    after a block of code.  The file must be seekable.
+    """
+    assert fp.seekable()
+    ptr = fp.tell()
+    try:
+        yield
+    finally:
+        fp.seek(ptr)
+
+
+def fortran_skip_record(f: FortranFile):
+    """Skip the next record in a Fortran file without reading it."""
+    size = f._read_size()
+    f._fp.seek(f._fp.tell() + size)
+    assert f._read_size() == size
+
+
+
+# Miscellaneous
+# ----------------------------------------------------------------------
 
 
 def prod(values):
@@ -19,6 +76,11 @@ def flatten_2d(array):
     return array.reshape((-1, array.shape[-1]))
 
 
+def transpose_butlast(array):
+    perm = tuple(range(array.ndim - 1))[::-1] + (array.ndim - 1,)
+    return array.transpose(perm)
+
+
 def ensure_ncomps(data, ncomps: int, allow_scalar: bool):
     assert data.ndim == 2
     if data.shape[-1] == 1 and allow_scalar:
@@ -26,6 +88,10 @@ def ensure_ncomps(data, ncomps: int, allow_scalar: bool):
     if data.shape[-1] >= ncomps:
         return data
     return np.hstack([data, np.zeros((data.shape[0], ncomps - data.shape[-1]), dtype=data.dtype)])
+
+
+def bounding_box(data):
+    return tuple((np.min(data[:,i]), np.max(data[:,i])) for i in range(data.shape[1]))
 
 
 T = TypeVar('T')
@@ -156,16 +222,6 @@ def structured_cells(cellshape, pardim, nodemap=None):
 def angle_mean_deg(data):
     data = np.deg2rad(data)
     return np.rad2deg(np.arctan2(np.mean(np.sin(data)), np.mean(np.cos(data))))
-
-
-@contextmanager
-def save_excursion(fp):
-    assert fp.seekable()
-    ptr = fp.tell()
-    try:
-        yield
-    finally:
-        fp.seek(ptr)
 
 
 def split_commas(strings: Iterable[str]) -> Iterable[str]:

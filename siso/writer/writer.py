@@ -85,13 +85,13 @@ class Writer(ABC):
         self.step_finalized = False
         self.geometry_finalized = False
 
-    def update_geometry(self, patch: Patch):
+    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
         """Call this after add_step to update the geometry for each new patch.
         This method only returns the global patch ID.  It should be
         reimplemented in subclasses.
         """
         assert not self.geometry_finalized
-        return self.geometry.update(patch)
+        return self.geometry.update(patch, data)
 
     def finalize_geometry(self):
         """Call this method after all patches have been updated to allow the
@@ -120,12 +120,12 @@ class Writer(ABC):
 class TesselatedWriter(Writer):
 
     @abstractmethod
-    def _update_geometry(self, patchid: int, patch: UnstructuredPatch):
+    def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
         pass
 
-    def update_geometry(self, patch: Patch):
-        patchid = super().update_geometry(patch)
-        self._update_geometry(patchid, patch.tesselate())
+    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
+        patchid = super().update_geometry(geometry, patch, data)
+        self._update_geometry(patchid, patch.tesselate(), patch.tesselate_field(data))
 
     @abstractmethod
     def _update_field(self, field: Field, patchid: int, data: Array2D):

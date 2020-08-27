@@ -86,8 +86,8 @@ class VTFWriter(TesselatedWriter):
         super().add_step(**stepdata)
         self.steps.append(stepdata)
 
-    def _update_geometry(self, patchid: int, patch: UnstructuredPatch):
-        patch.ensure_ncomps(3, allow_scalar=False)
+    def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
+        data = ensure_ncomps(data, 3, allow_scalar=False)
 
         # If we haven't seen this patch before, assert that it's the
         # next unseen one
@@ -95,7 +95,7 @@ class VTFWriter(TesselatedWriter):
             assert len(self.geometry_blocks) == patchid
 
         with self.out.NodeBlock() as nblock:
-            nblock.SetNodes(patch.nodes.flat)
+            nblock.SetNodes(data.flat)
 
         with self.out.ElementBlock() as eblock:
             eblock.AddElements(patch.cells.flat, patch.num_pardim)

@@ -62,8 +62,8 @@ class VTKWriter(TesselatedWriter):
             writer.SetFileTypeToBinary()
         return writer
 
-    def _update_geometry(self, patchid: int, patch: Patch):
-        self.patches[patchid] = patch
+    def _update_geometry(self, patchid: int, patch: Patch, data: Array2D):
+        self.patches[patchid] = (patch, data)
 
     def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
@@ -81,7 +81,7 @@ class VTKWriter(TesselatedWriter):
     @contextmanager
     def grid(self) -> vtk.vtkDataSet:
         structured = self.is_structured()
-        patch = next(iter(self.patches.values()))
+        patch, _ = next(iter(self.patches.values()))
 
         grid = vtk.vtkStructuredGrid() if structured else vtk.vtkUnstructuredGrid()
         if structured:
@@ -91,7 +91,7 @@ class VTKWriter(TesselatedWriter):
             grid.SetDimensions(*(s + 1 for s in shape))
 
         # Concatenate nodes of all patches
-        allpoints = np.vstack([p.nodes for p in self.patches.values()])
+        allpoints = np.vstack([data for _, data in self.patches.values()])
         allpoints = ensure_ncomps(allpoints, 3, allow_scalar=False)
         points = vtk.vtkPoints()
         points.SetData(vnp.numpy_to_vtk(allpoints))
@@ -100,8 +100,8 @@ class VTKWriter(TesselatedWriter):
         # If unstructured, concatenate cells of all patches
         if not structured:
             patches = self.patches.values()
-            offset = chain([0], np.cumsum([p.num_nodes for p in patches]))
-            cells = np.vstack([patch.cells + off for patch, off in zip(patches, offset)])
+            offset = chain([0], np.cumsum([p.num_nodes for p, _ in patches]))
+            cells = np.vstack([p.cells + off for (p, _), off in zip(patches, offset)])
             cells = np.hstack([cells.shape[-1] * np.ones((cells.shape[0], 1), dtype=int), cells])
             cells = cells.ravel()
 
