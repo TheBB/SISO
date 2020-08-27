@@ -43,21 +43,11 @@ class Option(click.Option):
     warnings.
     """
 
-    deprecated: Optional[str]
-
-    def __init__(self, *args, **kwargs):
-        self.deprecated = kwargs.pop('deprecated', None)
-        super().__init__(*args, **kwargs)
-
     def process_value(self, ctx, value):
         if value is not None:
             if not hasattr(ctx, 'explicit_options'):
                 ctx.explicit_options = set()
             ctx.explicit_options.add(self.name)
-            if self.deprecated:
-                if not hasattr(ctx, 'warnings'):
-                    ctx.warnings = set()
-                ctx.warnings.add(self.deprecated)
         return super().process_value(ctx, value)
 
 
@@ -84,12 +74,9 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
-@tracked_option('--geometry', '-g', 'coords', default='local', help='Use this basis to provide geometry.',
-                deprecated="--geometry is deprecated; use --coords instead")
-@tracked_option('--local', 'coords', flag_value='local', help='Local (cartesian) mapping.',
-                deprecated="--local/global is deprecated; use --coords local/global instead")
-@tracked_option('--global', 'coords', flag_value='global', help='Global (spherical) mapping.',
-                deprecated="--local/global is deprecated; use --coords local/global instead")
+@tracked_option('--geometry', '-g', 'coords', default='local', help='Use this basis to provide geometry.')
+@tracked_option('--local', 'coords', flag_value='local', help='Local (cartesian) mapping.')
+@tracked_option('--global', 'coords', flag_value='global', help='Global (spherical) mapping.')
 @tracked_option('--coords', help='Output coordinate system', default='local')
 
 # Logging and verbosity
@@ -119,8 +106,12 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
     log.current = log.FilterLog(logger, minlevel=getattr(log.proto.Level, verbosity))
 
     # Print potential warnings
-    for warning in getattr(ctx, 'warnings', set()):
-        log.warning(warning)
+    if '--global' in sys.argv:
+        log.warning(f"--global is deprecated; use --coords global instead")
+    if '--local' in sys.argv:
+        log.warning(f"--local is deprecated; use --coords local instead")
+    if '--geometry' in sys.argv or '-g' in sys.argv:
+        log.warning(f"--geometry is deprecated; use --coords instead")
 
     # Convert to pathlib
     infile = Path(infile)
