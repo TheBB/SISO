@@ -118,7 +118,7 @@ class ComponentField(SimpleField):
 
     ncomps = 1
     decompose = False
-    _fieldtype = Scalar()
+    fieldtype = Scalar()
 
     source: SimpleField
     index: int

@@ -18,6 +18,7 @@ from ..util import fortran_skip_record, save_excursion, cache
 class SIMRAField(SimpleField):
 
     cells = False
+    decompose = False
 
     index: int
     reader: 'SIMRAReader'
@@ -26,7 +27,6 @@ class SIMRAField(SimpleField):
         self.name = name
         self.index = index
         self.ncomps = ncomps
-        self.decompose = False
         self.reader = reader
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
@@ -40,7 +40,7 @@ class SIMRAGeometryField(SimpleField):
 
     name = 'Geometry'
     cells = False
-    _fieldtype = Geometry()
+    fieldtype = Geometry()
     ncomps = 3
 
     reader: 'SIMRAReader'

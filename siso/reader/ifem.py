@@ -167,7 +167,7 @@ class IFEMGeometryField(SimpleField):
 
     name = 'geometry'
     cells = False
-    _fieldtype = Geometry()
+    fieldtype = Geometry()
 
     def __init__(self, basis: Basis):
         self.basis = basis

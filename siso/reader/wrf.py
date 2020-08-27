@@ -106,7 +106,7 @@ class WRFGeometryField(SimpleField):
     name = 'Geometry'
     cells = False
     ncomps = 3
-    _fieldtype = Geometry()
+    fieldtype = Geometry()
 
     reader: 'WRFReader'
 

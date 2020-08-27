@@ -52,7 +52,7 @@ class PureGeometryReader(Reader, ABC):
 class PureGeometryField(SimpleField):
 
     name = 'Geometry'
-    _fieldtype = Geometry()
+    fieldtype = Geometry()
     cells = False
 
     reader: PureGeometryReader
