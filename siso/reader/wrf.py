@@ -31,7 +31,7 @@ MEAN_EARTH_RADIUS = 6_371_000
 # - if 'extrude', the output will be a volumetric mesh with all 3D fields,
 #   including 2D fields that will simply be constant in the vertical direction
 #
-# config.mapping:
+# config.coords:
 # - if 'local', the output will be in physical projected coordinates,
 #   derived from the DX and DY attributes in the data file, suitable
 #   if the computational domain is small with respect to the size of
@@ -47,11 +47,11 @@ MEAN_EARTH_RADIUS = 6_371_000
 #   and the poles, so that the output looks like a closed sphere
 #   rather than a sphere with some cut-out areas
 #
-# Except for config.periodic implying config.mapping == 'global',
+# Except for config.periodic implying config.coords == 'global',
 # these options are all independent, creating a lovely mess.  I have
 # tried to clarify as much as possible what is happening and why.
 #
-# For the global mapping, we use the XLONG and XLAT variables in the
+# For the global coords, we use the XLONG and XLAT variables in the
 # data file for placing the mesh nodes.  Vector fields (such as wind)
 # must also be rotated.  This happens in two steps:
 #
@@ -141,14 +141,14 @@ class WRFReader(Reader):
     def validate(self):
         super().validate()
 
-        # Disable periodicity except in global mapping
-        if config.mapping == 'local':
+        # Disable periodicity except in global coordinates
+        if config.coords == 'local':
             config.require(periodic=False, reason="WRF does not support periodic local grids, try with --global")
         else:
-            log.warning("Global mapping of WRF data is experimental, please do not use indiscriminately")
+            log.warning("Global coordinates of WRF data is experimental, please do not use indiscriminately")
 
         config.ensure_limited(
-            ConfigTarget.Reader, 'volumetric', 'mapping', 'periodic',
+            ConfigTarget.Reader, 'volumetric', 'periodic',
             reason="not supported by WRF"
         )
 
@@ -339,7 +339,7 @@ class WRFReader(Reader):
         """
 
         # Get horizontal coordinates
-        if config.mapping == 'local':
+        if config.coords == 'local':
             # LOCAL: Create a uniform grid based on mesh sizes in the dataset.
             x = np.arange(self.nlon) * self.nc.DX
             y = np.arange(self.nlat) * self.nc.DY
@@ -365,7 +365,7 @@ class WRFReader(Reader):
             nnodes *= self.nvert
 
         # Construct the nodal array
-        if config.mapping == 'local':
+        if config.coords == 'local':
             # LOCAL: Straightforward insertion of x, y and z
             nodes = np.zeros(z.shape + (3,), dtype=x.dtype)
             nodes[..., 0] = x
@@ -465,20 +465,20 @@ class WRFReader(Reader):
         """Compute the velocity field at a given time step.
 
         In the simplest case, this is just a matter of concatenating
-        the U, V and W data sets.  For global mapping, we must also
+        the U, V and W data sets.  For global coords, we must also
         transform the vector field accordingly.
         """
 
-        # Extract raw data.  For global mapping, compute the polar
+        # Extract raw data.  For global coords, compute the polar
         # values AFTER transformation.
         kwargs = {
-            'include_poles': config.mapping == 'local',
+            'include_poles': config.coords == 'local',
             'extrude_if_planar': config.volumetric == 'extrude',
         }
         data = np.array([self.variable_at(x, stepid, **kwargs).reshape(-1) for x in 'UVW']).T
 
-        # For local mapping, we're done
-        if config.mapping == 'local':
+        # For local coords, we're done
+        if config.coords == 'local':
             return data
 
         # Convert spherical coordinates to the grid's own Cartesian coordinate system

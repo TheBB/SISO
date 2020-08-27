@@ -7,6 +7,8 @@ import warnings
 import click
 import treelog as log
 
+from typing import Optional
+
 from . import config, ConfigSource
 from .pipeline import pipeline
 from .util import split_commas
@@ -37,13 +39,25 @@ class RichOutputLog(log.RichOutputLog):
 class Option(click.Option):
     """A custom option class that tracks which options have been
     explicitly set by the user, and stores them in a special attribute
-    attached to the context object."""
+    attached to the context object.  Also handles deprectation
+    warnings.
+    """
+
+    deprecated: Optional[str]
+
+    def __init__(self, *args, **kwargs):
+        self.deprecated = kwargs.pop('deprecated', None)
+        super().__init__(*args, **kwargs)
 
     def process_value(self, ctx, value):
         if value is not None:
             if not hasattr(ctx, 'explicit_options'):
                 ctx.explicit_options = set()
             ctx.explicit_options.add(self.name)
+            if self.deprecated:
+                if not hasattr(ctx, 'warnings'):
+                    ctx.warnings = set()
+                ctx.warnings.add(self.deprecated)
         return super().process_value(ctx, value)
 
 
@@ -71,8 +85,11 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
-@tracked_option('--local', 'mapping', flag_value='local', help='Local (cartesian) mapping.', default=True)
-@tracked_option('--global', 'mapping', flag_value='global', help='Global (spherical) mapping.')
+@tracked_option('--local', 'coords', flag_value='local', help='Local (cartesian) mapping.',
+                deprecated="--local/global is deprecated; use --coords local/global instead")
+@tracked_option('--global', 'coords', flag_value='global', help='Global (spherical) mapping.',
+                deprecated="--local/global is deprecated; use --coords local/global instead")
+@tracked_option('--coords', help='Output coordinate system', default='local')
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
@@ -99,6 +116,10 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
             log.FilterLog(log.StderrLog(), minlevel=log.proto.Level.warning),
         )
     log.current = log.FilterLog(logger, minlevel=getattr(log.proto.Level, verbosity))
+
+    # Print potential warnings
+    for warning in getattr(ctx, 'warnings', set()):
+        log.warning(warning)
 
     # Convert to pathlib
     infile = Path(infile)
