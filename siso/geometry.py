@@ -178,7 +178,7 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(key, nodes, cells, celltype=Hex()), nodes
+        return cls(key, np.zeros_like(nodes), cells, celltype=Hex()), nodes
 
     @property
     def num_physdim(self) -> int:
@@ -259,7 +259,9 @@ class LRPatch(Patch):
             data = data.decode()
         data = StringIO(data)
         for i, obj in enumerate(lr.LRSplineObject.read_many(data)):
-            yield cls((*key, i), obj), obj.controlpoints.reshape(-1, obj.dimension)
+            cps = obj.controlpoints.reshape(-1, obj.dimension)
+            obj.controlpoints = np.zeros_like(cps)
+            yield cls((*key, i), obj), cps
 
     @property
     def num_physdim(self) -> int:
@@ -382,6 +384,11 @@ class SplinePatch(Patch):
                 cps = flatten_2d(transpose_butlast(obj.controlpoints))
                 if obj.rational:
                     cps = cps[:, :-1]
+                cps = np.array(cps)
+                if obj.rational:
+                    obj.controlpoints[...,:-1] = 0
+                else:
+                    obj.controlpoints[...] = 0
                 yield cls((*key, i), obj), cps
 
     @property
