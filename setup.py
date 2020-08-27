@@ -17,6 +17,7 @@ setup(
     maintainer_email='eivind.fonn@sintef.no',
     packages=['siso', 'siso.writer', 'siso.reader'],
     install_requires=[
+        'cachetools',
         'click',
         'dataclasses',
         'numpy',
