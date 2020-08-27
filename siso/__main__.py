@@ -71,7 +71,6 @@ def tracked_option(*args, **kwargs):
 # Options that are forwarded to config
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
 @tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
-@tracked_option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
 @tracked_option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
 @tracked_option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
 @tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
@@ -85,6 +84,8 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
+@tracked_option('--geometry', '-g', 'coords', default='local', help='Use this basis to provide geometry.',
+                deprecated="--geometry is deprecated; use --coords instead")
 @tracked_option('--local', 'coords', flag_value='local', help='Local (cartesian) mapping.',
                 deprecated="--local/global is deprecated; use --coords local/global instead")
 @tracked_option('--global', 'coords', flag_value='global', help='Global (spherical) mapping.',

@@ -43,6 +43,22 @@ def discover_fields(reader: Reader) -> Tuple[List[Field], List[Field]]:
     return geometries, list(discover_decompositions(fields))
 
 
+def pick_geometry(geometries: List[Field]) -> Field:
+    if not geometries:
+        raise TypeError("No geometry found, don't know what to do")
+
+    coords = config.coords.lower()
+
+    # Search for exact name
+    try:
+        return next(g for g in geometries if g.name.lower() == coords)
+    except StopIteration:
+        pass
+
+    # Pick the first one
+    return geometries[0]
+
+
 def pipeline(reader: Reader, writer: Writer):
     """Main driver for moving data from reader to writer."""
 
@@ -54,10 +70,8 @@ def pipeline(reader: Reader, writer: Writer):
         steps = last(steps)
 
     geometries, fields = discover_fields(reader)
-
-    if not geometries:
-        raise TypeError("No geometry found, don't know what to do")
-    geometry = geometries[0]
+    geometry = pick_geometry(geometries)
+    log.debug(f"Using '{geometry.name}' as geometry input")
 
     first = True
     for stepid, stepdata in log.iter.plain('Step', steps):
@@ -65,7 +79,6 @@ def pipeline(reader: Reader, writer: Writer):
 
         for patch, data in geometry.patches(stepid, force=first):
             writer.update_geometry(geometry, patch, data)
-            # log.debug(f"Updating geometry {patch.key}")
         writer.finalize_geometry()
 
         for field in fields:

@@ -165,13 +165,12 @@ class IFEMGeometryField(SimpleField):
 
     basis: Basis
 
-    name = 'geometry'
     cells = False
     fieldtype = Geometry()
 
     def __init__(self, basis: Basis):
+        self.name = basis.name
         self.basis = basis
-        # self.ncomps = self.basis.patch_at()
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Field]]:
         if not force and not self.basis.update_at(stepid):
@@ -179,7 +178,6 @@ class IFEMGeometryField(SimpleField):
         for patchid in range(self.basis.npatches):
             patch, coeffs = self.basis.patch_at(stepid, patchid)
             yield patch, coeffs
-
 
 
 class IFEMField(SimpleField):
@@ -443,7 +441,8 @@ class IFEMReader(Reader):
             log.info(f"Creating combined field {sourcenames} -> {fname}")
 
     def fields(self) -> Iterable[Field]:
-        yield IFEMGeometryField(self.geometry_basis)
+        for basis in self.bases.values():
+            yield IFEMGeometryField(basis)
         yield from self._fields.values()
 
 

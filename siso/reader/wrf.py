@@ -77,7 +77,7 @@ class WRFScalarField(SimpleField):
         self.reader = reader
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
-        patch, _ = self.reader.patch_at(stepid)
+        patch = self.reader.patch_at(stepid)
         data = self.reader.variable_at(self.name, stepid, config.volumetric == 'extrude')
         yield patch, data.reshape(patch.num_nodes, -1)
 
@@ -97,24 +97,27 @@ class WRFVectorField(SimpleField):
         self.ncomps = len(components)
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
-        patch, _ = self.reader.patch_at(stepid)
+        patch = self.reader.patch_at(stepid)
         yield patch, self.reader.velocity_field(patch, stepid)
 
 
 class WRFGeometryField(SimpleField):
 
-    name = 'Geometry'
     cells = False
     ncomps = 3
     fieldtype = Geometry()
 
     reader: 'WRFReader'
+    coords: str
 
-    def __init__(self, reader: 'WRFReader'):
+    def __init__(self, reader: 'WRFReader', coords: str):
         self.reader = reader
+        self.coords = coords
+        self.name = coords
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
-        patch, nodes = self.reader.patch_at(stepid)
+        patch = self.reader.patch_at(stepid)
+        nodes = self.reader.nodes_at(stepid, self.coords)
         yield patch, nodes
 
 
@@ -332,14 +335,13 @@ class WRFReader(Reader):
 
         return None
 
-    @lru_cache(1)
-    def patch_at(self, stepid: int) -> Patch:
-        """Construct the patch object at the given time step.  This method
+    def nodes_at(self, stepid: int, coords: str) -> Array2D:
+        """Construct the geometry nodes at the given time step.  This method
         handles all variations of mesh options.
         """
 
         # Get horizontal coordinates
-        if config.coords == 'local':
+        if coords == 'local':
             # LOCAL: Create a uniform grid based on mesh sizes in the dataset.
             x = np.arange(self.nlon) * self.nc.DX
             y = np.arange(self.nlat) * self.nc.DY
@@ -365,7 +367,7 @@ class WRFReader(Reader):
             nnodes *= self.nvert
 
         # Construct the nodal array
-        if config.coords == 'local':
+        if coords == 'local':
             # LOCAL: Straightforward insertion of x, y and z
             nodes = np.zeros(z.shape + (3,), dtype=x.dtype)
             nodes[..., 0] = x
@@ -382,15 +384,27 @@ class WRFReader(Reader):
                 z * np.sin(y),
             ]).reshape((-1, nnodes)).T
 
-        # Assemble structured or unstructured patch and return
+        return nodes
+
+    def patch_at(self, stepid: int) -> Patch:
+        """Construct the patch object at the given time step.  This method
+        handles all variations of mesh options.
+        """
+
+        nnodes = self.nplanar
+        if config.periodic:
+            nnodes += 2
+        if config.volumetric != 'planar':
+            nnodes *= self.nvert
+
         if config.periodic and config.volumetric == 'planar':
-            return UnstructuredPatch(('geometry',), len(nodes), self.periodic_planar_mesh(), celltype=Quad()), nodes
+            return UnstructuredPatch(('geometry',), nnodes, self.periodic_planar_mesh(), celltype=Quad())
         elif config.periodic:
-            return UnstructuredPatch(('geometry',), len(nodes), self.periodic_volumetric_mesh(), celltype=Hex()), nodes
+            return UnstructuredPatch(('geometry',), nnodes, self.periodic_volumetric_mesh(), celltype=Hex())
         elif config.volumetric == 'planar':
-            return StructuredPatch(('geometry',), self.planar_shape, celltype=Quad()), nodes
+            return StructuredPatch(('geometry',), self.planar_shape, celltype=Quad())
         else:
-            return StructuredPatch(('geometry',), self.volumetric_shape, celltype=Hex()), nodes
+            return StructuredPatch(('geometry',), self.volumetric_shape, celltype=Hex())
 
     def periodic_planar_mesh(self):
         """Compute cell topology for the periodic planar unstructured case,
@@ -502,11 +516,9 @@ class WRFReader(Reader):
         data = self.rotation().apply(data)
         return data
 
-    def geometry(self, stepid: int, force: bool = False) -> Iterable[Patch]:
-        yield self.patch_at(stepid)
-
     def fields(self) -> Iterable[Field]:
-        yield WRFGeometryField(self)
+        yield WRFGeometryField(self, 'local')
+        yield WRFGeometryField(self, 'global')
 
         if config.volumetric == 'volumetric':
             allowed_types = {'volumetric'}
