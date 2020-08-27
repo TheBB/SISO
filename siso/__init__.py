@@ -113,9 +113,6 @@ class Config(metaclass=ConfigMeta):
     # List of basis objects to copy to output. Used by the IFEM reader.
     only_bases = Setting((), Reader, name='--basis')
 
-    # Which basis should be used to represent the geometry. Used by the IFEM reader.
-    geometry_basis = Setting(None, Reader, name='--geometry')
-
     # Volumetric/surface field behaviour. Used by the WRF reader.
     # - volumetric: only include volumetric fields
     # - planar: only include surface fields

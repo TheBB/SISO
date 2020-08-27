@@ -269,7 +269,6 @@ class IFEMReader(Reader):
     _fields: Dict[str, Field]
     _field_basis: Dict[str, str]
 
-    geometry_basis: Basis
     patch_catalogue: PatchCatalogue
 
     @classmethod
@@ -292,7 +291,7 @@ class IFEMReader(Reader):
     def validate(self):
         super().validate()
         config.ensure_limited(
-            ConfigTarget.Reader, 'only_bases', 'geometry_basis',
+            ConfigTarget.Reader, 'only_bases',
             reason="not supported by IFEM"
         )
 
@@ -307,10 +306,6 @@ class IFEMReader(Reader):
         self.init_fields()
         self.split_fields()
         self.combine_fields()
-
-        # Create geometry manager
-        geometry_basis_name = config.geometry_basis or next(iter(self.bases))
-        self.geometry_basis = self.bases[geometry_basis_name]
 
         return self
 
@@ -366,10 +361,8 @@ class IFEMReader(Reader):
 
         # Delete the bases we don't need
         if config.only_bases:
-            keep = set(config.only_bases)
-            if config.geometry_basis:
-                keep.add(config.geometry_basis)
-            self.bases = {name: basis for name, basis in self.bases.items() if name in keep}
+            keep = {b.lower() for b in config.only_bases} | {config.coords.lower()}
+            self.bases = {name: basis for name, basis in self.bases.items() if name.lower() in keep}
 
         # Debug output
         for basis in self.bases.values():
