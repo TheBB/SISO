@@ -10,7 +10,7 @@ import treelog as log
 from typing import Optional
 
 from . import config, ConfigSource
-from .coords import CoordinateSystem, Local, Geocentric
+from .coords import Coords, Local, Geocentric
 from .pipeline import pipeline
 from .util import split_commas
 from .reader import Reader
@@ -52,13 +52,13 @@ class Option(click.Option):
         return super().process_value(ctx, value)
 
 
-class Coords(click.ParamType):
+class CoordsType(click.ParamType):
     """Parameter type for coordinate systems."""
 
     def convert(self, value, param, ctx):
-        if value is None or isinstance(value, CoordinateSystem):
+        if value is None or isinstance(value, Coords):
             return value
-        return CoordinateSystem.find(value)
+        return Coords.find(value)
 
 
 def tracked_option(*args, **kwargs):
@@ -84,10 +84,10 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
-@tracked_option('--geometry', '-g', 'coords', default=Local(), help='Use this basis to provide geometry.', type=Coords())
-@tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=Coords())
-@tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=Coords())
-@tracked_option('--coords', help='Output coordinate system', default='local', type=Coords())
+@tracked_option('--geometry', '-g', 'coords', default=Local(), help='Use this basis to provide geometry.', type=CoordsType())
+@tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=CoordsType())
+@tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=CoordsType())
+@tracked_option('--coords', help='Output coordinate system', default='local', type=CoordsType())
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')

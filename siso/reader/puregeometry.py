@@ -4,12 +4,12 @@ from pathlib import Path
 import lrspline
 from splipy.io import G2
 
-from typing import Iterable, Tuple
+from typing import Iterable, Tuple, Optional
 from ..typing import StepData, Array2D
 
 from .. import config, ConfigTarget
 from ..geometry import Patch, SplinePatch, LRPatch
-from ..fields import Field, SimpleField, Geometry
+from ..fields import Field, SimpleField, Geometry, FieldPatches
 from .reader import Reader
 
 
@@ -45,7 +45,7 @@ class PureGeometryReader(Reader, ABC):
         yield PureGeometryField(self)
 
     @abstractmethod
-    def patches(self) -> Iterable[Tuple[Patch, Array2D]]:
+    def patches(self) -> FieldPatches:
         pass
 
 
@@ -60,7 +60,7 @@ class PureGeometryField(SimpleField):
     def __init__(self, reader: PureGeometryReader):
         self.reader = reader
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield from self.reader.patches()
 
 

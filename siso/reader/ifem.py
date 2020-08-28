@@ -13,7 +13,7 @@ from ..typing import Array2D, StepData, BoundingBox, PatchKey
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..coords import Local
-from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement, Geometry
+from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement, Geometry, FieldPatches
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
 from ..util import ensure_ncomps, bounding_box
 from ..writer import Writer
@@ -32,15 +32,6 @@ class PatchCatalogue:
     def __init__(self):
         self.bboxes = dict()
         self.ids = dict()
-
-    # def known_key(self, key: PatchKey) -> Optional[PatchKey]:
-    #     return self.ids.get(key, None)
-
-    # def default_bbox(self, data: Array2D, oldkey: PatchKey) -> PatchKey:
-    #     bbox = bounding_box(data)
-    #     newkey = self.bboxes.setdefault(bbox, oldkey)
-    #     self.ids[oldkey] = newkey
-    #     return newkey
 
     def setdefault(self, data: Array2D, oldkey: PatchKey) -> PatchKey:
         if oldkey in self.ids:
@@ -174,7 +165,7 @@ class IFEMGeometryField(SimpleField):
         self.basis = basis
         self.fieldtype = Geometry(Local(basis.name))
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Field]]:
+    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         if not force and not self.basis.update_at(stepid):
             return
         for patchid in range(self.basis.npatches):
@@ -210,7 +201,7 @@ class IFEMField(SimpleField):
     def basisname(self) -> str:
         return self.basis.name
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         if not force and not self.update_at(stepid):
             return
         for patchid in range(self.basis.npatches):

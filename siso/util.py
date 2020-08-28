@@ -9,6 +9,7 @@ import numpy as np
 from scipy.io import FortranFile
 
 from typing import Iterable, Type, TypeVar, Callable, IO
+from .typing import Array
 
 
 
@@ -56,6 +57,40 @@ def fortran_skip_record(f: FortranFile):
     size = f._read_size()
     f._fp.seek(f._fp.tell() + size)
     assert f._read_size() == size
+
+
+
+# Coordinate transformations
+# ----------------------------------------------------------------------
+
+
+def spherical_cartesian_vf(lon: Array, lat: Array, data: Array, invert: bool = False) -> Array:
+    """Convert a spherical vector field to a Cartesian vector field or back. """
+    lon = np.deg2rad(lon)
+    lat = np.deg2rad(lat)
+    clon, clat = np.cos(lon), np.cos(lat)
+    slon, slat = np.sin(lon), np.sin(lat)
+
+    retval = np.zeros_like(data)
+    retval[..., 0] -= slon * data[..., 0]
+    retval[..., 1] -= slat * slon * data[..., 1]
+    retval[..., 2] += slat * data[..., 2]
+
+    if invert:
+        retval[..., 1] -= slat * clon * data[..., 0]
+        retval[..., 2] += clat * clon * data[..., 0]
+        retval[..., 0] += clon * data[..., 1]
+        retval[..., 2] += clat * slon * data[..., 1]
+        retval[..., 1] += clat * data[..., 2]
+    else:
+        retval[..., 0] -= slat * clon * data[..., 1]
+        retval[..., 0] += clat * clon * data[..., 2]
+        retval[..., 1] += clon * data[..., 0]
+        retval[..., 1] += clat * slon * data[..., 2]
+        retval[..., 2] += clat * data[..., 1]
+
+    return retval
+
 
 
 
