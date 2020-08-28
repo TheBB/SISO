@@ -6,6 +6,7 @@ import treelog as log
 from typing import List, Optional, Iterable, Tuple, Union
 from .typing import Array2D
 
+from .coords import CoordinateSystem, Local
 from .geometry import Patch
 from .util import ensure_ncomps
 
@@ -13,6 +14,7 @@ from .util import ensure_ncomps
 
 PatchData = Union[Patch, List[Patch]]
 FieldData = Union[Array2D, List[Array2D]]
+
 
 
 # Field types
@@ -24,6 +26,7 @@ class FieldType:
     is_vector: bool = False
     is_displacement: bool = False
     is_geometry: bool = False
+    coordinates: CoordinateSystem = Local()
 
     @property
     def is_scalar(cls):
@@ -33,13 +36,19 @@ class Scalar(FieldType):
     pass
 
 class Vector(FieldType):
+
     is_vector = True
 
 class Displacement(Vector):
+
     is_displacement = True
 
 class Geometry(Vector):
+
     is_geometry = True
+
+    def __init__(self, coords: CoordinateSystem = Local()):
+        self.coordinates = coords
 
 
 
@@ -88,6 +97,10 @@ class Field(ABC):
     @property
     def is_geometry(self) -> bool:
         return self.fieldtype.is_geometry
+
+    @property
+    def coordinates(self) -> CoordinateSystem:
+        return self.fieldtype.coordinates
 
     @abstractmethod
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[PatchData, FieldData]]:

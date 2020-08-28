@@ -12,9 +12,10 @@ from ..typing import Array2D, StepData, BoundingBox, PatchKey
 
 from .reader import Reader
 from .. import config, ConfigTarget
-from ..util import ensure_ncomps, bounding_box
+from ..coords import Local
 from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement, Geometry
 from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
+from ..util import ensure_ncomps, bounding_box
 from ..writer import Writer
 
 
@@ -171,6 +172,7 @@ class IFEMGeometryField(SimpleField):
     def __init__(self, basis: Basis):
         self.name = basis.name
         self.basis = basis
+        self.fieldtype = Geometry(Local(basis.name))
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Field]]:
         if not force and not self.basis.update_at(stepid):

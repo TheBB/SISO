@@ -10,12 +10,13 @@ import treelog as log
 from typing import Optional, Tuple, Iterable, List
 from ..typing import Shape, Array2D, StepData
 
-from .. import config, ConfigTarget
 from .reader import Reader
-from ..writer import Writer
-from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
+from .. import config, ConfigTarget
+from ..coords import Local, Geocentric
 from ..fields import Field, SimpleField, Geometry
+from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
 from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap
+from ..writer import Writer
 
 
 MEAN_EARTH_RADIUS = 6_371_000
@@ -105,7 +106,6 @@ class WRFGeometryField(SimpleField):
 
     cells = False
     ncomps = 3
-    fieldtype = Geometry()
 
     reader: 'WRFReader'
     coords: str
@@ -114,6 +114,10 @@ class WRFGeometryField(SimpleField):
         self.reader = reader
         self.coords = coords
         self.name = coords
+        if coords == 'local':
+            self.fieldtype = Geometry(Local())
+        else:
+            self.fieldtype = Geometry(Geocentric())
 
     def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
         patch = self.reader.patch_at(stepid)
@@ -145,7 +149,7 @@ class WRFReader(Reader):
         super().validate()
 
         # Disable periodicity except in global coordinates
-        if config.coords == 'local':
+        if str(config.coords) == 'local':
             config.require(periodic=False, reason="WRF does not support periodic local grids, try with --global")
         else:
             log.warning("Global coordinates of WRF data is experimental, please do not use indiscriminately")
@@ -492,7 +496,7 @@ class WRFReader(Reader):
         data = np.array([self.variable_at(x, stepid, **kwargs).reshape(-1) for x in 'UVW']).T
 
         # For local coords, we're done
-        if config.coords == 'local':
+        if str(config.coords) == 'local':
             return data
 
         # Convert spherical coordinates to the grid's own Cartesian coordinate system

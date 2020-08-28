@@ -144,12 +144,15 @@ for n in ['eastward', 'northward', 'outward']:
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], suffix='-volumetric')
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', suffix='-planar')
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', suffix='-extrude')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--global', suffix='-volumetric-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', '--coords', 'global', suffix='-planar-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--coords', 'global', suffix='-extrude-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', '--coords', 'global', '--periodic', suffix='-planar-periodic')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--volumetric', '--coords', 'global', '--periodic', suffix='-volumetric-periodic')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--coords', 'global', '--periodic', suffix='-extrude-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--coords', 'geocentric', suffix='-volumetric-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', '--coords', 'geocentric', suffix='-planar-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--coords', 'geocentric', suffix='-extrude-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
+             '--planar', '--coords', 'geocentric', '--periodic', suffix='-planar-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
+             '--volumetric', '--coords', 'geocentric', '--periodic', suffix='-volumetric-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
+             '--extrude', '--coords', 'geocentric', '--periodic', suffix='-extrude-periodic')
 
 # Miscellaneous CLI options
 testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')

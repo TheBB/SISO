@@ -4,9 +4,10 @@ import treelog as log
 from typing import TypeVar, Iterable, List, Tuple
 
 from . import config
+from .coords import CoordinateSystem
+from .fields import Field, ComponentField
 from .reader import Reader
 from .writer import Writer
-from .fields import Field, ComponentField
 
 
 T = TypeVar('T')
@@ -40,18 +41,22 @@ def discover_fields(reader: Reader) -> Tuple[List[Field], List[Field]]:
 
     fields = sorted(fields, key=attrgetter('name'))
     fields = sorted(fields, key=attrgetter('cells'))
-    return geometries, list(discover_decompositions(fields))
+    fields = list(discover_decompositions(fields))
+
+    for field in geometries:
+        log.debug(f"Discovered geometry '{field.name}' with coordinates {field.coordinates}")
+
+    return geometries, fields
 
 
 def pick_geometry(geometries: List[Field]) -> Field:
     if not geometries:
         raise TypeError("No geometry found, don't know what to do")
 
-    coords = config.coords.lower()
-
-    # Search for exact name
+    # Search for exact name.  If one is found, set the output
+    # coordinate system equal to the input, to ensure no conversion.
     try:
-        return next(g for g in geometries if g.name.lower() == coords)
+        return next(g for g in geometries if g.coordinates == config.coords)
     except StopIteration:
         pass
 

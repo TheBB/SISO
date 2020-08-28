@@ -10,6 +10,7 @@ import treelog as log
 from typing import Optional
 
 from . import config, ConfigSource
+from .coords import CoordinateSystem, Local, Geocentric
 from .pipeline import pipeline
 from .util import split_commas
 from .reader import Reader
@@ -51,6 +52,15 @@ class Option(click.Option):
         return super().process_value(ctx, value)
 
 
+class Coords(click.ParamType):
+    """Parameter type for coordinate systems."""
+
+    def convert(self, value, param, ctx):
+        if value is None or isinstance(value, CoordinateSystem):
+            return value
+        return CoordinateSystem.find(value)
+
+
 def tracked_option(*args, **kwargs):
     return click.option(*args, **kwargs, cls=Option)
 
@@ -74,10 +84,10 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
-@tracked_option('--geometry', '-g', 'coords', default='local', help='Use this basis to provide geometry.')
-@tracked_option('--local', 'coords', flag_value='local', help='Local (cartesian) mapping.')
-@tracked_option('--global', 'coords', flag_value='global', help='Global (spherical) mapping.')
-@tracked_option('--coords', help='Output coordinate system', default='local')
+@tracked_option('--geometry', '-g', 'coords', default=Local(), help='Use this basis to provide geometry.', type=Coords())
+@tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=Coords())
+@tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=Coords())
+@tracked_option('--coords', help='Output coordinate system', default='local', type=Coords())
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
@@ -107,7 +117,7 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
 
     # Print potential warnings
     if '--global' in sys.argv:
-        log.warning(f"--global is deprecated; use --coords global instead")
+        log.warning(f"--global is deprecated; use --coords geocentric instead")
     if '--local' in sys.argv:
         log.warning(f"--local is deprecated; use --coords local instead")
     if '--geometry' in sys.argv or '-g' in sys.argv:
