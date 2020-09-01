@@ -7,7 +7,10 @@ import warnings
 import click
 import treelog as log
 
+from typing import Optional
+
 from . import config, ConfigSource
+from .coords import Coords, Local, Geocentric
 from .pipeline import pipeline
 from .util import split_commas
 from .reader import Reader
@@ -37,7 +40,9 @@ class RichOutputLog(log.RichOutputLog):
 class Option(click.Option):
     """A custom option class that tracks which options have been
     explicitly set by the user, and stores them in a special attribute
-    attached to the context object."""
+    attached to the context object.  Also handles deprectation
+    warnings.
+    """
 
     def process_value(self, ctx, value):
         if value is not None:
@@ -45,6 +50,15 @@ class Option(click.Option):
                 ctx.explicit_options = set()
             ctx.explicit_options.add(self.name)
         return super().process_value(ctx, value)
+
+
+class CoordsType(click.ParamType):
+    """Parameter type for coordinate systems."""
+
+    def convert(self, value, param, ctx):
+        if value is None or isinstance(value, Coords):
+            return value
+        return Coords.find(value)
 
 
 def tracked_option(*args, **kwargs):
@@ -57,7 +71,6 @@ def tracked_option(*args, **kwargs):
 # Options that are forwarded to config
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
 @tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
-@tracked_option('--geometry', '-g', 'geometry_basis', default=None, help='Use this basis to provide geometry.')
 @tracked_option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
 @tracked_option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
 @tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
@@ -71,8 +84,10 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
-@tracked_option('--local', 'mapping', flag_value='local', help='Local (cartesian) mapping.', default=True)
-@tracked_option('--global', 'mapping', flag_value='global', help='Global (spherical) mapping.')
+@tracked_option('--geometry', '-g', 'coords', default=Local(), help='Use this basis to provide geometry.', type=CoordsType())
+@tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=CoordsType())
+@tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=CoordsType())
+@tracked_option('--coords', help='Output coordinate system', default='local', type=CoordsType())
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
@@ -99,6 +114,14 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
             log.FilterLog(log.StderrLog(), minlevel=log.proto.Level.warning),
         )
     log.current = log.FilterLog(logger, minlevel=getattr(log.proto.Level, verbosity))
+
+    # Print potential warnings
+    if '--global' in sys.argv:
+        log.warning(f"--global is deprecated; use --coords geocentric instead")
+    if '--local' in sys.argv:
+        log.warning(f"--local is deprecated; use --coords local instead")
+    if '--geometry' in sys.argv or '-g' in sys.argv:
+        log.warning(f"--geometry is deprecated; use --coords instead")
 
     # Convert to pathlib
     infile = Path(infile)

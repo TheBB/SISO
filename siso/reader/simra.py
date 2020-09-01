@@ -6,12 +6,12 @@ from scipy.io import FortranFile
 from typing import Optional, Iterable, Tuple
 from ..typing import StepData, Array2D
 
-from .. import config, ConfigTarget
-from ..fields import Field, SimpleField, Geometry
-from ..geometry import Patch, UnstructuredPatch, Hex
 from .reader import Reader
-from ..writer import Writer
+from .. import config, ConfigTarget
+from ..fields import Field, SimpleField, Geometry, FieldPatches
+from ..geometry import Patch, UnstructuredPatch, Hex
 from ..util import fortran_skip_record, save_excursion, cache
+from ..writer import Writer
 
 
 
@@ -29,7 +29,7 @@ class SIMRAField(SimpleField):
         self.ncomps = ncomps
         self.reader = reader
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield (
             self.reader.patch(),
             self.reader.data()[:, self.index : self.index + self.ncomps]
@@ -48,7 +48,7 @@ class SIMRAGeometryField(SimpleField):
     def __init__(self, reader: 'SIMRAReader'):
         self.reader = reader
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield self.reader.patch(), self.reader.nodes()
 
 

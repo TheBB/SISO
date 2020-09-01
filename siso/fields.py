@@ -6,6 +6,7 @@ import treelog as log
 from typing import List, Optional, Iterable, Tuple, Union
 from .typing import Array2D
 
+from .coords import Coords, Local
 from .geometry import Patch
 from .util import ensure_ncomps
 
@@ -13,6 +14,8 @@ from .util import ensure_ncomps
 
 PatchData = Union[Patch, List[Patch]]
 FieldData = Union[Array2D, List[Array2D]]
+FieldPatches = Iterable[Tuple[PatchData, FieldData]]
+
 
 
 # Field types
@@ -24,6 +27,7 @@ class FieldType:
     is_vector: bool = False
     is_displacement: bool = False
     is_geometry: bool = False
+    coords: Coords = Local()
 
     @property
     def is_scalar(cls):
@@ -33,13 +37,19 @@ class Scalar(FieldType):
     pass
 
 class Vector(FieldType):
+
     is_vector = True
 
 class Displacement(Vector):
+
     is_displacement = True
 
 class Geometry(Vector):
+
     is_geometry = True
+
+    def __init__(self, coords: Coords = Local()):
+        self.coords = coords
 
 
 
@@ -89,8 +99,12 @@ class Field(ABC):
     def is_geometry(self) -> bool:
         return self.fieldtype.is_geometry
 
+    @property
+    def coords(self) -> Coords:
+        return self.fieldtype.coords
+
     @abstractmethod
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[PatchData, FieldData]]:
+    def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
         pass
 
 
@@ -129,9 +143,9 @@ class ComponentField(SimpleField):
         self.source = source
         self.index = index
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[Patch, Array2D]]:
+    def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
         if isinstance(self.source, SimpleField):
-            for patch, data in self.source.patches(stepid, force=force):
+            for patch, data in self.source.patches(stepid, force=force, coords=coords):
                 yield patch, data[:, self.index : self.index+1]
 
 
@@ -157,8 +171,8 @@ class CombinedField(Field):
         self.ncomps = sum(source.ncomps for source in sources)
         self.sources = sources
 
-    def patches(self, stepid: int, force: bool = False) -> Iterable[Tuple[List[Patch], List[Array2D]]]:
-        subpatch_iters = zip(*(source.patches(stepid, force=force) for source in self.sources))
+    def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
+        subpatch_iters = zip(*(source.patches(stepid, force=force, coords=coords) for source in self.sources))
         for subpatches in subpatch_iters:
             patches, data = [], []
             for subpatch, subdata in subpatches:

@@ -4,9 +4,10 @@ import treelog as log
 from typing import TypeVar, Iterable, List, Tuple
 
 from . import config
+from .coords import Coords, Converter, graph
+from .fields import Field, ComponentField
 from .reader import Reader
 from .writer import Writer
-from .fields import Field, ComponentField
 
 
 T = TypeVar('T')
@@ -40,7 +41,21 @@ def discover_fields(reader: Reader) -> Tuple[List[Field], List[Field]]:
 
     fields = sorted(fields, key=attrgetter('name'))
     fields = sorted(fields, key=attrgetter('cells'))
-    return geometries, list(discover_decompositions(fields))
+    fields = list(discover_decompositions(fields))
+
+    for field in geometries:
+        log.debug(f"Discovered geometry '{field.name}' with coordinates {field.coords}")
+
+    return geometries, fields
+
+
+def pick_geometry(geometries: List[Field]) -> Tuple[Field, Converter]:
+    if not geometries:
+        raise TypeError("No geometry found, don't know what to do")
+
+    # Find the geometry that can most easily be converted to the target
+    index, converter = graph.optimal_source(config.coords, map(attrgetter('coords'), geometries))
+    return geometries[index], converter
 
 
 def pipeline(reader: Reader, writer: Writer):
@@ -54,22 +69,33 @@ def pipeline(reader: Reader, writer: Writer):
         steps = last(steps)
 
     geometries, fields = discover_fields(reader)
+    geometry, converter = pick_geometry(geometries)
+    log.debug(f"Using '{geometry.name}' as geometry input")
 
-    if not geometries:
-        raise TypeError("No geometry found, don't know what to do")
-    geometry = geometries[0]
+    if not converter.is_trivial and any(f.is_vector for f in fields):
+        log.warning(f"Nontrivial coordinate transformations detected")
+        trivial = False
+        geometry_nodes = dict()
+    else:
+        trivial = True
 
     first = True
     for stepid, stepdata in log.iter.plain('Step', steps):
         writer.add_step(**stepdata)
 
         for patch, data in geometry.patches(stepid, force=first):
+            if not trivial:
+                geometry_nodes[patch.key] = data
+            data = converter.points(geometry.coords, config.coords, data)
             writer.update_geometry(geometry, patch, data)
-            # log.debug(f"Updating geometry {patch.key}")
         writer.finalize_geometry()
 
         for field in fields:
-            for patch, data in field.patches(stepid, force=first):
+            for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
+                if field.is_vector and trivial:
+                    data = converter.vectors(geometry.coords, config.coords, data)
+                elif field.is_vector:
+                    data = converter.vectors(geometry.coords, config.coords, data, nodes=geometry_nodes[patch.key])
                 writer.update_field(field, patch, data)
 
         writer.finalize_step()

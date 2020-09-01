@@ -98,6 +98,9 @@ class Config(metaclass=ConfigMeta):
     # Whether to copy only the final time step.
     only_final_timestep = Setting(False, Pipeline, name='--last')
 
+    # Desired output coordinate system.
+    coords = Setting('local', Pipeline, name='--coords')
+
     # Whether the data set contains multiple time steps.
     multiple_timesteps = Setting(True, Writer)
 
@@ -110,17 +113,11 @@ class Config(metaclass=ConfigMeta):
     # List of basis objects to copy to output. Used by the IFEM reader.
     only_bases = Setting((), Reader, name='--basis')
 
-    # Which basis should be used to represent the geometry. Used by the IFEM reader.
-    geometry_basis = Setting(None, Reader, name='--geometry')
-
     # Volumetric/surface field behaviour. Used by the WRF reader.
     # - volumetric: only include volumetric fields
     # - planar: only include surface fields
     # - extrude: include all, extruding surface fields upwards
     volumetric = Setting('volumetric', Reader, name='--volumetric/planar/extrude')
-
-    # Global or local mapping behaviour. Used by the WRF reader.
-    mapping = Setting('local', Reader, name='--local/global')
 
     # Hint to the reader that the data may be periodic. Used by the WRF reader.
     periodic = Setting(False, Reader)

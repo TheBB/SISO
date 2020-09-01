@@ -27,6 +27,7 @@ setup(
         'vtk',
         'netcdf4',
         'nptyping',
+        'pyerfa',
         'singledispatchmethod',
         'treelog',
     ],
