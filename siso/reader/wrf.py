@@ -278,17 +278,18 @@ class WRFReader(Reader):
         assert time == 'Time'
         data = self.nc[name][stepid, ...]
 
-        # If we're in planar mode and the field is volumetric, grab
-        # the surface slice
-        if len(dimensions) == 3 and config.volumetric == 'planar':
-            data = data[0, ...]
-            dimensions = dimensions[1:]
-
         # Detect staggered axes and un-stagger them
         for i, dim in enumerate(dimensions):
             if dim.endswith('_stag'):
                 data = unstagger(data, i)
                 dimensions[i] = dim[:-5]
+
+        # If we're in planar mode and the field is volumetric, grab
+        # the surface slice
+        if len(dimensions) == 3 and config.volumetric == 'planar':
+            index = len(self.nc.dimensions['soil_layers_stag']) - 1
+            data = data[index, ...]
+            dimensions = dimensions[1:]
 
         # Compute polar values if necessary
         if include_poles and config.periodic:
