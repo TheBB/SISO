@@ -34,7 +34,7 @@ def dtypes(endianness):
 class SIMRAField(SimpleField):
 
     cells = False
-    decompose = False
+    decompose = True
 
     index: int
     reader: 'SIMRAResultReader'
