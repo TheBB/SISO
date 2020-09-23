@@ -18,7 +18,7 @@ from ..writer import Writer
 class SIMRAField(SimpleField):
 
     cells = False
-    decompose = False
+    decompose = True
 
     index: int
     reader: 'SIMRAReader'

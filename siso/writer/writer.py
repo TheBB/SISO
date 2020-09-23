@@ -29,7 +29,7 @@ class Writer(ABC):
     geometry_finalized: bool
 
     @classmethod
-    def applicable(self, fmt: str) -> bool:
+    def applicable(cls, fmt: str) -> bool:
         """Return true if the class can handle the given format."""
         return False
 
