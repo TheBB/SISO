@@ -27,23 +27,34 @@ from ..writer import Writer
 class PatchCatalogue:
 
     ids: Dict[PatchKey, PatchKey]
+    seqs: Dict[int, PatchKey]
     bboxes: Dict[BoundingBox, PatchKey]
 
     def __init__(self):
         self.bboxes = dict()
+        self.seqs = dict()
         self.ids = dict()
 
     def setdefault(self, data: Array2D, oldkey: PatchKey) -> PatchKey:
         if oldkey in self.ids:
             return self.ids[oldkey]
+
         bbox = bounding_box(data)
+        _, seq, *_ = oldkey
+
         try:
             newkey = self.bboxes[bbox]
-            log.debug(f"Patch {oldkey} identified with {newkey}")
+            log.debug(f"Patch {oldkey} identified with {newkey} by bounding box")
         except KeyError:
-            newkey = oldkey
+            try:
+                newkey = self.seqs[seq]
+                log.debug(f"Patch {oldkey} identified with {newkey} by sequence number")
+            except KeyError:
+                newkey = oldkey
+
         self.ids[oldkey] = newkey
         self.bboxes[bbox] = newkey
+        self.seqs[seq] = newkey
         return newkey
 
 
