@@ -354,7 +354,7 @@ class IFEMReader(Reader):
 
         # Delete the bases we don't need
         if config.only_bases:
-            keep = {b.lower() for b in config.only_bases} | {config.coords.lower()}
+            keep = {b.lower() for b in config.only_bases} | {config.coords.name.lower()}
             self.bases = {name: basis for name, basis in self.bases.items() if name.lower() in keep}
 
         # Debug output
