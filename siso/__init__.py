@@ -113,6 +113,9 @@ class Config(metaclass=ConfigMeta):
     # List of basis objects to copy to output. Used by the IFEM reader.
     only_bases = Setting((), Reader, name='--basis')
 
+    # Strict patch identification. Used by the IFEM reader.
+    strict_id = Setting(False, Reader, name='--strict-id')
+
     # Volumetric/surface field behaviour. Used by the WRF reader.
     # - volumetric: only include volumetric fields
     # - planar: only include surface fields

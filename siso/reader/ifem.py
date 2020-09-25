@@ -27,23 +27,37 @@ from ..writer import Writer
 class PatchCatalogue:
 
     ids: Dict[PatchKey, PatchKey]
+    seqs: Dict[int, PatchKey]
     bboxes: Dict[BoundingBox, PatchKey]
 
     def __init__(self):
         self.bboxes = dict()
+        self.seqs = dict()
         self.ids = dict()
 
     def setdefault(self, data: Array2D, oldkey: PatchKey) -> PatchKey:
         if oldkey in self.ids:
             return self.ids[oldkey]
+
         bbox = bounding_box(data)
+        _, seq, *_ = oldkey
+
         try:
             newkey = self.bboxes[bbox]
-            log.debug(f"Patch {oldkey} identified with {newkey}")
+            log.debug(f"Patch {oldkey} identified with {newkey} by bounding box")
         except KeyError:
-            newkey = oldkey
+            if config.strict_id:
+                newkey = oldkey
+            else:
+                try:
+                    newkey = self.seqs[seq]
+                    log.debug(f"Patch {oldkey} identified with {newkey} by sequence number")
+                except KeyError:
+                    newkey = oldkey
+
         self.ids[oldkey] = newkey
         self.bboxes[bbox] = newkey
+        self.seqs[seq] = newkey
         return newkey
 
 
@@ -284,7 +298,7 @@ class IFEMReader(Reader):
     def validate(self):
         super().validate()
         config.ensure_limited(
-            ConfigTarget.Reader, 'only_bases',
+            ConfigTarget.Reader, 'only_bases', 'strict_id',
             reason="not supported by IFEM"
         )
 
@@ -354,7 +368,7 @@ class IFEMReader(Reader):
 
         # Delete the bases we don't need
         if config.only_bases:
-            keep = {b.lower() for b in config.only_bases} | {config.coords.lower()}
+            keep = {b.lower() for b in config.only_bases} | {config.coords.name.lower()}
             self.bases = {name: basis for name, basis in self.bases.items() if name.lower() in keep}
 
         # Debug output

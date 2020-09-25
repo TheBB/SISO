@@ -434,7 +434,7 @@ class GeometryManager:
             patchid = self.id_by_key(patch.key)
         except KeyError:
             patchid = len(self.patch_keys)
-            log.debug(f"New unique patch detected, assigned ID {patchid}")
+            log.debug(f"New unique patch detected {patch.key}, assigned ID {patchid}")
             self.patch_keys[patch.key] = patchid
         return patchid
 
@@ -442,4 +442,7 @@ class GeometryManager:
         try:
             return self.id_by_key(patch.key)
         except KeyError:
-            raise ValueError(f"Unable to find corresponding geometry patch for {patch.key}")
+            msg = f"Unable to find corresponding geometry patch for {patch.key}"
+            if config.strict_id:
+                msg += f", consider trying without {config.cname('strict_id')}"
+            raise ValueError(msg)
