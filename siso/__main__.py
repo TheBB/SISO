@@ -76,6 +76,7 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
+@tracked_option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
 
 @tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
 @tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')

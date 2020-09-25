@@ -442,4 +442,7 @@ class GeometryManager:
         try:
             return self.id_by_key(patch.key)
         except KeyError:
-            raise ValueError(f"Unable to find corresponding geometry patch for {patch.key}")
+            msg = f"Unable to find corresponding geometry patch for {patch.key}"
+            if config.strict_id:
+                msg += f", consider trying without {config.cname('strict_id')}"
+            raise ValueError(msg)

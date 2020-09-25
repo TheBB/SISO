@@ -46,11 +46,14 @@ class PatchCatalogue:
             newkey = self.bboxes[bbox]
             log.debug(f"Patch {oldkey} identified with {newkey} by bounding box")
         except KeyError:
-            try:
-                newkey = self.seqs[seq]
-                log.debug(f"Patch {oldkey} identified with {newkey} by sequence number")
-            except KeyError:
+            if config.strict_id:
                 newkey = oldkey
+            else:
+                try:
+                    newkey = self.seqs[seq]
+                    log.debug(f"Patch {oldkey} identified with {newkey} by sequence number")
+                except KeyError:
+                    newkey = oldkey
 
         self.ids[oldkey] = newkey
         self.bboxes[bbox] = newkey
@@ -295,7 +298,7 @@ class IFEMReader(Reader):
     def validate(self):
         super().validate()
         config.ensure_limited(
-            ConfigTarget.Reader, 'only_bases',
+            ConfigTarget.Reader, 'only_bases', 'strict_id',
             reason="not supported by IFEM"
         )
 
