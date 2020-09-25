@@ -434,7 +434,7 @@ class GeometryManager:
             patchid = self.id_by_key(patch.key)
         except KeyError:
             patchid = len(self.patch_keys)
-            log.debug(f"New unique patch detected, assigned ID {patchid}")
+            log.debug(f"New unique patch detected {patch.key}, assigned ID {patchid}")
             self.patch_keys[patch.key] = patchid
         return patchid
 
