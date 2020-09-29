@@ -434,7 +434,7 @@ class IFEMReader(Reader):
             if not (1 < len(sourcenames) < 4):
                 continue
 
-            sourcesnames = sorted(sourcenames, key=lambda s: s[-1])
+            sourcenames = sorted(sourcenames, key=lambda s: s[-1])
             sources = [self._fields[s] for s in sourcenames]
             sourcenames = ', '.join(sourcenames)
             self._fields[fname] = CombinedField(fname, sources)
