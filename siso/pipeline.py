@@ -90,11 +90,12 @@ def pipeline(reader: Reader, writer: Writer):
                     geom(patch, data)
 
             for field in fields:
-                for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
-                    if field.is_vector and trivial:
-                        data = converter.vectors(geometry.coords, config.coords, data)
-                    elif field.is_vector:
-                        data = converter.vectors(geometry.coords, config.coords, data, nodes=geometry_nodes[patch.key])
-                    writer.update_field(field, patch, data)
+                with step.field(field) as fld:
+                    for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
+                        if field.is_vector and trivial:
+                            data = converter.vectors(geometry.coords, config.coords, data)
+                        elif field.is_vector:
+                            data = converter.vectors(geometry.coords, config.coords, data, nodes=geometry_nodes[patch.key])
+                        fld(patch, data)
 
             first = False

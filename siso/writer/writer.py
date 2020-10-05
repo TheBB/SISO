@@ -100,6 +100,7 @@ class Writer(Filter, StepFilter):
 
     @contextmanager
     def field(self, field: Field):
+        assert self.geometry_finalized
         yield partial(self.update_field, field)
 
     def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
