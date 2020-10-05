@@ -1,15 +1,16 @@
 from pathlib import Path
+import re
 
 import numpy as np
 from scipy.io import FortranFile
 
-from typing import Optional, Iterable, Tuple
+from typing import Optional, Iterable, Tuple, TextIO
 from ..typing import StepData, Array2D
 
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..fields import Field, SimpleField, Geometry, FieldPatches
-from ..geometry import Patch, UnstructuredPatch, Hex
+from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex, Quad
 from ..util import fortran_skip_record, save_excursion, cache
 from ..writer import Writer
 
@@ -67,12 +68,15 @@ class SIMRAReader(Reader):
     u4_type: np.dtype
 
     @classmethod
-    def applicable(self, filename: Path) -> bool:
+    def applicable(cls, filename: Path) -> bool:
         try:
+            assert filename.suffix == '.res'
             endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
             u4_type = f'{endian}u4'
             with FortranFile(filename, 'r', header_dtype=u4_type) as f:
-                assert f._read_size() % 4 == 0
+                size = f._read_size()
+                assert size % 4 == 0
+                assert (size // 4 - 1) % 11 == 0  # Eleven scalars per point plus a time
             with FortranFile(filename.with_name('mesh.dat'), 'r', header_dtype=u4_type) as f:
                 assert f._read_size() == 6 * 4
             return True
@@ -143,3 +147,63 @@ class SIMRAReader(Reader):
         yield SIMRAField('pts', 8, 1, self)
         yield SIMRAField('rho', 9, 1, self)
         yield SIMRAField('rhos', 10, 1, self)
+
+
+class SIMRA2DMeshReader(Reader):
+
+    reader_name = "SIMRA-map"
+
+    filename: Path
+    mapfile: TextIO
+    shape: Tuple[int, int]
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        # The first line should have two right-aligned positive
+        # integers, exactly eight characters each
+        try:
+            with open(filename, 'r') as f:
+                line = next(f)
+            assert len(line) == 17
+            assert re.match(r'[ ]*[0-9]+', line[:8])
+            assert re.match(r'[ ]*[0-9]+', line[8:16])
+            assert line[-1] == '\n'
+            return True
+        except:
+            return False
+
+    def __init__(self, filename: Path):
+        self.filename = filename
+
+    def validate(self):
+        super().validate()
+        config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
+        config.ensure_limited(ConfigTarget.Reader, reason=f"not supported by {self.reader_name}")
+
+    def __enter__(self):
+        self.mapfile = open(self.filename, 'r').__enter__()
+        self.shape = tuple(int(s) - 1 for s in next(self.mapfile).split())
+        return self
+
+    def __exit__(self, *args):
+        return self.mapfile.__exit__(*args)
+
+    @property
+    def nodeshape(self):
+        return tuple(s+1 for s in self.shape)
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        yield (0, {'time': 0.0})
+
+    def patch(self):
+        return StructuredPatch(('geometry',), self.shape[::-1], celltype=Quad())
+
+    def nodes(self):
+        nodes = []
+        for line in self.mapfile:
+            nodes.extend(map(float, line.split()))
+        nodes = np.array(nodes).reshape(*self.nodeshape[::-1], 3)
+        return nodes.transpose(1, 0, 2).reshape(-1, 3)
+
+    def fields(self) -> Iterable[Field]:
+        yield SIMRAGeometryField(self)

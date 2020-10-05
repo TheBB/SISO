@@ -139,6 +139,7 @@ testcase('lr/square-2.lr', None, FORMATS)
 testcase('lr/backstep-3.lr', None, FORMATS)
 testcase('lr/cube-3.lr', None, FORMATS)
 testcase('res/box/box.res', None, FORMATS)
+testcase('simra-map.dat/map.dat', None, ['pvd'])
 
 # WRF reader to PVD writer with various CLI options
 for n in ['eastward', 'northward', 'outward']:
