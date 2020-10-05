@@ -89,6 +89,14 @@ class VTFWriter(TesselatedWriter):
         with super().step(stepdata) as step:
             yield step
 
+    @contextmanager
+    def geometry(self, field: Field):
+        with super().geometry(field) as geometry:
+            yield geometry
+            if self.dirty_geometry:
+                self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
+            self.dirty_geometry = False
+
     def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=False)
 
@@ -110,12 +118,6 @@ class VTFWriter(TesselatedWriter):
         else:
             self.geometry_blocks[patchid] = (nblock, eblock)
         self.dirty_geometry = True
-
-    def finalize_geometry(self):
-        if self.dirty_geometry:
-            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
-        self.dirty_geometry = False
-        super().finalize_geometry()
 
     def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)

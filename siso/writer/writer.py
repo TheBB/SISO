@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+from functools import partial
 from inspect import isabstract
 from pathlib import Path
 
@@ -18,11 +19,11 @@ from ..util import subclasses
 
 
 
-class Writer(Filter):
+class Writer(Filter, StepFilter):
 
     writer_name: str
 
-    geometry: GeometryManager
+    _geometry: GeometryManager
     outpath: Path
 
     stepid: int
@@ -49,7 +50,7 @@ class Writer(Filter):
         raise TypeError(f"Unable to find any applicable writers for {fmt}")
 
     def __init__(self, outpath: Path):
-        self.geometry = GeometryManager()
+        self._geometry = GeometryManager()
         self.outpath = Path(outpath)
 
     def validate(self):
@@ -91,10 +92,15 @@ class Writer(Filter):
         assert not self.step_finalized
         self.step_finalized = True
 
-    def add_step(self, **stepdata: Any):
-        """Increment the step counter and store the data (which may be time,
-        frequency, etc.)
-        """
+    @contextmanager
+    def geometry(self, field: Field):
+        self.geometry_finalized = False
+        yield partial(self.update_geometry, field)
+        self.geometry_finalized = True
+
+    @contextmanager
+    def field(self, field: Field):
+        yield partial(self.update_field, field)
 
     def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
         """Call this after add_step to update the geometry for each new patch.
@@ -102,14 +108,7 @@ class Writer(Filter):
         reimplemented in subclasses.
         """
         assert not self.geometry_finalized
-        return self.geometry.update(patch, data)
-
-    def finalize_geometry(self):
-        """Call this method after all patches have been updated to allow the
-        writer to push data to disk.
-        """
-        assert not self.geometry_finalized
-        self.geometry_finalized = True
+        return self._geometry.update(patch, data)
 
     @abstractmethod
     def update_field(self, field: Field, patch: PatchData, data: FieldData):
@@ -139,12 +138,12 @@ class TesselatedWriter(Writer):
 
     @update_field.register(SimpleField)
     def _(self, field: SimpleField, patch: Patch, data: Array2D):
-        patchid = self.geometry.global_id(patch)
+        patchid = self._geometry.global_id(patch)
         data = patch.tesselate_field(data, cells=field.cells)
         self._update_field(field, patchid, data)
 
     @update_field.register(CombinedField)
     def _(self, field: CombinedField, patch: List[Patch], data: List[Array2D]):
-        patchid = self.geometry.global_id(patch[0])
+        patchid = self._geometry.global_id(patch[0])
         data = np.hstack([p.tesselate_field(d, cells=field.cells) for p, d in zip(patch, data)])
         self._update_field(field, patchid, data)

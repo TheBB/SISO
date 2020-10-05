@@ -82,12 +82,12 @@ def pipeline(reader: Reader, writer: Writer):
     first = True
     for stepid, stepdata in log.iter.plain('Step', steps):
         with writer.step(stepdata) as step:
-            for patch, data in geometry.patches(stepid, force=first):
-                if not trivial:
-                    geometry_nodes[patch.key] = data
-                data = converter.points(geometry.coords, config.coords, data)
-                writer.update_geometry(geometry, patch, data)
-            writer.finalize_geometry()
+            with step.geometry(geometry) as geom:
+                for patch, data in geometry.patches(stepid, force=first):
+                    if not trivial:
+                        geometry_nodes[patch.key] = data
+                    data = converter.points(geometry.coords, config.coords, data)
+                    geom(patch, data)
 
             for field in fields:
                 for patch, data in field.patches(stepid, force=first, coords=geometry.coords):

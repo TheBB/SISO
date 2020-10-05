@@ -22,11 +22,11 @@ class Filter(ABC):
 class StepFilter(ABC):
 
     @abstractmethod
-    def geometry(self) -> ContextManager['FieldFilter']:
+    def geometry(self, field: Field) -> ContextManager['FieldFilter']:
         pass
 
     @abstractmethod
-    def field(self) -> ContextManager['FieldFilter']:
+    def field(self, field: Field) -> ContextManager['FieldFilter']:
         pass
 
 
