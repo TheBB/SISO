@@ -42,6 +42,8 @@ class PreparedTestCase:
     reference_path: Path
     reference_files: List[Path]
     extra_args: List[str]
+    abs_tol: float
+    rel_tol: float
 
     def check_files(self, path: Path) -> Iterator[Tuple[Path, Path]]:
         """Yield a sequence of tuples, the first being the output of the test
@@ -77,7 +79,7 @@ MULTISTEP_FORMATS = {'pvd', 'vtf'}
 
 
 def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
-             *extra_args: str, suffix: str = ''):
+             *extra_args: str, suffix: str = '', abs_tol=1e-15, rel_tol=1e-7):
     """Create test cases for converting SOURCEFILE to every format listed
     in FORMATS.  NSTEPS should be None if the source data has no
     timesteps, or the number of steps if it does.
@@ -93,6 +95,8 @@ def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
             reference_path=TESTDATA_DIR/fmt,
             reference_files=reference_files,
             extra_args=list(extra_args),
+            abs_tol=abs_tol,
+            rel_tol=rel_tol,
         ))
 
 
@@ -139,6 +143,8 @@ testcase('lr/square-2.lr', None, FORMATS)
 testcase('lr/backstep-3.lr', None, FORMATS)
 testcase('lr/cube-3.lr', None, FORMATS)
 testcase('res/box/box.res', None, FORMATS)
+testcase('simra-map.dat/map.dat', None, FORMATS)
+testcase('simra-mesh.dat/mesh.dat', None, FORMATS, abs_tol=1e-5)  # Single precision
 
 # WRF reader to PVD writer with various CLI options
 for n in ['eastward', 'northward', 'outward']:
@@ -164,7 +170,7 @@ testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U', '-l', 'V', '-l', '
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U,V,W', suffix='-filtered')
 
 
-def compare_vtk_data(out, ref):
+def compare_vtk_data(out, ref, case: PreparedTestCase):
     """Helper function for comparing two vtkDataSetAttributes objects,
     generally vtkPointData or vtkCellData.
     """
@@ -175,20 +181,22 @@ def compare_vtk_data(out, ref):
         np.testing.assert_allclose(
             vtknp.vtk_to_numpy(out.GetAbstractArray(name)),
             vtknp.vtk_to_numpy(ref.GetAbstractArray(i)),
-            atol=1e-15,
+            atol=case.abs_tol,
+            rtol=case.rel_tol,
         )
 
 
-def compare_vtk_unstructured(out, ref):
+def compare_vtk_unstructured(out, ref, case: PreparedTestCase):
     """Helper function for comparing two vtkDataSet objects."""
     np.testing.assert_allclose(
         vtknp.vtk_to_numpy(out.GetPoints().GetData()),
         vtknp.vtk_to_numpy(ref.GetPoints().GetData()),
-        atol=1e-15,
+        atol=case.abs_tol,
+        rtol=case.rel_tol,
     )
     np.testing.assert_array_equal(
         vtknp.vtk_to_numpy(out.GetCells().GetData()),
         vtknp.vtk_to_numpy(ref.GetCells().GetData()),
     )
-    compare_vtk_data(out.GetPointData(), ref.GetPointData())
-    compare_vtk_data(out.GetCellData(), ref.GetCellData())
+    compare_vtk_data(out.GetPointData(), ref.GetPointData(), case)
+    compare_vtk_data(out.GetCellData(), ref.GetCellData(), case)

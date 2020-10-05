@@ -17,7 +17,7 @@ def load_grid(filename: Path):
     return reader.GetOutput()
 
 
-def compare_pvd(outfn: Path, reffn: Path):
+def compare_pvd(outfn: Path, reffn: Path, case: PreparedTestCase):
     assert outfn.exists()
     assert reffn.exists()
     with open(outfn, 'r') as f:
@@ -40,6 +40,7 @@ def compare_pvd(outfn: Path, reffn: Path):
         compare_vtk_unstructured(
             load_grid(outfn.parent / outtag.attrib['file']),
             load_grid(reffn.parent / reftag.attrib['file']),
+            case
         )
 
 
@@ -47,4 +48,4 @@ def compare_pvd(outfn: Path, reffn: Path):
 def test_pvd_integrity(case: PreparedTestCase):
     with case.invoke('pvd') as tempdir:
         for out, ref in case.check_files(tempdir):
-            compare_pvd(out, ref)
+            compare_pvd(out, ref, case)
