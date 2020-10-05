@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from pathlib import Path
 import re
 
@@ -16,15 +17,29 @@ from ..writer import Writer
 
 
 
+# Utilities
+# ----------------------------------------------------------------------
+
+
+def dtypes(endianness):
+    endian = {'native': '=', 'big': '>', 'small': '<'}[endianness]
+    return np.dtype(f'{endian}f4'), np.dtype(f'{endian}u4')
+
+
+
+# Fields
+# ----------------------------------------------------------------------
+
+
 class SIMRAField(SimpleField):
 
     cells = False
     decompose = False
 
     index: int
-    reader: 'SIMRAReader'
+    reader: 'SIMRAResultReader'
 
-    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAReader'):
+    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader'):
         self.name = name
         self.index = index
         self.ncomps = ncomps
@@ -54,162 +69,44 @@ class SIMRAGeometryField(SimpleField):
 
 
 
-class SIMRA3DMeshReader(Reader):
-
-    reader_name = "SIMRA-mesh"
-
-    filename: Path
-    mesh: FortranFile
-
-    @classmethod
-    def applicable(cls, filename:  Path) -> bool:
-        endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
-        u4_type = f'{endian}u4'
-        try:
-            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
-                assert f._read_size() == 6 * 4
-            return True
-        except:
-            return False
-
-    def __init__(self, filename: Path):
-        endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
-        self.f4_type = np.dtype(f'{endian}f4')
-        self.u4_type = np.dtype(f'{endian}u4')
-        self.filename = filename
-
-    def validate(self):
-        super().validate()
-        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
-        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
-
-    def __enter__(self):
-        self.mesh = FortranFile(self.filename, 'r', header_dtype=self.u4_type).__enter__()
-        return self
-
-    def __exit__(self, *args):
-        self.mesh.__exit__(*args)
-
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        yield (0, {'time': 0.0})
-
-    @cache(1)
-    def patch(self) -> Patch:
-        with save_excursion(self.mesh._fp):
-            npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
-            fortran_skip_record(self.mesh)
-            cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-            return UnstructuredPatch(('geometry',), npts, cells, celltype=Hex())
-
-    @cache(1)
-    def nodes(self) -> Array2D:
-        with save_excursion(self.mesh._fp):
-            npts, _, _, _, _, _ = self.mesh.read_ints(self.u4_type)
-            return self.mesh.read_reals(self.f4_type).reshape(npts, 3)
-
-    def fields(self) -> Iterable[Field]:
-        yield SIMRAGeometryField(self)
+# Abstract reader
+# ----------------------------------------------------------------------
 
 
 class SIMRAReader(Reader):
 
-    reader_name = "SIMRA"
-
-    result_fn: Path
-    mesh_fn: Path
-
-    result: FortranFile
-    mesh: FortranFile
-
     f4_type: np.dtype
     u4_type: np.dtype
-
-    @classmethod
-    def applicable(cls, filename: Path) -> bool:
-        try:
-            # It's too easy to mistake other files for SIMRA results,
-            # so we require a certain suffix
-            assert filename.suffix == '.res'
-
-            endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
-            u4_type = f'{endian}u4'
-            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
-                size = f._read_size()
-                assert size % 4 == 0
-                assert (size // 4 - 1) % 11 == 0  # Eleven scalars per point plus a time
-            with FortranFile(filename.with_name('mesh.dat'), 'r', header_dtype=u4_type) as f:
-                assert f._read_size() == 6 * 4
-            return True
-        except:
-            return False
-
-    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None):
-        self.result_fn = Path(result_fn)
-        self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
-
-        if not self.mesh_fn.is_file():
-            raise IOError(f"Unable to find mesh file: {self.mesh_fn}")
-
-        endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
-        self.f4_type = np.dtype(f'{endian}f4')
-        self.u4_type = np.dtype(f'{endian}u4')
 
     def validate(self):
         super().validate()
         config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
         config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
 
-    def __enter__(self):
-        self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
-        self.mesh = FortranFile(self.mesh_fn, 'r', header_dtype=self.u4_type).__enter__()
-        return self
-
-    def __exit__(self, *args):
-        self.mesh.__exit__(*args)
-        self.result.__exit__(*args)
+    def __init__(self):
+        self.f4_type, self.u4_type = dtypes(config.input_endianness)
 
     def steps(self) -> Iterable[Tuple[int, StepData]]:
-        # This is slightly hacky, but grabs the time value for the
-        # next timestep without reading the whole dataset
-        with save_excursion(self.result._fp):
-            self.result._read_size()
-            time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
-        yield (0, {'time': time})
+        yield (0, {'time': 0.0})
 
-    @cache(1)
+    @abstractmethod
     def patch(self) -> Patch:
-        with save_excursion(self.mesh._fp):
-            npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
-            fortran_skip_record(self.mesh)
-            cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-            return UnstructuredPatch(('geometry',), npts, cells, celltype=Hex())
+        pass
 
-    @cache(1)
+    @abstractmethod
     def nodes(self) -> Array2D:
-        with save_excursion(self.mesh._fp):
-            npts, _, _, _, _, _ = self.mesh.read_ints(self.u4_type)
-            return self.mesh.read_reals(self.f4_type).reshape(npts, 3)
-
-    @cache(1)
-    def data(self) -> Array2D:
-        data = self.result.read_reals(dtype=self.f4_type)
-        _, data = data[0], data[1:].reshape(-1, 11)
-        return data
+        pass
 
     def fields(self) -> Iterable[Field]:
         yield SIMRAGeometryField(self)
-        yield SIMRAField('u', 0, 3, self)
-        yield SIMRAField('ps', 3, 1, self)
-        yield SIMRAField('tk', 4, 1, self)
-        yield SIMRAField('td', 5, 1, self)
-        yield SIMRAField('vtef', 6, 1, self)
-        yield SIMRAField('pt', 7, 1, self)
-        yield SIMRAField('pts', 8, 1, self)
-        yield SIMRAField('rho', 9, 1, self)
-        yield SIMRAField('rhos', 10, 1, self)
 
 
-class SIMRA2DMeshReader(Reader):
+
+# Concrete readers
+# ----------------------------------------------------------------------
+
+
+class SIMRA2DMeshReader(SIMRAReader):
 
     reader_name = "SIMRA-map"
 
@@ -233,12 +130,8 @@ class SIMRA2DMeshReader(Reader):
             return False
 
     def __init__(self, filename: Path):
+        super().__init__()
         self.filename = filename
-
-    def validate(self):
-        super().validate()
-        config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
-        config.ensure_limited(ConfigTarget.Reader, reason=f"not supported by {self.reader_name}")
 
     def __enter__(self):
         self.mapfile = open(self.filename, 'r').__enter__()
@@ -252,9 +145,6 @@ class SIMRA2DMeshReader(Reader):
     def nodeshape(self):
         return tuple(s+1 for s in self.shape)
 
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        yield (0, {'time': 0.0})
-
     def patch(self):
         return StructuredPatch(('geometry',), self.shape[::-1], celltype=Quad())
 
@@ -265,5 +155,118 @@ class SIMRA2DMeshReader(Reader):
         nodes = np.array(nodes).reshape(*self.nodeshape[::-1], 3)
         return nodes.transpose(1, 0, 2).reshape(-1, 3)
 
+
+class SIMRA3DMeshReader(SIMRAReader):
+
+    reader_name = "SIMRA-mesh"
+
+    filename: Path
+    mesh: FortranFile
+
+    @classmethod
+    def applicable(cls, filename:  Path) -> bool:
+        _, u4_type = dtypes(config.input_endianness)
+        try:
+            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
+                assert f._read_size() == 6 * 4
+            return True
+        except:
+            return False
+
+    def __init__(self, filename: Path):
+        super().__init__()
+        self.filename = filename
+
+    def __enter__(self):
+        self.mesh = FortranFile(self.filename, 'r', header_dtype=self.u4_type).__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self.mesh.__exit__(*args)
+
+    @cache(1)
+    def patch(self) -> Patch:
+        with save_excursion(self.mesh._fp):
+            npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
+            fortran_skip_record(self.mesh)
+            cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
+            return UnstructuredPatch(('geometry',), npts, cells, celltype=Hex())
+
+    @cache(1)
+    def nodes(self) -> Array2D:
+        with save_excursion(self.mesh._fp):
+            npts, _, _, _, _, _ = self.mesh.read_ints(self.u4_type)
+            return self.mesh.read_reals(self.f4_type).reshape(npts, 3)
+
+
+class SIMRAResultReader(SIMRAReader):
+
+    reader_name = "SIMRA"
+
+    result_fn: Path
+    mesh_fn: Path
+
+    result: FortranFile
+    mesh: SIMRA3DMeshReader
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        _, u4_type = dtypes(config.input_endianness)
+        try:
+            # It's too easy to mistake other files for SIMRA results,
+            # so we require a certain suffix
+            assert filename.suffix == '.res'
+            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
+                size = f._read_size()
+                assert size % 4 == 0
+                assert (size // 4 - 1) % 11 == 0  # Eleven scalars per point plus a time
+            assert SIMRA3DMeshReader.applicable(filename.with_name('mesh.dat'))
+            return True
+        except:
+            return False
+
+    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None):
+        super().__init__()
+        self.result_fn = Path(result_fn)
+        self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
+
+    def __enter__(self):
+        self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
+        self.mesh = SIMRA3DMeshReader(self.mesh_fn).__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self.mesh.__exit__(*args)
+        self.result.__exit__(*args)
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        # This is slightly hacky, but grabs the time value for the
+        # next timestep without reading the whole dataset
+        with save_excursion(self.result._fp):
+            self.result._read_size()
+            time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
+        yield (0, {'time': time})
+
+    def patch(self) -> Patch:
+        return self.mesh.patch()
+
+    def nodes(self) -> Array2D:
+        return self.mesh.nodes()
+
+    @cache(1)
+    def data(self) -> Array2D:
+        data = self.result.read_reals(dtype=self.f4_type)
+        _, data = data[0], data[1:].reshape(-1, 11)
+        return data
+
     def fields(self) -> Iterable[Field]:
-        yield SIMRAGeometryField(self)
+        yield from self.mesh.fields()
+        yield SIMRAField('u', 0, 3, self)
+        yield SIMRAField('ps', 3, 1, self)
+        yield SIMRAField('tk', 4, 1, self)
+        yield SIMRAField('td', 5, 1, self)
+        yield SIMRAField('vtef', 6, 1, self)
+        yield SIMRAField('pt', 7, 1, self)
+        yield SIMRAField('pts', 8, 1, self)
+        yield SIMRAField('rho', 9, 1, self)
+        yield SIMRAField('rhos', 10, 1, self)
