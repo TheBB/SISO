@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from inspect import isabstract
 from pathlib import Path
 
@@ -7,16 +8,17 @@ from singledispatchmethod import singledispatchmethod
 import treelog as log
 
 from typing import Any, Optional, Dict, Union, List
-from ..typing import Array2D
+from ..typing import Array2D, StepData
 
 from .. import config
 from ..geometry import Patch, UnstructuredPatch, GeometryManager
 from ..fields import Field, PatchData, FieldData, SimpleField, CombinedField
+from ..filters import Filter, StepFilter, FieldFilter
 from ..util import subclasses
 
 
 
-class Writer(ABC):
+class Writer(Filter):
 
     writer_name: str
 
@@ -29,7 +31,7 @@ class Writer(ABC):
     geometry_finalized: bool
 
     @classmethod
-    def applicable(self, fmt: str) -> bool:
+    def applicable(cls, fmt: str) -> bool:
         """Return true if the class can handle the given format."""
         return False
 
@@ -75,15 +77,24 @@ class Writer(ABC):
     def __exit__(self, tp, value, bt):
         pass
 
-    def add_step(self, **stepdata: Any):
-        """Increment the step counter and store the data (which may be time,
-        frequency, etc.)
-        """
+    @contextmanager
+    def step(self, stepdata: StepData):
         assert self.step_finalized
         self.stepid += 1
         self.stepdata = stepdata
         self.step_finalized = False
         self.geometry_finalized = False
+
+        yield self
+
+        assert self.geometry_finalized
+        assert not self.step_finalized
+        self.step_finalized = True
+
+    def add_step(self, **stepdata: Any):
+        """Increment the step counter and store the data (which may be time,
+        frequency, etc.)
+        """
 
     def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
         """Call this after add_step to update the geometry for each new patch.
@@ -106,15 +117,6 @@ class Writer(ABC):
         which are defined on patches.
         """
         pass
-
-    def finalize_step(self):
-        """Call this method after all calls to update_field have been issued,
-        to allow the writer to push data to disk.
-        """
-        assert self.geometry_finalized
-        assert not self.step_finalized
-        self.step_finalized = True
-
 
 
 class TesselatedWriter(Writer):

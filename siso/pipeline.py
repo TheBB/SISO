@@ -81,22 +81,20 @@ def pipeline(reader: Reader, writer: Writer):
 
     first = True
     for stepid, stepdata in log.iter.plain('Step', steps):
-        writer.add_step(**stepdata)
+        with writer.step(stepdata) as step:
+            for patch, data in geometry.patches(stepid, force=first):
+                if not trivial:
+                    geometry_nodes[patch.key] = data
+                data = converter.points(geometry.coords, config.coords, data)
+                writer.update_geometry(geometry, patch, data)
+            writer.finalize_geometry()
 
-        for patch, data in geometry.patches(stepid, force=first):
-            if not trivial:
-                geometry_nodes[patch.key] = data
-            data = converter.points(geometry.coords, config.coords, data)
-            writer.update_geometry(geometry, patch, data)
-        writer.finalize_geometry()
+            for field in fields:
+                for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
+                    if field.is_vector and trivial:
+                        data = converter.vectors(geometry.coords, config.coords, data)
+                    elif field.is_vector:
+                        data = converter.vectors(geometry.coords, config.coords, data, nodes=geometry_nodes[patch.key])
+                    writer.update_field(field, patch, data)
 
-        for field in fields:
-            for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
-                if field.is_vector and trivial:
-                    data = converter.vectors(geometry.coords, config.coords, data)
-                elif field.is_vector:
-                    data = converter.vectors(geometry.coords, config.coords, data, nodes=geometry_nodes[patch.key])
-                writer.update_field(field, patch, data)
-
-        writer.finalize_step()
-        first = False
+            first = False

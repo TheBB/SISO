@@ -12,7 +12,7 @@ import vtk.util.numpy_support as vnp
 from dataclasses import dataclass
 
 from typing import Optional, Dict, List
-from ..typing import Array2D
+from ..typing import Array2D, StepData
 
 from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
@@ -113,8 +113,11 @@ class VTKWriter(TesselatedWriter):
 
         yield grid
 
-    def finalize_step(self):
-        super().finalize_step()
+    @contextmanager
+    def step(self, stepdata: StepData):
+        with super().step(stepdata) as step:
+            yield step
+
         with self.grid() as grid:
             pointdata = grid.GetPointData()
             celldata = grid.GetCellData()
@@ -199,8 +202,10 @@ class PVDWriter(VTUWriter):
         makedirs(filename.parent, mode=0o775, exist_ok=True)
         return filename
 
-    def finalize_step(self):
-        super().finalize_step()
+    @contextmanager
+    def step(self, stepdata: StepData):
+        with super().step(stepdata) as step:
+            yield step
         filename = self.make_filename(with_step=True)
         if self.stepdata:
             timestep = next(iter(self.stepdata.values()))

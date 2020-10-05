@@ -1,4 +1,5 @@
 from collections import defaultdict, OrderedDict
+from contextlib import contextmanager
 from pathlib import Path
 
 from dataclasses import dataclass
@@ -7,7 +8,7 @@ from singledispatchmethod import singledispatchmethod
 import treelog as log
 
 from typing import Optional, List, Dict, Any, Tuple, Type
-from ..typing import Array2D
+from ..typing import Array2D, StepData
 
 from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
@@ -82,9 +83,11 @@ class VTFWriter(TesselatedWriter):
                 desc = {'value': 'Eigenvalue', 'frequency': 'Frequency', 'time': 'Time'}[key]
                 func(stepid+1, '{} {:.4f}'.format(desc, value), value)
 
-    def add_step(self, **stepdata):
-        super().add_step(**stepdata)
+    @contextmanager
+    def step(self, stepdata: StepData):
         self.steps.append(stepdata)
+        with super().step(stepdata) as step:
+            yield step
 
     def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=False)
