@@ -15,14 +15,14 @@ def load_grid(filename: Path):
     return reader.GetOutput()
 
 
-def compare_vtu(out: Path, ref: Path):
+def compare_vtu(out: Path, ref: Path, case: PreparedTestCase):
     assert out.exists()
     assert ref.exists()
-    compare_vtk_unstructured(load_grid(out), load_grid(ref))
+    compare_vtk_unstructured(load_grid(out), load_grid(ref), case)
 
 
 @pytest.mark.parametrize('case', TESTCASES['vtu'])
 def test_vtu_integrity(case: PreparedTestCase):
     with case.invoke('vtu') as tempdir:
         for out, ref in case.check_files(tempdir):
-            compare_vtu(out, ref)
+            compare_vtu(out, ref, case)

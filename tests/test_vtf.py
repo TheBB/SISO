@@ -17,7 +17,7 @@ except ImportError:
 NUM = re.compile(r'-?\d+[ +\-e.\d]*\n?$')
 
 
-def compare_vtf(out, ref):
+def compare_vtf(out, ref, case: PreparedTestCase):
     outiter = iter(out)
     refiter = iter(ref)
     for i, (outline, refline) in enumerate(zip(outiter, refiter), start=1):
@@ -26,7 +26,7 @@ def compare_vtf(out, ref):
         if NUM.match(refline):
             out = list(map(float, outline.split()))
             ref = list(map(float, refline.split()))
-            np.testing.assert_allclose(out, ref, atol=1e-10)
+            np.testing.assert_allclose(out, ref, atol=case.abs_tol, rtol=case.rel_tol)
         else:
             assert outline == refline
 
@@ -43,4 +43,4 @@ def test_vtf_integrity(case: PreparedTestCase):
             assert out.exists()
             assert ref.exists()
             with open(out, 'r') as a, open(ref, 'r') as b:
-                compare_vtf(a, b)
+                compare_vtf(a, b, case)
