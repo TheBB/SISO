@@ -55,6 +55,8 @@ class Option(click.Option):
 class CoordsType(click.ParamType):
     """Parameter type for coordinate systems."""
 
+    name = "coords"
+
     def convert(self, value, param, ctx):
         if value is None or isinstance(value, Coords):
             return value
