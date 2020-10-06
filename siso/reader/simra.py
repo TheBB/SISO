@@ -153,7 +153,8 @@ class SIMRA2DMeshReader(SIMRAReader):
         for line in self.mapfile:
             nodes.extend(map(float, line.split()))
         nodes = np.array(nodes).reshape(*self.nodeshape[::-1], 3)
-        return nodes.transpose(1, 0, 2).reshape(-1, 3)
+        nodes[...,2 ] /= 10      # Map files have a vertical resolution factor of 10
+        return nodes.reshape(-1, 3)
 
 
 class SIMRA3DMeshReader(SIMRAReader):
