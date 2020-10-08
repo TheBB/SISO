@@ -4,14 +4,15 @@ import treelog as log
 
 from .writer import TesselatedWriter
 from ..fields import Field
-from ..geometry import UnstructuredPatch
+from ..geometry import UnstructuredPatch, StructuredPatch, Hex
 
 from ..typing import Array2D
+from typing import Any
 
 
-class NetCDFWriter(TesselatedWriter):
+class NetCDFCFWriter(TesselatedWriter):
 
-    writer_name = "NetCDF4-UGRID"
+    writer_name = "NetCDF4-CF"
 
     @classmethod
     def applicable(cls, fmt: str) -> bool:
@@ -19,9 +20,82 @@ class NetCDFWriter(TesselatedWriter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.filename = filename
         self.initialized_geometry = False
-        # self.finalized_geometry = False
+
+    def __enter__(self):
+        self.out = Dataset(self.outpath, 'w').__enter__()
+        self.timedim = self.out.createDimension('time')
+        self.timevar = self.out.createVariable('time', 'f8', ('time',))
+        self.out.Conventions = 'ACDD-1.3, CF-1.7'
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        self.out.__exit__(*args)
+        return super().__exit__(*args)
+
+    def add_step(self, **stepdata: Any):
+        super().add_step(**stepdata)
+        if 'time' in stepdata:
+            self.out['time'][self.stepid] = stepdata['time']
+        else:
+            self.out['time'][self.stepid] = self.stepid
+
+    def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
+        if self.initialized_geometry:
+            raise TypeError("NetCDF4-CF writer only supports single-patch geometries")
+        if self.stepid != 0:
+            raise ValueError("NetCDF4 writer currently only supports non-variable geometries")
+        if not isinstance(patch, StructuredPatch):
+            raise TypeError("NetCDF4-CF writer only supports structured grids")
+        if not isinstance(patch.celltype, Hex):
+            raise TypeError("NetCDF4-CF writer only supports hex-cells")
+
+        nodeshape = tuple(s+1 for s in patch.shape)
+        self.out.createDimension('i', nodeshape[0])
+        self.out.createDimension('j', nodeshape[1])
+        self.out.createDimension('k', nodeshape[2])
+
+        x = self.out.createVariable('x', 'f8', ('i', 'j', 'k'))
+        x[:] = data[:,0].reshape(nodeshape)
+
+        y = self.out.createVariable('y', 'f8', ('i', 'j', 'k'))
+        y[:] = data[:,1].reshape(nodeshape)
+
+        z = self.out.createVariable('z', 'f8', ('i', 'j', 'k'))
+        z[:] = data[:,2].reshape(nodeshape)
+
+        self.initialized_geometry = True
+
+    def _update_field(self, field: Field, patchid: int, data: Array2D):
+        if field.cells:
+            log.warning(f"NetCDF writer doesn't support cell fields: skipping {field.name}")
+            return
+        if field.ncomps > 1:
+            for i, subfield in enumerate(field.decompositions()):
+                self._insert_field(subfield, data[..., i:i+1])
+        else:
+            self._insert_field(field, data)
+
+    def _insert_field(self, field: Field, data: Array2D):
+        try:
+            var = self.out[field.name]
+        except IndexError:
+            var = self.out.createVariable(field.name, data.dtype, ('time', 'i', 'j', 'k'))
+        var[self.stepid, ...] = data.reshape(var.shape[1:])
+
+
+class NetCDFUgridWriter(TesselatedWriter):
+
+    writer_name = "NetCDF4-UGRID"
+
+    @classmethod
+    def applicable(cls, fmt: str) -> bool:
+        return False
+        # return fmt == 'nc'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initialized_geometry = False
         self.patches = {}
 
     def __enter__(self):
@@ -109,15 +183,3 @@ class NetCDFWriter(TesselatedWriter):
             estart += len(elements)
 
         self.patches = {}
-
-    # def update_field(self, results, name, stepid, patchid, kind='scalar', cells=False):
-    #     if cells:
-    #         return
-    #     if kind == 'vector':
-    #         for i, n in zip(range(results.shape[-1]), 'xyz'):
-    #             self._update_field(results[..., i], '{}_{}'.format(name, n), stepid, patchid)
-    #     else:
-    #         self._update_field(results, name, stepid, patchid)
-
-    # def finalize_step(self):
-    #     pass
