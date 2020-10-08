@@ -9,7 +9,7 @@ from ..typing import StepData, Array2D
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..fields import Field, SimpleField, Geometry, FieldPatches
-from ..geometry import Patch, UnstructuredPatch, Hex
+from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
 from ..util import fortran_skip_record, save_excursion, cache
 from ..writer import Writer
 
@@ -115,10 +115,10 @@ class SIMRAReader(Reader):
     @cache(1)
     def patch(self) -> Patch:
         with save_excursion(self.mesh._fp):
-            npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
+            npts, nelems, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
             fortran_skip_record(self.mesh)
             cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-            return UnstructuredPatch(('geometry',), npts, cells, celltype=Hex())
+            return StructuredPatch(('geometry',), (imax-1, jmax-1, kmax-1), celltype=Hex())
 
     @cache(1)
     def nodes(self) -> Array2D:
