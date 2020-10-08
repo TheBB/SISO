@@ -1,21 +1,14 @@
 from operator import attrgetter
 import treelog as log
 
-from typing import TypeVar, Iterable, List, Tuple
+from typing import Iterable, List, Tuple
 
 from . import config
+from .filters import Source, LastStepFilter
 from .coords import Coords, Converter, graph
 from .fields import Field, ComponentField
 from .reader import Reader
 from .writer import Writer
-
-
-T = TypeVar('T')
-def last(iterable: Iterable[T]) -> Iterable[T]:
-    """Yield only the last element in an iterable."""
-    for x in iterable:
-        pass
-    yield x
 
 
 def discover_decompositions(fields: List[Field]) -> Iterable[Field]:
@@ -58,15 +51,11 @@ def pick_geometry(geometries: List[Field]) -> Tuple[Field, Converter]:
     return geometries[index], converter
 
 
-def pipeline(reader: Reader, writer: Writer):
+def pipeline(reader: Source, writer: Writer):
     """Main driver for moving data from reader to writer."""
 
     if config.only_final_timestep:
-        config.require(multiple_timesteps=False)
-
-    steps = reader.steps()
-    if config.only_final_timestep:
-        steps = last(steps)
+        reader = LastStepFilter(reader)
 
     geometries, fields = discover_fields(reader)
     geometry, converter = pick_geometry(geometries)
@@ -80,7 +69,7 @@ def pipeline(reader: Reader, writer: Writer):
         trivial = True
 
     first = True
-    for stepid, stepdata in log.iter.plain('Step', steps):
+    for stepid, stepdata in log.iter.plain('Step', reader.steps()):
         with writer.step(stepdata) as step:
             with step.geometry(geometry) as geom:
                 for patch, data in geometry.patches(stepid, force=first):
