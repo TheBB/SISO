@@ -14,12 +14,12 @@ from ..typing import Array2D, StepData
 from .. import config
 from ..geometry import Patch, UnstructuredPatch, GeometryManager
 from ..fields import Field, PatchData, FieldData, SimpleField, CombinedField
-from ..filters import Filter, StepFilter, FieldFilter
+from ..filters import Sink, StepSink, FieldSink
 from ..util import subclasses
 
 
 
-class Writer(Filter, StepFilter):
+class Writer(Sink, StepSink):
 
     writer_name: str
 

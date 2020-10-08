@@ -12,14 +12,14 @@ from typing import ContextManager
 # ----------------------------------------------------------------------
 
 
-class Filter(ABC):
+class Sink(ABC):
 
     @abstractmethod
     def step(self, stepdata: StepData) -> ContextManager['StepFilter']:
         pass
 
 
-class StepFilter(ABC):
+class StepSink(ABC):
 
     @abstractmethod
     def geometry(self, field: Field) -> ContextManager['FieldFilter']:
@@ -30,8 +30,8 @@ class StepFilter(ABC):
         pass
 
 
-class FieldFilter(ABC):
+class FieldSink(ABC):
 
     @abstractmethod
-    def __call__(self, field: Field, patch: PatchData, data: FieldData):
+    def __call__(self, patch: PatchData, data: FieldData):
         pass
