@@ -104,7 +104,7 @@ class TesselatorFilter(Source):
             yield TesselatedField(field, self.manager)
 
 
-class TesselatedField(SourcedField, SimpleField):
+class TesselatedField(SourcedField):
 
     manager: GeometryManager
 
