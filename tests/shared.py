@@ -143,6 +143,7 @@ testcase('g2/annulus3D.g2', None, formats, **kwargs)
 # Single precision, therefore inflated tolerance
 testcase('res/box/box.res', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 testcase('simra-map.dat/map.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-mesh2d.dat/mesh2d.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 testcase('simra-mesh.dat/mesh.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 
 # Unstructured data sets
