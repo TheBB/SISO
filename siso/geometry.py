@@ -33,6 +33,11 @@ class CellType:
     num_pardim: int
     structured: bool
 
+    def __eq__(self, other):
+        if not isinstance(other, CellType):
+            return NotImplemented
+        return type(self) == type(other)
+
 
 class Quad(CellType):
 
@@ -81,9 +86,9 @@ class Topology(ABC):
         pass
 
     @abstractmethod
-    def tesselate(self) -> 'UnstructuredPatch':
+    def tesselate(self) -> 'UnstructuredTopology':
         """Convert to a suitable discrete representation.
-        Currently an UnstructuredPatch.
+        Currently an UnstructuredTopology.
         """
         pass
 
@@ -131,6 +136,15 @@ class UnstructuredTopology(Topology):
         self._num_nodes = num_nodes
         self.celltype = celltype
         assert cells.shape[-1] == celltype.num_nodes
+
+    @classmethod
+    def join(cls, left: 'UnstructuredTopology', right: 'UnstructuredTopology') -> 'UnstructuredTopology':
+        assert left.celltype == right.celltype
+        return cls(
+            left.num_nodes + right.num_nodes,
+            np.vstack((left.cells, right.cells + left.num_nodes)),
+            left.celltype
+        )
 
     @classmethod
     def from_lagrangian(cls, data: Union[bytes, str]) -> Tuple['UnstructuredTopology', Array2D]:

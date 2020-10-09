@@ -4,7 +4,7 @@ import treelog as log
 from typing import Iterable, List, Tuple
 
 from . import config
-from .filters import Source, LastStepFilter, TesselatorFilter
+from .filters import Source, LastStepFilter, TesselatorFilter, MergeTopologiesFilter
 from .coords import Coords, Converter, graph
 from .fields import Field, ComponentField
 from .reader import Reader
@@ -54,9 +54,13 @@ def pick_geometry(geometries: List[Field]) -> Tuple[Field, Converter]:
 def pipeline(reader: Source, writer: Writer):
     """Main driver for moving data from reader to writer."""
 
+    # TODO: Streamline filter application
     if config.only_final_timestep:
         reader = LastStepFilter(reader)
     reader = TesselatorFilter(reader)
+
+    if writer.writer_name != 'VTF':
+        reader = MergeTopologiesFilter(reader)
 
     geometries, fields = discover_fields(reader)
     geometry, converter = pick_geometry(geometries)

@@ -4,10 +4,10 @@ from contextlib import contextmanager
 from . import config
 from .coords import Coords
 from .fields import Field, CombinedField, SimpleField, SourcedField, PatchData, FieldData, FieldPatches
-from .geometry import GeometryManager, Patch
+from .geometry import GeometryManager, Patch, PatchKey, UnstructuredTopology
 
 from .typing import StepData, Array2D
-from typing import ContextManager, Iterable, Tuple, Optional
+from typing import ContextManager, Iterable, Tuple, Optional, Dict
 
 import numpy as np
 
@@ -137,3 +137,85 @@ class TesselatedField(SourcedField):
 
             else:
                 raise TypeError(f"Unable to find corresponding geometry patch in field {self.name}")
+
+
+
+# MergeTopologies
+# ----------------------------------------------------------------------
+
+
+class MergeTopologiesFilter(Source):
+
+    src: Source
+    indices: Dict[PatchKey, Tuple[int, int]]
+    last_step: int
+    next_index: int
+    topology: Optional[UnstructuredTopology]
+
+    def __init__(self, src: Source):
+        """Filter that combines all topologies into one."""
+        self.src = src
+        self.indices = dict()
+        self.last_step = -1
+        self.next_index = 0
+        self.topology = None
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        yield from self.src.steps()
+
+    def fields(self) -> Iterable[Field]:
+        for field in self.src.fields():
+            yield MergeTopologiesField(field, self)
+
+    def set_indices(self, stepid: int, key: PatchKey, nnodes: int):
+        if stepid != self.last_step:
+            self.indices.clear()
+            self.last_step = stepid
+            self.next_index = 0
+
+        self.indices[key] = (self.next_index, self.next_index + nnodes)
+        self.next_index += nnodes
+
+    def get_indices(self, patches: Iterable[Patch]) -> Iterable[Tuple[int, int]]:
+        return [self.indices[patch.key] for patch in patches]
+
+
+class MergeTopologiesField(SourcedField):
+
+    manager: MergeTopologiesFilter
+
+    def __init__(self, src: Source, manager: MergeTopologiesFilter):
+        self.src = src
+        self.manager = manager
+
+    def decompositions(self):
+        for field in self.src.decompositions():
+            yield MergeTopologiesField(field, self.manager)
+
+    def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
+        # print(self.name, len(list(self.src.patches(stepid, force=force, coords=coords))))
+
+        # TODO: Find a way to get this information without the data
+        if self.is_geometry:
+            topo = None
+            for patch, data in self.src.patches(stepid, force=force, coords=coords):
+                self.manager.set_indices(stepid, patch.key, len(data))
+                if topo is None:
+                    topo = patch.topology
+                else:
+                    assert isinstance(topo, UnstructuredTopology)
+                    assert isinstance(patch.topology, UnstructuredTopology)
+                    topo = UnstructuredTopology.join(topo, patch.topology)
+            if topo is not None:
+                self.manager.topology = topo
+
+        nnodes = self.manager.next_index
+        total_data = None
+        for patch, data in self.src.patches(stepid, force=force, coords=coords):
+            if total_data is None:
+                total_data = data
+            else:
+                total_data = np.vstack((total_data, data))
+
+        if total_data is not None:
+            yield Patch((0,), self.manager.topology), total_data

@@ -11,6 +11,7 @@ from .. import config, ConfigTarget
 from ..geometry import SplineTopology, LRTopology, Patch
 from ..fields import Field, SimpleField, Geometry, FieldPatches
 from .reader import Reader
+from ..util import save_excursion
 
 
 
@@ -70,8 +71,9 @@ class G2Reader(PureGeometryReader):
     suffix = '.g2'
 
     def patches(self):
-        for i, (topo, data) in enumerate(SplineTopology.from_string(self.f.read())):
-            yield Patch((i,), topo), data
+        with save_excursion(self.f):
+            for i, (topo, data) in enumerate(SplineTopology.from_string(self.f.read())):
+                yield Patch((i,), topo), data
 
 
 class LRReader(PureGeometryReader):
@@ -80,5 +82,6 @@ class LRReader(PureGeometryReader):
     suffix = '.lr'
 
     def patches(self):
-        for i, (topo, data) in enumerate(LRTopology.from_string(self.f.read())):
-            yield Patch((i,), topo), data
+        with save_excursion(self.f):
+            for i, (topo, data) in enumerate(LRTopology.from_string(self.f.read())):
+                yield Patch((i,), topo), data

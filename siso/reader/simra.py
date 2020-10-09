@@ -135,7 +135,8 @@ class SIMRA2DMeshReader(SIMRAReader):
 
     def __enter__(self):
         self.mapfile = open(self.filename, 'r').__enter__()
-        self.shape = tuple(int(s) - 1 for s in next(self.mapfile).split())
+        with save_excursion(self.mapfile):
+            self.shape = tuple(int(s) - 1 for s in next(self.mapfile).split())
         return self
 
     def __exit__(self, *args):
@@ -150,8 +151,10 @@ class SIMRA2DMeshReader(SIMRAReader):
 
     def nodes(self):
         nodes = []
-        for line in self.mapfile:
-            nodes.extend(map(float, line.split()))
+        with save_excursion(self.mapfile):
+            next(self.mapfile)
+            for line in self.mapfile:
+                nodes.extend(map(float, line.split()))
         nodes = np.array(nodes).reshape(*self.nodeshape[::-1], 3)
         nodes[...,2 ] /= 10      # Map files have a vertical resolution factor of 10
         return nodes.reshape(-1, 3)
