@@ -8,7 +8,7 @@ from typing import Iterable, Tuple, Optional
 from ..typing import StepData, Array2D
 
 from .. import config, ConfigTarget
-from ..geometry import Patch, SplinePatch, LRPatch
+from ..geometry import SplineTopology, LRTopology, Patch
 from ..fields import Field, SimpleField, Geometry, FieldPatches
 from .reader import Reader
 
@@ -70,7 +70,8 @@ class G2Reader(PureGeometryReader):
     suffix = '.g2'
 
     def patches(self):
-        yield from SplinePatch.from_string(('geometry',), self.f.read())
+        for i, (topo, data) in enumerate(SplineTopology.from_string(self.f.read())):
+            yield Patch((i,), topo), data
 
 
 class LRReader(PureGeometryReader):
@@ -79,4 +80,5 @@ class LRReader(PureGeometryReader):
     suffix = '.lr'
 
     def patches(self):
-        yield from LRPatch.from_string(('geometry',), self.f.read())
+        for i, (topo, data) in enumerate(LRTopology.from_string(self.f.read())):
+            yield Patch((i,), topo), data

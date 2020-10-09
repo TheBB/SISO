@@ -16,7 +16,7 @@ from ..typing import Array2D, StepData
 
 from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
-from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
+from ..geometry import UnstructuredTopology, Hex, Patch
 from ..util import ensure_ncomps
 from .writer import Writer
 
@@ -32,7 +32,7 @@ class VTKWriter(Writer):
 
     writer_name = "VTK"
 
-    patches: Dict[int, UnstructuredPatch]
+    topologies: Dict[int, UnstructuredTopology]
     fields: Dict[str, Field]
 
     @classmethod
@@ -41,7 +41,7 @@ class VTKWriter(Writer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.patches = dict()
+        self.topologies = dict()
         self.fields = dict()
 
     def nan_filter(self, data: Array2D) -> Array2D:
@@ -64,7 +64,7 @@ class VTKWriter(Writer):
 
     def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
         super().update_geometry(geometry, patch, data)
-        self.patches[patch.key[0]] = (patch, data)
+        self.topologies[patch.key[0]] = (patch.topology, data)
 
     def update_field(self, field: SimpleField, patch: Patch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
@@ -82,7 +82,7 @@ class VTKWriter(Writer):
     @contextmanager
     def grid(self) -> vtk.vtkDataSet:
         structured = self.is_structured()
-        patch, _ = next(iter(self.patches.values()))
+        patch, _ = next(iter(self.topologies.values()))
 
         grid = vtk.vtkStructuredGrid() if structured else vtk.vtkUnstructuredGrid()
         if structured:
@@ -91,18 +91,18 @@ class VTKWriter(Writer):
                 shape = (*shape, 0)
             grid.SetDimensions(*(s + 1 for s in shape))
 
-        # Concatenate nodes of all patches
-        allpoints = np.vstack([data for _, data in self.patches.values()])
+        # Concatenate nodes of all topologies
+        allpoints = np.vstack([data for _, data in self.topologies.values()])
         allpoints = ensure_ncomps(allpoints, 3, allow_scalar=False)
         points = vtk.vtkPoints()
         points.SetData(vnp.numpy_to_vtk(allpoints))
         grid.SetPoints(points)
 
-        # If unstructured, concatenate cells of all patches
+        # If unstructured, concatenate cells of all topologies
         if not structured:
-            patches = self.patches.values()
-            offset = chain([0], np.cumsum([p.num_nodes for p, _ in patches]))
-            cells = np.vstack([p.cells + off for (p, _), off in zip(patches, offset)])
+            topologies = self.topologies.values()
+            offset = chain([0], np.cumsum([p.num_nodes for p, _ in topologies]))
+            cells = np.vstack([p.cells + off for (p, _), off in zip(topologies, offset)])
             cells = np.hstack([cells.shape[-1] * np.ones((cells.shape[0], 1), dtype=int), cells])
             cells = cells.ravel()
 

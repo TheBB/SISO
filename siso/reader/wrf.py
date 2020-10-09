@@ -15,7 +15,7 @@ from .reader import Reader
 from .. import config, ConfigTarget
 from ..coords import Local, Geocentric, Geodetic, Coords
 from ..fields import Field, SimpleField, Geometry, FieldPatches
-from ..geometry import Quad, Hex, Patch, StructuredPatch, UnstructuredPatch
+from ..geometry import Quad, Hex, StructuredTopology, UnstructuredTopology, Patch
 from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap, flatten_2d, spherical_cartesian_vf
 from ..writer import Writer
 
@@ -37,7 +37,7 @@ class WRFScalarField(SimpleField):
         patch = self.reader.patch_at(stepid)
         kwargs = {'extrude_if_planar': config.volumetric == 'extrude'}
         data = self.reader.variable_at(self.name, stepid, **kwargs)
-        yield patch, data.reshape(patch.num_nodes, -1)
+        yield patch, data.reshape(patch.topology.num_nodes, -1)
 
 
 class WRFVectorField(SimpleField):
@@ -356,13 +356,14 @@ class WRFReader(Reader):
             nnodes *= self.nvert
 
         if config.periodic and config.volumetric == 'planar':
-            return UnstructuredPatch(('geometry',), nnodes, self.periodic_planar_mesh(), celltype=Quad())
+            topo = UnstructuredTopology(nnodes, self.periodic_planar_mesh(), celltype=Quad())
         elif config.periodic:
-            return UnstructuredPatch(('geometry',), nnodes, self.periodic_volumetric_mesh(), celltype=Hex())
+            topo = UnstructuredTopology(nnodes, self.periodic_volumetric_mesh(), celltype=Hex())
         elif config.volumetric == 'planar':
-            return StructuredPatch(('geometry',), self.planar_shape, celltype=Quad())
+            topo = StructuredTopology(self.planar_shape, celltype=Quad())
         else:
-            return StructuredPatch(('geometry',), self.volumetric_shape, celltype=Hex())
+            topo = StructuredTopology(self.volumetric_shape, celltype=Hex())
+        return Patch(('geometry',), topo)
 
     def periodic_planar_mesh(self):
         """Compute cell topology for the periodic planar unstructured case,

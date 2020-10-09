@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from . import config
 from .coords import Coords
 from .fields import Field, CombinedField, SimpleField, SourcedField, PatchData, FieldData, FieldPatches
-from .geometry import GeometryManager, VoidPatch
+from .geometry import GeometryManager, Patch
 
 from .typing import StepData, Array2D
 from typing import ContextManager, Iterable, Tuple, Optional
@@ -118,25 +118,22 @@ class TesselatedField(SourcedField, SimpleField):
 
     def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
         for patchdata, fielddata in self.src.patches(stepid, force=force, coords=coords):
-            if self.is_geometry:
-                patchid = self.manager.update(patchdata, fielddata)
-                patch = patchdata.tesselate()
+            key = patchdata.key if isinstance(patchdata, Patch) else patchdata[0].key
 
-                # TODO: Find a better way to create a new patch object
-                # with a different key without copying data.
-                oldkey = patch.key
-                patch.key = (patchid,)
-                yield patch, patchdata.tesselate_field(fielddata)
-                patch.key = oldkey
+            if self.is_geometry:
+                patchid = self.manager.update(key, fielddata)
+                topo = patchdata.topology.tesselate()
+                data = patchdata.topology.tesselate_field(fielddata)
+                yield Patch((patchid,), topo), data
 
             elif isinstance(self.src, SimpleField):
-                patchid = self.manager.global_id(patchdata)
-                yield VoidPatch((patchid,)), patchdata.tesselate_field(fielddata, cells=self.cells)
+                patchid = self.manager.global_id(key)
+                yield Patch((patchid,)), patchdata.topology.tesselate_field(fielddata, cells=self.cells)
 
             elif isinstance(self.src, CombinedField):
-                patchid = self.manager.global_id(patchdata[0])
-                data = np.hstack([p.tesselate_field(d, cells=self.cells) for p, d in zip(patchdata, fielddata)])
-                yield VoidPatch((patchid,)), data
+                patchid = self.manager.global_id(key)
+                data = np.hstack([p.topology.tesselate_field(d, cells=self.cells) for p, d in zip(patchdata, fielddata)])
+                yield Patch((patchid,)), data
 
             else:
                 raise TypeError(f"Unable to find corresponding geometry patch in field {self.name}")

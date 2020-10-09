@@ -11,7 +11,7 @@ from ..typing import StepData, Array2D
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..fields import Field, SimpleField, Geometry, FieldPatches
-from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex, Quad
+from ..geometry import Topology, UnstructuredTopology, StructuredTopology, Hex, Quad, Patch
 from ..util import fortran_skip_record, save_excursion, cache
 from ..writer import Writer
 
@@ -90,7 +90,7 @@ class SIMRAReader(Reader):
         yield (0, {'time': 0.0})
 
     @abstractmethod
-    def patch(self) -> Patch:
+    def patch(self) -> Topology:
         pass
 
     @abstractmethod
@@ -146,7 +146,7 @@ class SIMRA2DMeshReader(SIMRAReader):
         return tuple(s+1 for s in self.shape)
 
     def patch(self):
-        return StructuredPatch(('geometry',), self.shape[::-1], celltype=Quad())
+        return Patch(('geometry',), StructuredTopology(self.shape[::-1], celltype=Quad()))
 
     def nodes(self):
         nodes = []
@@ -191,7 +191,7 @@ class SIMRA3DMeshReader(SIMRAReader):
             npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
             fortran_skip_record(self.mesh)
             cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-            return UnstructuredPatch(('geometry',), npts, cells, celltype=Hex())
+            return Patch(('geometry',), UnstructuredTopology(npts, cells, celltype=Hex()))
 
     @cache(1)
     def nodes(self) -> Array2D:

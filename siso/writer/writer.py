@@ -12,7 +12,6 @@ from typing import Any, Optional, Dict, Union, List
 from ..typing import Array2D, StepData
 
 from .. import config
-from ..geometry import Patch, UnstructuredPatch, GeometryManager
 from ..fields import Field, PatchData, FieldData, SimpleField, CombinedField
 from ..filters import Sink, StepSink, FieldSink
 from ..util import subclasses
@@ -23,7 +22,6 @@ class Writer(Sink, StepSink):
 
     writer_name: str
 
-    _geometry: GeometryManager
     outpath: Path
 
     stepid: int
@@ -50,7 +48,6 @@ class Writer(Sink, StepSink):
         raise TypeError(f"Unable to find any applicable writers for {fmt}")
 
     def __init__(self, outpath: Path):
-        self._geometry = GeometryManager()
         self.outpath = Path(outpath)
 
     def validate(self):
@@ -103,7 +100,7 @@ class Writer(Sink, StepSink):
         assert self.geometry_finalized
         yield partial(self.update_field, field)
 
-    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
+    def update_geometry(self, geometry: Field, patch: PatchData, data: Array2D):
         """Call this after add_step to update the geometry for each new patch.
         This method only returns the global patch ID.  It should be
         reimplemented in subclasses.

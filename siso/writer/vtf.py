@@ -12,7 +12,7 @@ from ..typing import Array2D, StepData
 
 from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
-from ..geometry import Patch, UnstructuredPatch
+from ..geometry import Patch
 from ..util import ensure_ncomps
 from .writer import Writer
 
@@ -97,7 +97,7 @@ class VTFWriter(Writer):
                 self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
             self.dirty_geometry = False
 
-    def update_geometry(self, geometry: Field, patch: UnstructuredPatch, data: Array2D):
+    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=False)
         patchid = patch.key[0]
 
@@ -110,7 +110,7 @@ class VTFWriter(Writer):
             nblock.SetNodes(data.flat)
 
         with self.out.ElementBlock() as eblock:
-            eblock.AddElements(patch.cells.flat, patch.num_pardim)
+            eblock.AddElements(patch.topology.cells.flat, patch.topology.num_pardim)
             eblock.SetPartName('Patch {}'.format(patchid+1))
             eblock.BindNodeBlock(nblock, patchid+1)
 
@@ -120,7 +120,7 @@ class VTFWriter(Writer):
             self.geometry_blocks[patchid] = (nblock, eblock)
         self.dirty_geometry = True
 
-    def update_field(self, field: SimpleField, patch: UnstructuredPatch, data: Array2D):
+    def update_field(self, field: SimpleField, patch: Patch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
         patchid = patch.key[0]
 

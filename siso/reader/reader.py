@@ -8,7 +8,6 @@ from typing import Iterable, Tuple
 from ..typing import StepData
 
 from ..filters import Source
-from ..geometry import Patch
 from ..fields import Field
 
 from ..util import subclasses
