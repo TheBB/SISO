@@ -14,7 +14,7 @@ from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
 from ..geometry import Patch, UnstructuredPatch
 from ..util import ensure_ncomps
-from .writer import TesselatedWriter
+from .writer import Writer
 
 try:
     import vtfwriter as vtf
@@ -30,7 +30,7 @@ class Field:
     steps: Dict[int, List['vtf.ResultBlock']]
 
 
-class VTFWriter(TesselatedWriter):
+class VTFWriter(Writer):
 
     writer_name = "VTF"
 
@@ -97,8 +97,9 @@ class VTFWriter(TesselatedWriter):
                 self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
             self.dirty_geometry = False
 
-    def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
+    def update_geometry(self, geometry: Field, patch: UnstructuredPatch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=False)
+        patchid = patch.key[0]
 
         # If we haven't seen this patch before, assert that it's the
         # next unseen one
@@ -119,8 +120,9 @@ class VTFWriter(TesselatedWriter):
             self.geometry_blocks[patchid] = (nblock, eblock)
         self.dirty_geometry = True
 
-    def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
+    def update_field(self, field: SimpleField, patch: UnstructuredPatch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
+        patchid = patch.key[0]
 
         nblock, eblock = self.geometry_blocks[patchid]
         with self.out.ResultBlock(cells=field.cells, vector=field.is_vector) as rblock:

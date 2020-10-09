@@ -4,7 +4,7 @@ import treelog as log
 from typing import Iterable, List, Tuple
 
 from . import config
-from .filters import Source, LastStepFilter
+from .filters import Source, LastStepFilter, TesselatorFilter
 from .coords import Coords, Converter, graph
 from .fields import Field, ComponentField
 from .reader import Reader
@@ -56,6 +56,7 @@ def pipeline(reader: Source, writer: Writer):
 
     if config.only_final_timestep:
         reader = LastStepFilter(reader)
+    reader = TesselatorFilter(reader)
 
     geometries, fields = discover_fields(reader)
     geometry, converter = pick_geometry(geometries)

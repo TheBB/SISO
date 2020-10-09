@@ -52,9 +52,15 @@ class Hex(CellType):
 # ----------------------------------------------------------------------
 
 
-class Patch(ABC):
+class VoidPatch:
 
     key: PatchKey
+
+    def __init__(self, key):
+        self.key = key
+
+
+class Patch(VoidPatch, ABC):
 
     @property
     @abstractmethod

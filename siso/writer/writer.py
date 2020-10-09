@@ -109,7 +109,6 @@ class Writer(Sink, StepSink):
         reimplemented in subclasses.
         """
         assert not self.geometry_finalized
-        return self._geometry.update(patch, data)
 
     @abstractmethod
     def update_field(self, field: Field, patch: PatchData, data: FieldData):
@@ -117,34 +116,3 @@ class Writer(Sink, StepSink):
         which are defined on patches.
         """
         pass
-
-
-class TesselatedWriter(Writer):
-
-    @abstractmethod
-    def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
-        pass
-
-    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
-        patchid = super().update_geometry(geometry, patch, data)
-        self._update_geometry(patchid, patch.tesselate(), patch.tesselate_field(data))
-
-    @abstractmethod
-    def _update_field(self, field: Field, patchid: int, data: Array2D):
-        pass
-
-    @singledispatchmethod
-    def update_field(self, field: Field, patch: PatchData, data: FieldData):
-        raise NotImplementedError
-
-    @update_field.register(SimpleField)
-    def _(self, field: SimpleField, patch: Patch, data: Array2D):
-        patchid = self._geometry.global_id(patch)
-        data = patch.tesselate_field(data, cells=field.cells)
-        self._update_field(field, patchid, data)
-
-    @update_field.register(CombinedField)
-    def _(self, field: CombinedField, patch: List[Patch], data: List[Array2D]):
-        patchid = self._geometry.global_id(patch[0])
-        data = np.hstack([p.tesselate_field(d, cells=field.cells) for p, d in zip(patch, data)])
-        self._update_field(field, patchid, data)

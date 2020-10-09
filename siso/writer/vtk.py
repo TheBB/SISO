@@ -18,7 +18,7 @@ from .. import config
 from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
 from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex
 from ..util import ensure_ncomps
-from .writer import TesselatedWriter
+from .writer import Writer
 
 
 
@@ -28,7 +28,7 @@ class Field:
     data: Dict[int, Array2D]
 
 
-class VTKWriter(TesselatedWriter):
+class VTKWriter(Writer):
 
     writer_name = "VTK"
 
@@ -62,12 +62,13 @@ class VTKWriter(TesselatedWriter):
             writer.SetFileTypeToBinary()
         return writer
 
-    def _update_geometry(self, patchid: int, patch: Patch, data: Array2D):
-        self.patches[patchid] = (patch, data)
+    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
+        super().update_geometry(geometry, patch, data)
+        self.patches[patch.key[0]] = (patch, data)
 
-    def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
+    def update_field(self, field: SimpleField, patch: Patch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
-        self.fields.setdefault(field.name, Field(field.cells, dict())).data[patchid] = self.nan_filter(data)
+        self.fields.setdefault(field.name, Field(field.cells, dict())).data[patch.key[0]] = self.nan_filter(data)
 
     def is_structured(self) -> bool:
         # TODO: Structured output works fine, but needs to be
