@@ -12,7 +12,7 @@ from .reader import Reader
 from .. import config, ConfigTarget
 from ..fields import Field, SimpleField, Geometry, FieldPatches
 from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex, Quad
-from ..util import fortran_skip_record, save_excursion, cache
+from ..util import fortran_skip_record, save_excursion, cache, prod
 from ..writer import Writer
 
 
@@ -106,7 +106,7 @@ class SIMRAReader(Reader):
 # ----------------------------------------------------------------------
 
 
-class SIMRA2DMeshReader(SIMRAReader):
+class SIMRA2DMapReader(SIMRAReader):
 
     reader_name = "SIMRA-map"
 
@@ -157,15 +157,55 @@ class SIMRA2DMeshReader(SIMRAReader):
         return nodes.reshape(-1, 3)
 
 
+class SIMRA2DMeshReader(SIMRAReader):
+
+    reader_name = "SIMRA-2D"
+
+    filename: Path
+    meshfile: TextIO
+    shape: Tuple[int, int]
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        try:
+            with open(filename, 'r') as f:
+                assert next(f) == 'text\n'
+            return True
+        except:
+            return False
+
+    def __init__(self, filename: Path):
+        super().__init__()
+        self.filename = filename
+
+    def __enter__(self):
+        self.meshfile = open(self.filename, 'r').__enter__()
+        next(self.meshfile)
+        self.shape = tuple(int(s) - 1 for s in next(self.meshfile).split()[2:])
+        return self
+
+    def __exit__(self, *args):
+        self.meshfile.__exit__(*args)
+
+    @cache(1)
+    def patch(self) -> Patch:
+        return StructuredPatch(('geometry',), self.shape[::-1], celltype=Quad())
+
+    @cache(1)
+    def nodes(self) -> Array2D:
+        nnodes = prod(s+1 for s in self.shape)
+        return np.array([tuple(map(float, next(self.meshfile).split()[1:])) for _ in range(nnodes)])
+
+
 class SIMRA3DMeshReader(SIMRAReader):
 
-    reader_name = "SIMRA-mesh"
+    reader_name = "SIMRA-3D"
 
     filename: Path
     mesh: FortranFile
 
     @classmethod
-    def applicable(cls, filename:  Path) -> bool:
+    def applicable(cls, filename: Path) -> bool:
         _, u4_type = dtypes(config.input_endianness)
         try:
             with FortranFile(filename, 'r', header_dtype=u4_type) as f:
