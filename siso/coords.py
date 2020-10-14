@@ -11,6 +11,15 @@ from .util import subclasses, spherical_cartesian_vf
 
 
 
+# Errors
+# ----------------------------------------------------------------------
+
+
+class CoordinateConversionError(TypeError):
+    pass
+
+
+
 # Reference ellipsoids
 # ----------------------------------------------------------------------
 
@@ -112,7 +121,7 @@ class Local(Coords):
         self.specific_name = name
 
     def __str__(self):
-        return self.specific_name
+        return f'Local({self.specific_name})'
 
 
 class Geodetic(Coords):
@@ -205,7 +214,7 @@ class ConversionGraph:
                     new_front[neighbor] = new_path
             front = new_front
 
-        raise ValueError(f"Unable to convert {source} to {target}")
+        raise CoordinateConversionError(f"Unable to convert {source} to {target}")
 
     def optimal_source(self, target: Coords, sources: Iterable[Coords]) -> Tuple[int, 'Converter']:
         min_distance, retval = None, None
