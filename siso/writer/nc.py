@@ -26,6 +26,8 @@ class NetCDFCFWriter(TesselatedWriter):
         self.out = Dataset(self.outpath, 'w').__enter__()
         self.timedim = self.out.createDimension('time')
         self.timevar = self.out.createVariable('time', 'f8', ('time',))
+        self.timevar.long_name = 'time'
+        self.timevar.units = 's'
         self.out.Conventions = 'ACDD-1.3, CF-1.7'
         return super().__enter__()
 
@@ -57,12 +59,18 @@ class NetCDFCFWriter(TesselatedWriter):
 
         x = self.out.createVariable('x', 'f8', ('i', 'j', 'k'))
         x[:] = data[:,0].reshape(nodeshape)
+        x.long_name = 'x-coordinate'
+        x.units = 'm'
 
         y = self.out.createVariable('y', 'f8', ('i', 'j', 'k'))
         y[:] = data[:,1].reshape(nodeshape)
+        y.long_name = 'y-coordinate'
+        y.units = 'm'
 
         z = self.out.createVariable('z', 'f8', ('i', 'j', 'k'))
         z[:] = data[:,2].reshape(nodeshape)
+        z.long_name = 'altitude'
+        z.units = 'm'
 
         self.initialized_geometry = True
 
@@ -82,6 +90,35 @@ class NetCDFCFWriter(TesselatedWriter):
         except IndexError:
             var = self.out.createVariable(field.name, data.dtype, ('time', 'i', 'j', 'k'))
         var[self.stepid, ...] = data.reshape(var.shape[1:])
+
+        # TODO: Hardcoded!
+        var.long_name = {
+            'ps': 'hydrostatic pressure',
+            'pt': 'potential temperature',
+            'pts': 'potential temperature (hydrostatic)',
+            'rho': 'mass density',
+            'rhos': 'mass density (hydrostatic)',
+            'td': 'energy dissipation rate',
+            'tk': 'turbulent kinetic energy',
+            'u_x': 'wind speed x-direction',
+            'u_y': 'wind speed y-direction',
+            'u_z': 'wind speed z-direction',
+            'vtef': 'eddy viscosity',
+        }[field.name]
+
+        var.units = {
+            'ps': 'm2 s-2',
+            'pt': 'K',
+            'pts': 'K',
+            'rho': 'kg m-3',
+            'rhos': 'kg m-3',
+            'td': 'm2 s-3',
+            'tk': 'm2 s-2',
+            'u_x': 'm s-1',
+            'u_y': 'm s-1',
+            'u_z': 'm s-1',
+            'vtef': 'm2 s-1',
+        }[field.name]
 
 
 class NetCDFUgridWriter(TesselatedWriter):
