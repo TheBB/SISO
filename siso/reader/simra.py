@@ -2,8 +2,10 @@ from abc import abstractmethod
 from pathlib import Path
 import re
 
+import f90nml
 import numpy as np
 from scipy.io import FortranFile
+import treelog as log
 
 from typing import Optional, Iterable, Tuple, TextIO
 from ..typing import StepData, Array2D
@@ -38,17 +40,19 @@ class SIMRAField(SimpleField):
 
     index: int
     reader: 'SIMRAResultReader'
+    scale: float
 
-    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader'):
+    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader', scale: float = 1.0):
         self.name = name
         self.index = index
         self.ncomps = ncomps
         self.reader = reader
+        self.scale = scale
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield (
             self.reader.patch(),
-            self.reader.data()[:, self.index : self.index + self.ncomps]
+            self.reader.data()[:, self.index : self.index + self.ncomps] * self.scale,
         )
 
 
@@ -229,10 +233,29 @@ class SIMRAResultReader(SIMRAReader):
         except:
             return False
 
-    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None):
+    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None, input_fn: Optional[Path] = None):
         super().__init__()
         self.result_fn = Path(result_fn)
         self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
+        self.input_fn = input_fn or self.result_fn.parent / 'simra.in'
+
+        if not self.mesh_fn.is_file():
+            raise IOError(f"Unable to find mesh file: {self.mesh_fn}")
+
+        if self.input_fn.is_file():
+            self.input_data = f90nml.read(self.input_fn)
+        else:
+            self.input_data = {}
+            log.warning(f"SIMRA input file not found, scales will be missing")
+
+        endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
+        self.f4_type = np.dtype(f'{endian}f4')
+        self.u4_type = np.dtype(f'{endian}u4')
+
+    def validate(self):
+        super().validate()
+        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
+        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
 
     def __enter__(self):
         self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
@@ -263,13 +286,19 @@ class SIMRAResultReader(SIMRAReader):
         _, data = data[0], data[1:].reshape(-1, 11)
         return data
 
+    def scale(self, name: str) -> float:
+        return self.input_data.get('param_data', {}).get(name, 1.0)
+
     def fields(self) -> Iterable[Field]:
         yield from self.mesh.fields()
-        yield SIMRAField('u', 0, 3, self)
-        yield SIMRAField('ps', 3, 1, self)
-        yield SIMRAField('tk', 4, 1, self)
-        yield SIMRAField('td', 5, 1, self)
-        yield SIMRAField('vtef', 6, 1, self)
+
+        uref = self.scale('uref')
+        lref = self.scale('lenref')
+        yield SIMRAField('u', 0, 3, self, scale=uref)
+        yield SIMRAField('ps', 3, 1, self, scale=uref**2)
+        yield SIMRAField('tk', 4, 1, self, scale=uref**2)
+        yield SIMRAField('td', 5, 1, self, scale=uref**3/lref)
+        yield SIMRAField('vtef', 6, 1, self, scale=uref*lref)
         yield SIMRAField('pt', 7, 1, self)
         yield SIMRAField('pts', 8, 1, self)
         yield SIMRAField('rho', 9, 1, self)
