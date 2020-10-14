@@ -3,7 +3,7 @@ import pytest
 
 from click.testing import CliRunner
 
-from .shared import TESTCASES, compare_vtk_unstructured, PreparedTestCase
+from .shared import TESTCASES, TESTIDS, compare_vtk_unstructured, PreparedTestCase
 
 import vtk
 
@@ -21,7 +21,7 @@ def compare_vtk(out: Path, ref: Path, case: PreparedTestCase):
     compare_vtk_unstructured(load_grid(str(out)), load_grid(ref), case)
 
 
-@pytest.mark.parametrize('case', TESTCASES['vtk'])
+@pytest.mark.parametrize('case', TESTCASES['vtk'], ids=TESTIDS['vtk'])
 def test_vtk_integrity(case: PreparedTestCase):
     with case.invoke('vtk') as tempdir:
         for out, ref in case.check_files(tempdir):

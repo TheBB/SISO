@@ -69,6 +69,7 @@ class PreparedTestCase:
 # programmatically. The TESTCASES dictionary maps output format name
 # to a list of test cases.
 TESTCASES = {}
+TESTIDS = {}
 
 # The root of the repository's test data path.
 TESTDATA_DIR = Path(__file__).parent / 'testdata'
@@ -98,6 +99,9 @@ def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
         ))
+
+        args = ' '.join(extra_args)
+        TESTIDS.setdefault(fmt, []).append(f'{sourcefile.name} {args}')
 
 
 def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
