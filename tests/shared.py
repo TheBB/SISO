@@ -7,7 +7,7 @@ from click.testing import CliRunner
 from dataclasses import dataclass
 import numpy as np
 
-from typing import List, Optional, Iterator, Tuple
+from typing import List, Optional, Iterator, Tuple, Dict
 
 import vtk
 import vtk.util.numpy_support as vtknp
@@ -80,7 +80,8 @@ MULTISTEP_FORMATS = {'pvd', 'vtf'}
 
 
 def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
-             *extra_args: str, suffix: str = '', abs_tol=1e-15, rel_tol=1e-7):
+             *extra_args: str, suffix: str = '', abs_tol=1e-15, rel_tol=1e-7,
+             format_args: Dict[str, List[str]] = {}):
     """Create test cases for converting SOURCEFILE to every format listed
     in FORMATS.  NSTEPS should be None if the source data has no
     timesteps, or the number of steps if it does.
@@ -95,7 +96,7 @@ def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
             target_format=fmt,
             reference_path=TESTDATA_DIR/fmt,
             reference_files=reference_files,
-            extra_args=list(extra_args),
+            extra_args=list(extra_args) + format_args.get(fmt, []),
             abs_tol=abs_tol,
             rel_tol=rel_tol,
         ))
@@ -126,28 +127,28 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
 FORMATS = ['vtk', 'vtu', 'pvd', 'vtf']
 
 # General tests of IFEM, LR, G2 and SIMRA readers and VTK, VTF, VTU and PVD readers
-testcase('hdf5/Annulus.hdf5', 3, FORMATS)
-testcase('hdf5/Cavity-mixed.hdf5', 1, FORMATS)
-testcase('hdf5/Cavity3D-compatible.hdf5', 1, FORMATS)
+testcase('hdf5/Annulus.hdf5', 3, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Cavity-mixed.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Cavity3D-compatible.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
 testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, FORMATS)
 testcase('hdf5/NACA0015_a6_small_weak_mixed_SA.hdf5', 4, FORMATS)
 testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, FORMATS)
-testcase('hdf5/SmallBox.hdf5', 3, FORMATS)
-testcase('hdf5/Square.hdf5', 1, FORMATS)
-testcase('hdf5/Square-ad.hdf5', 11, FORMATS)
+testcase('hdf5/SmallBox.hdf5', 3, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Square.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Square-ad.hdf5', 11, FORMATS, format_args={'vtk': ['--unstructured']})
 testcase('hdf5/Square-LR.hdf5', 1, FORMATS)
-testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, FORMATS)
-testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, FORMATS)
-testcase('hdf5/Square-modes.hdf5', 10, FORMATS)
-testcase('hdf5/Square-modes-freq.hdf5', 10, FORMATS)
-testcase('hdf5/Waterfall3D.hdf5', 1, FORMATS)
+testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Square-modes.hdf5', 10, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Square-modes-freq.hdf5', 10, FORMATS, format_args={'vtk': ['--unstructured']})
+testcase('hdf5/Waterfall3D.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
 testcase('g2/Backstep2D.g2', None, FORMATS)
-testcase('g2/annulus3D.g2', None, FORMATS)
+testcase('g2/annulus3D.g2', None, FORMATS, format_args={'vtk': ['--unstructured']})
 testcase('lr/square-2.lr', None, FORMATS)
 testcase('lr/backstep-3.lr', None, FORMATS)
 testcase('lr/cube-3.lr', None, FORMATS)
 testcase('res/box/box.res', None, FORMATS)
-testcase('simra-map.dat/map.dat', None, FORMATS)
+testcase('simra-map.dat/map.dat', None, FORMATS, format_args={'vtk': ['--unstructured']})
 testcase('simra-mesh.dat/mesh.dat', None, FORMATS, abs_tol=1e-5)  # Single precision
 
 # WRF reader to PVD writer with various CLI options
@@ -167,8 +168,8 @@ for n in ['eastward', 'northward', 'outward']:
 
 # Miscellaneous CLI options
 testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
-testcase('hdf5/Annulus.hdf5', 3, FORMATS, '--nvis', '2', suffix='-with-nvis')
-testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis')
+testcase('hdf5/Annulus.hdf5', 3, FORMATS, '--nvis', '2', suffix='-with-nvis', format_args={'vtk': ['--unstructured']})
+testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis', format_args={'vtk': ['--unstructured']})
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--no-fields', suffix='-no-fields')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U', '-l', 'V', '-l', 'W', suffix='-filtered')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U,V,W', suffix='-filtered')

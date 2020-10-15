@@ -68,7 +68,7 @@ def tracked_option(*args, **kwargs):
 
 
 @click.command()
-@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd', 'nc']), required=False, help='Output format.')
+@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc']), required=False, help='Output format.')
 
 # Options that are forwarded to config
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
@@ -79,6 +79,7 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
 @tracked_option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
+@tracked_option('--unstructured', 'require_unstructured', is_flag=True, help='Ensure unstructured output format.')
 
 @tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
 @tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')

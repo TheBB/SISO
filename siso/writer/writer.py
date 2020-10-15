@@ -20,7 +20,7 @@ from ..util import subclasses
 
 class Writer(Sink, StepSink):
 
-    writer_name: str
+    writer_name: str = "?"
 
     outpath: Path
 

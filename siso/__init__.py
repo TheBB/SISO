@@ -104,6 +104,10 @@ class Config(metaclass=ConfigMeta):
     # Whether the data set contains multiple time steps.
     multiple_timesteps = Setting(True, Writer)
 
+    # Enforce unstructured output, even if input is structured.  Used by writers
+    # that can switch dynamically, e.g. VTK.
+    require_unstructured = Setting(False, Writer, name='--unstructured')
+
     # Output mode. Used by the VTK and VTF writers.
     output_mode = Setting('binary', Writer, name='--mode')
 

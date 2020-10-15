@@ -1,3 +1,3 @@
 from .writer import Writer
-from .vtk import VTKWriter, VTUWriter, PVDWriter
+from .vtk import VTKLegacyWriter, VTUWriter, VTSWriter, PVDWriter
 from .vtf import VTFWriter

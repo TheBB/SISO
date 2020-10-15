@@ -1,39 +1,117 @@
+"""Module for VTK format writers."""
+
+from abc import abstractmethod
 from contextlib import contextmanager
-from itertools import chain
 from os import makedirs
 from pathlib import Path
 
+from typing import TextIO, Optional
+
 import numpy as np
-from singledispatchmethod import singledispatchmethod
 import treelog as log
-import vtk
-import vtk.util.numpy_support as vnp
 
-from dataclasses import dataclass
-
-from typing import Optional, Dict, List
-from ..typing import Array2D, StepData
+# We import from vtkmodules to help linters find the module members
+from vtkmodules.vtkCommonCore import vtkPoints
+from vtkmodules.vtkCommonDataModel import (
+    vtkDataSet, vtkUnstructuredGrid, vtkStructuredGrid, vtkCellArray,
+    VTK_HEXAHEDRON, VTK_QUAD,
+)
+from vtkmodules.vtkIOLegacy import vtkUnstructuredGridWriter, vtkStructuredGridWriter
+from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridWriter, vtkXMLStructuredGridWriter
+from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
 
 from .. import config
-from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
-from ..geometry import UnstructuredTopology, Hex, Patch
+from ..fields import Field
+from ..geometry import StructuredTopology, Hex, Patch
 from ..util import ensure_ncomps
 from .writer import Writer
 
+from ..typing import Array2D, StepData
 
 
-@dataclass
-class Field:
-    cells: bool
-    data: Dict[int, Array2D]
+
+class AbstractVTKWriter(Writer):
+    """Superclass for all VTK format writers."""
+
+    grid: Optional[vtkDataSet]
+
+    allow_structured: bool
+    require_structured: bool
+
+    @staticmethod
+    def nan_filter(data: Array2D) -> Array2D:
+        """Filter out nans in the data array, if necessary."""
+        i, j = np.where(np.isnan(data))
+        if len(i) > 0 and config.output_mode == 'ascii':
+            log.warning("VTK ASCII files do not support NaN, will be set to zero")
+            data[i, j] = 0.0
+        return data
+
+    @abstractmethod
+    def get_writer(self):
+        pass
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.grid = None
+
+    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
+        super().update_geometry(geometry, patch, data)
+
+        if not isinstance(patch.topology, StructuredTopology) and self.require_structured:
+            raise TypeError(f"{self.writer_name} does not support unstructured grids")
+
+        if isinstance(patch.topology, StructuredTopology) and self.allow_structured:
+            if not isinstance(self.grid, vtkStructuredGrid):
+                self.grid = vtkStructuredGrid()
+            shape = patch.topology.shape
+            while len(shape) < 3:
+                shape = (*shape, 0)
+            self.grid.SetDimensions(*(s + 1 for s in shape))
+        elif not self.grid:
+            self.grid = vtkUnstructuredGrid()
+
+        points = vtkPoints()
+        data = ensure_ncomps(self.nan_filter(data), 3, allow_scalar=False)
+        points.SetData(numpy_to_vtk(data))
+        self.grid.SetPoints(points)
+
+        if isinstance(self.grid, vtkUnstructuredGrid):
+            cells = patch.topology.cells
+            cells = np.hstack([cells.shape[-1] * np.ones((len(cells), 1), dtype=int), cells]).ravel()
+            cellarray = vtkCellArray()
+            cellarray.SetCells(len(cells), numpy_to_vtkIdTypeArray(cells))
+            celltype = VTK_HEXAHEDRON if isinstance(patch.topology.celltype, Hex) else VTK_QUAD
+            self.grid.SetCells(celltype, cellarray)
+
+    def update_field(self, field: Field, patch: Patch, data: Array2D):
+        target = self.grid.GetCellData() if field.cells else self.grid.GetPointData()
+        data = ensure_ncomps(self.nan_filter(data), 3, allow_scalar=field.is_scalar)
+        array = numpy_to_vtk(data)
+        array.SetName(field.name)
+        target.AddArray(array)
+
+    @contextmanager
+    def step(self, stepdata: StepData):
+        with super().step(stepdata) as step:
+            yield step
+
+        filename = self.make_filename(with_step=True)
+        writer = self.get_writer()
+        writer.SetFileName(str(filename))
+        writer.SetInputData(self.grid)
+        writer.Write()
+
+        log.user(filename)
 
 
-class VTKWriter(Writer):
+class VTKLegacyWriter(AbstractVTKWriter):
+    """Writer for VTK legacy format."""
 
-    writer_name = "VTK"
+    writer_name = "VTK-legacy"
 
-    topologies: Dict[int, UnstructuredTopology]
-    fields: Dict[str, Field]
+    allow_structured = True
+    require_structured = False
 
     @classmethod
     def applicable(cls, fmt: str) -> bool:
@@ -41,125 +119,40 @@ class VTKWriter(Writer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.topologies = dict()
-        self.fields = dict()
-
-    def nan_filter(self, data: Array2D) -> Array2D:
-        I, J = np.where(np.isnan(data))
-        if len(I) > 0 and config.output_mode == 'ascii':
-            log.warning("VTK ASCII files do not support NaN, will be set to zero")
-            data[I, J] = 0.0
-        return data
+        if config.require_unstructured:
+            self.allow_structured = False
 
     def validate(self):
         config.require_in(reason="not supported by VTK", output_mode=('binary', 'ascii'))
 
     def get_writer(self):
-        writer = vtk.vtkStructuredGridWriter() if self.is_structured() else vtk.vtkUnstructuredGridWriter()
+        if isinstance(self.grid, vtkStructuredGrid):
+            writer = vtkStructuredGridWriter()
+        else:
+            writer = vtkUnstructuredGridWriter()
         if config.output_mode == 'ascii':
             writer.SetFileTypeToASCII()
         else:
             writer.SetFileTypeToBinary()
         return writer
 
-    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
-        super().update_geometry(geometry, patch, data)
-        self.topologies[patch.key[0]] = (patch.topology, data)
 
-    def update_field(self, field: SimpleField, patch: Patch, data: Array2D):
-        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
-        self.fields.setdefault(field.name, Field(field.cells, dict())).data[patch.key[0]] = self.nan_filter(data)
-
-    def is_structured(self) -> bool:
-        # TODO: Structured output works fine, but needs to be
-        # implemented smoothly in the testing suite.  For now it is
-        # disabled.
-
-        # patch = next(iter(self.patches.values()))
-        # return len(self.patches) == 1 and isinstance(patch, StructuredPatch)
-        return False
-
-    @contextmanager
-    def grid(self) -> vtk.vtkDataSet:
-        structured = self.is_structured()
-        patch, _ = next(iter(self.topologies.values()))
-
-        grid = vtk.vtkStructuredGrid() if structured else vtk.vtkUnstructuredGrid()
-        if structured:
-            shape = patch.shape
-            while len(shape) < 3:
-                shape = (*shape, 0)
-            grid.SetDimensions(*(s + 1 for s in shape))
-
-        # Concatenate nodes of all topologies
-        allpoints = np.vstack([data for _, data in self.topologies.values()])
-        allpoints = ensure_ncomps(allpoints, 3, allow_scalar=False)
-        points = vtk.vtkPoints()
-        points.SetData(vnp.numpy_to_vtk(allpoints))
-        grid.SetPoints(points)
-
-        # If unstructured, concatenate cells of all topologies
-        if not structured:
-            topologies = self.topologies.values()
-            offset = chain([0], np.cumsum([p.num_nodes for p, _ in topologies]))
-            cells = np.vstack([p.cells + off for (p, _), off in zip(topologies, offset)])
-            cells = np.hstack([cells.shape[-1] * np.ones((cells.shape[0], 1), dtype=int), cells])
-            cells = cells.ravel()
-
-            cellarray = vtk.vtkCellArray()
-            cellarray.SetCells(len(cells), vnp.numpy_to_vtkIdTypeArray(cells))
-
-            celltype = vtk.VTK_HEXAHEDRON if isinstance(patch.celltype, Hex) else vtk.VTK_QUAD
-            grid.SetCells(celltype, cellarray)
-
-        yield grid
-
-    @contextmanager
-    def step(self, stepdata: StepData):
-        with super().step(stepdata) as step:
-            yield step
-
-        with self.grid() as grid:
-            pointdata = grid.GetPointData()
-            celldata = grid.GetCellData()
-
-            for name, field in self.fields.items():
-                data = np.vstack([k for k in field.data.values()])
-                array = vnp.numpy_to_vtk(data)
-                array.SetName(name)
-                if field.cells:
-                    celldata.AddArray(array)
-                else:
-                    pointdata.AddArray(array)
-
-            filename = self.make_filename(with_step=True)
-            writer = self.get_writer()
-            writer.SetFileName(str(filename))
-            writer.SetInputData(grid)
-            writer.Write()
-
-        log.user(filename)
-
-
-class VTUWriter(VTKWriter):
-
-    writer_name = "VTU"
-
-    def is_structured(self):
-        return False
-
-    @classmethod
-    def applicable(cls, fmt: str) -> bool:
-        return fmt == 'vtu'
-
-    def nan_filter(self, results):
-        return results
+class VTKXMLWriter(AbstractVTKWriter):
+    """Writer for VTK XML-based format."""
 
     def validate(self):
-        config.require_in(reason="not supported by VTF", output_mode=('binary', 'ascii', 'appended'))
+        super().validate()
+        config.require_in(reason=f"not supported by {self.writer_name}", output_mode=('binary', 'ascii', 'appended'))
+
+    @staticmethod
+    def nan_filter(data: Array2D) -> Array2D:
+        return data
 
     def get_writer(self):
-        writer = vtk.vtkXMLUnstructuredGridWriter()
+        if isinstance(self.grid, vtkStructuredGrid):
+            writer = vtkXMLStructuredGridWriter()
+        else:
+            writer = vtkXMLUnstructuredGridWriter()
         if config.output_mode == 'appended':
             writer.SetDataModeToAppended()
         elif config.output_mode == 'ascii':
@@ -169,12 +162,39 @@ class VTUWriter(VTKWriter):
         return writer
 
 
+class VTUWriter(VTKXMLWriter):
+    """Writer for VTU format (XML-based unstructured grid)."""
+
+    writer_name = "VTU"
+    allow_structured = False
+    require_structured = False
+
+    @classmethod
+    def applicable(cls, fmt: str) -> bool:
+        return fmt == 'vtu'
+
+
+class VTSWriter(VTKXMLWriter):
+    """Writer for VTS format (XML-based unstructured grid)."""
+
+    writer_name = "VTS"
+    allow_structured = True
+    require_structured = True
+
+    @classmethod
+    def applicable(cls, fmt: str) -> bool:
+        return fmt == 'vts'
+
+
 class PVDWriter(VTUWriter):
+    """Writer for PVD format (XML-based file with links to other files per timestep)."""
 
     writer_name = "PVD"
 
+    pvd: TextIO
+
     @classmethod
-    def applicable(self, fmt: str) -> bool:
+    def applicable(cls, fmt: str) -> bool:
         return fmt == 'pvd'
 
     def __init__(self, outpath: Path):
