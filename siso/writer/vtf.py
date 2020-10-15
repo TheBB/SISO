@@ -1,20 +1,20 @@
-from collections import defaultdict, OrderedDict
+"""Module for VTF format writer."""
+
 from contextlib import contextmanager
 from pathlib import Path
 
+from typing import List, Dict, Any, Tuple, Type, Optional
+
 from dataclasses import dataclass
-import numpy as np
-from singledispatchmethod import singledispatchmethod
 import treelog as log
 
-from typing import Optional, List, Dict, Any, Tuple, Type
-from ..typing import Array2D, StepData
-
 from .. import config
-from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
+from ..fields import SimpleField
 from ..geometry import Patch
 from ..util import ensure_ncomps
 from .writer import Writer
+
+from ..typing import Array2D, StepData
 
 try:
     import vtfwriter as vtf
@@ -26,11 +26,13 @@ except ImportError:
 
 @dataclass
 class Field:
+    """Utility class for block book-keeping."""
     blocktype: Type['vtf.Block']
     steps: Dict[int, List['vtf.ResultBlock']]
 
 
 class VTFWriter(Writer):
+    """Writer for VTF format."""
 
     writer_name = "VTF"
 
@@ -40,6 +42,8 @@ class VTFWriter(Writer):
     steps: List[Dict[str, Any]]
     geometry_blocks: List[Tuple['vtf.NodeBlock', 'vtf.ElementBlock']]
     field_blocks: Dict[str, Field]
+
+    gblock: Optional['vtf.GeometryBlock']
 
     @classmethod
     def applicable(cls, fmt: str) -> bool:
@@ -52,6 +56,8 @@ class VTFWriter(Writer):
 
         self.field_blocks = dict()
         self.dirty_geometry = False
+
+        self.gblock = None
 
     def validate(self):
         config.require_in(reason="not supported by VTF", output_mode=('binary', 'ascii'))
@@ -76,6 +82,9 @@ class VTFWriter(Writer):
         log.user(self.make_filename())
 
     def exit_stateinfo(self):
+        """Create the state info block, as the last thing to happen before
+        closing the file.
+        """
         with self.out.StateInfoBlock() as states:
             for stepid, data in enumerate(self.steps):
                 key, value = next(iter(data.items()))
