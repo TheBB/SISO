@@ -1,21 +1,14 @@
 from operator import attrgetter
 import treelog as log
 
-from typing import TypeVar, Iterable, List, Tuple
+from typing import Iterable, List, Tuple
 
 from . import config
+from .filters import Source, LastStepFilter, TesselatorFilter, MergeTopologiesFilter, CoordinateTransformFilter
 from .coords import Coords, Converter, graph
 from .fields import Field, ComponentField
 from .reader import Reader
 from .writer import Writer
-
-
-T = TypeVar('T')
-def last(iterable: Iterable[T]) -> Iterable[T]:
-    """Yield only the last element in an iterable."""
-    for x in iterable:
-        pass
-    yield x
 
 
 def discover_decompositions(fields: List[Field]) -> Iterable[Field]:
@@ -58,45 +51,34 @@ def pick_geometry(geometries: List[Field]) -> Tuple[Field, Converter]:
     return geometries[index], converter
 
 
-def pipeline(reader: Reader, writer: Writer):
+def pipeline(reader: Source, writer: Writer):
     """Main driver for moving data from reader to writer."""
 
+    # TODO: Streamline filter application
     if config.only_final_timestep:
-        config.require(multiple_timesteps=False)
+        reader = LastStepFilter(reader)
+    reader = TesselatorFilter(reader)
 
-    steps = reader.steps()
-    if config.only_final_timestep:
-        steps = last(steps)
+    if writer.writer_name != 'VTF':
+        reader = MergeTopologiesFilter(reader)
 
+    reader = CoordinateTransformFilter(reader, config.coords)
     geometries, fields = discover_fields(reader)
-    geometry, converter = pick_geometry(geometries)
+    if not geometries:
+        raise ValueError(f"Unable to find any useful geometry fields")
+    geometry = geometries[0]
     log.debug(f"Using '{geometry.name}' as geometry input")
 
-    if not converter.is_trivial and any(f.is_vector for f in fields):
-        log.warning(f"Nontrivial coordinate transformations detected")
-        trivial = False
-        geometry_nodes = dict()
-    else:
-        trivial = True
-
     first = True
-    for stepid, stepdata in log.iter.plain('Step', steps):
-        writer.add_step(**stepdata)
+    for stepid, stepdata in log.iter.plain('Step', reader.steps()):
+        with writer.step(stepdata) as step:
+            with step.geometry(geometry) as geom:
+                for patch, data in geometry.patches(stepid, force=first):
+                    geom(patch, data)
 
-        for patch, data in geometry.patches(stepid, force=first):
-            if not trivial:
-                geometry_nodes[patch.key] = data
-            data = converter.points(geometry.coords, config.coords, data)
-            writer.update_geometry(geometry, patch, data)
-        writer.finalize_geometry()
+            for field in fields:
+                with step.field(field) as fld:
+                    for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
+                        fld(patch, data)
 
-        for field in fields:
-            for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
-                if field.is_vector and trivial:
-                    data = converter.vectors(geometry.coords, config.coords, data)
-                elif field.is_vector:
-                    data = converter.vectors(geometry.coords, config.coords, data, nodes=geometry_nodes[patch.key])
-                writer.update_field(field, patch, data)
-
-        writer.finalize_step()
-        first = False
+            first = False

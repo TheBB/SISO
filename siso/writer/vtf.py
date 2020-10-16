@@ -1,19 +1,20 @@
-from collections import defaultdict, OrderedDict
+"""Module for VTF format writer."""
+
+from contextlib import contextmanager
 from pathlib import Path
 
+from typing import List, Dict, Any, Tuple, Type, Optional
+
 from dataclasses import dataclass
-import numpy as np
-from singledispatchmethod import singledispatchmethod
 import treelog as log
 
-from typing import Optional, List, Dict, Any, Tuple, Type
-from ..typing import Array2D
-
 from .. import config
-from ..fields import Field, SimpleField, CombinedField, PatchData, FieldData
-from ..geometry import Patch, UnstructuredPatch
+from ..fields import SimpleField
+from ..geometry import Patch
 from ..util import ensure_ncomps
-from .writer import TesselatedWriter
+from .writer import Writer
+
+from ..typing import Array2D, StepData
 
 try:
     import vtfwriter as vtf
@@ -25,11 +26,13 @@ except ImportError:
 
 @dataclass
 class Field:
+    """Utility class for block book-keeping."""
     blocktype: Type['vtf.Block']
     steps: Dict[int, List['vtf.ResultBlock']]
 
 
-class VTFWriter(TesselatedWriter):
+class VTFWriter(Writer):
+    """Writer for VTF format."""
 
     writer_name = "VTF"
 
@@ -39,6 +42,8 @@ class VTFWriter(TesselatedWriter):
     steps: List[Dict[str, Any]]
     geometry_blocks: List[Tuple['vtf.NodeBlock', 'vtf.ElementBlock']]
     field_blocks: Dict[str, Field]
+
+    gblock: Optional['vtf.GeometryBlock']
 
     @classmethod
     def applicable(cls, fmt: str) -> bool:
@@ -51,6 +56,8 @@ class VTFWriter(TesselatedWriter):
 
         self.field_blocks = dict()
         self.dirty_geometry = False
+
+        self.gblock = None
 
     def validate(self):
         config.require_in(reason="not supported by VTF", output_mode=('binary', 'ascii'))
@@ -75,6 +82,9 @@ class VTFWriter(TesselatedWriter):
         log.user(self.make_filename())
 
     def exit_stateinfo(self):
+        """Create the state info block, as the last thing to happen before
+        closing the file.
+        """
         with self.out.StateInfoBlock() as states:
             for stepid, data in enumerate(self.steps):
                 key, value = next(iter(data.items()))
@@ -82,12 +92,23 @@ class VTFWriter(TesselatedWriter):
                 desc = {'value': 'Eigenvalue', 'frequency': 'Frequency', 'time': 'Time'}[key]
                 func(stepid+1, '{} {:.4f}'.format(desc, value), value)
 
-    def add_step(self, **stepdata):
-        super().add_step(**stepdata)
+    @contextmanager
+    def step(self, stepdata: StepData):
         self.steps.append(stepdata)
+        with super().step(stepdata) as step:
+            yield step
 
-    def _update_geometry(self, patchid: int, patch: UnstructuredPatch, data: Array2D):
+    @contextmanager
+    def geometry(self, field: Field):
+        with super().geometry(field) as geometry:
+            yield geometry
+            if self.dirty_geometry:
+                self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
+            self.dirty_geometry = False
+
+    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=False)
+        patchid = patch.key[0]
 
         # If we haven't seen this patch before, assert that it's the
         # next unseen one
@@ -98,7 +119,7 @@ class VTFWriter(TesselatedWriter):
             nblock.SetNodes(data.flat)
 
         with self.out.ElementBlock() as eblock:
-            eblock.AddElements(patch.cells.flat, patch.num_pardim)
+            eblock.AddElements(patch.topology.cells.flat, patch.topology.num_pardim)
             eblock.SetPartName('Patch {}'.format(patchid+1))
             eblock.BindNodeBlock(nblock, patchid+1)
 
@@ -108,18 +129,13 @@ class VTFWriter(TesselatedWriter):
             self.geometry_blocks[patchid] = (nblock, eblock)
         self.dirty_geometry = True
 
-    def finalize_geometry(self):
-        if self.dirty_geometry:
-            self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
-        self.dirty_geometry = False
-        super().finalize_geometry()
-
-    def _update_field(self, field: SimpleField, patchid: int, data: Array2D):
+    def update_field(self, field: SimpleField, patch: Patch, data: Array2D):
         data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
+        patchid = patch.key[0]
 
         nblock, eblock = self.geometry_blocks[patchid]
         with self.out.ResultBlock(cells=field.cells, vector=field.is_vector) as rblock:
-            rblock.SetResults(data.flat)
+            rblock.SetResults(data.flatten())
             rblock.BindBlock(eblock if field.cells else nblock)
 
         if field.name not in self.field_blocks:

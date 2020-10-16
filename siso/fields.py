@@ -108,6 +108,36 @@ class Field(ABC):
         pass
 
 
+class SourcedField(Field):
+    """Utility class for creating linked chains of fields that inherit
+    most but not all properties from the source field.
+    """
+
+    src: Field
+
+    @property
+    def name(self) -> str:
+        return self.src.name
+
+    @property
+    def cells(self) -> bool:
+        return self.src.cells
+
+    @property
+    def ncomps(self) -> int:
+        return self.src.ncomps
+
+    @property
+    def fieldtype(self) -> FieldType:
+        return self.src.fieldtype
+
+    def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
+        yield from self.src.patches(stepid, force=force, coords=coords)
+
+    def decompositions(self) -> Iterable['Field']:
+        yield from self.src.decompositions()
+
+
 
 # Simple fields
 # ----------------------------------------------------------------------

@@ -68,7 +68,7 @@ def tracked_option(*args, **kwargs):
 
 
 @click.command()
-@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'pvd', 'nc']), required=False, help='Output format.')
+@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc']), required=False, help='Output format.')
 
 # Options that are forwarded to config
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
@@ -79,6 +79,7 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
 @tracked_option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
+@tracked_option('--unstructured', 'require_unstructured', is_flag=True, help='Ensure unstructured output format.')
 
 @tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
 @tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
@@ -91,6 +92,7 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=CoordsType())
 @tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=CoordsType())
 @tracked_option('--coords', help='Output coordinate system', default='local', type=CoordsType())
+@tracked_option('--in-coords', 'input_coords', nargs=2, multiple=2, type=click.Tuple([str, CoordsType()]))
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
@@ -138,7 +140,9 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         outfile = Path(infile.name).with_suffix(f'.{fmt}')
 
     # Handle default values of multi-valued options that should be
-    # distinguished from empty, as well as comma splitting
+    # distinguished from empty, as well as comma splitting and other
+    # transformations
+    kwargs['input_coords'] = dict(kwargs['input_coords'])
     for k in ['field_filter', 'only_bases']:
         kwargs[k] = tuple(split_commas(kwargs[k]))
     explicit_options = getattr(ctx, 'explicit_options', set())

@@ -2,17 +2,20 @@ from abc import abstractmethod
 from pathlib import Path
 import re
 
+import f90nml
 import numpy as np
 from scipy.io import FortranFile
+import treelog as log
 
 from typing import Optional, Iterable, Tuple, TextIO
-from ..typing import StepData, Array2D
+from ..typing import StepData, Array2D, Shape
 
 from .reader import Reader
 from .. import config, ConfigTarget
+from ..coords import Local
 from ..fields import Field, SimpleField, Geometry, FieldPatches
-from ..geometry import Patch, UnstructuredPatch, StructuredPatch, Hex, Quad
-from ..util import fortran_skip_record, save_excursion, cache
+from ..geometry import Topology, UnstructuredTopology, StructuredTopology, Hex, Quad, Patch
+from ..util import fortran_skip_record, save_excursion, cache, prod
 from ..writer import Writer
 
 
@@ -26,6 +29,10 @@ def dtypes(endianness):
     return np.dtype(f'{endian}f4'), np.dtype(f'{endian}u4')
 
 
+def transpose(array, nodeshape):
+    return array.reshape(*nodeshape, -1).transpose(1, 0, 2, 3).reshape(prod(nodeshape), -1)
+
+
 
 # Fields
 # ----------------------------------------------------------------------
@@ -34,21 +41,23 @@ def dtypes(endianness):
 class SIMRAField(SimpleField):
 
     cells = False
-    decompose = False
+    decompose = True
 
     index: int
     reader: 'SIMRAResultReader'
+    scale: float
 
-    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader'):
+    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader', scale: float = 1.0):
         self.name = name
         self.index = index
         self.ncomps = ncomps
         self.reader = reader
+        self.scale = scale
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield (
             self.reader.patch(),
-            self.reader.data()[:, self.index : self.index + self.ncomps]
+            self.reader.data()[:, self.index : self.index + self.ncomps] * self.scale,
         )
 
 
@@ -56,13 +65,13 @@ class SIMRAGeometryField(SimpleField):
 
     name = 'Geometry'
     cells = False
-    fieldtype = Geometry()
     ncomps = 3
 
     reader: 'SIMRAReader'
 
     def __init__(self, reader: 'SIMRAReader'):
         self.reader = reader
+        self.fieldtype = Geometry(Local().substitute())
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield self.reader.patch(), self.reader.nodes()
@@ -90,7 +99,7 @@ class SIMRAReader(Reader):
         yield (0, {'time': 0.0})
 
     @abstractmethod
-    def patch(self) -> Patch:
+    def patch(self) -> Topology:
         pass
 
     @abstractmethod
@@ -106,7 +115,7 @@ class SIMRAReader(Reader):
 # ----------------------------------------------------------------------
 
 
-class SIMRA2DMeshReader(SIMRAReader):
+class SIMRA2DMapReader(SIMRAReader):
 
     reader_name = "SIMRA-map"
 
@@ -135,7 +144,8 @@ class SIMRA2DMeshReader(SIMRAReader):
 
     def __enter__(self):
         self.mapfile = open(self.filename, 'r').__enter__()
-        self.shape = tuple(int(s) - 1 for s in next(self.mapfile).split())
+        with save_excursion(self.mapfile):
+            self.shape = tuple(int(s) - 1 for s in next(self.mapfile).split())
         return self
 
     def __exit__(self, *args):
@@ -146,26 +156,69 @@ class SIMRA2DMeshReader(SIMRAReader):
         return tuple(s+1 for s in self.shape)
 
     def patch(self):
-        return StructuredPatch(('geometry',), self.shape[::-1], celltype=Quad())
+        return Patch(('geometry',), StructuredTopology(self.shape[::-1], celltype=Quad()))
 
     def nodes(self):
         nodes = []
-        for line in self.mapfile:
-            nodes.extend(map(float, line.split()))
+        with save_excursion(self.mapfile):
+            next(self.mapfile)
+            for line in self.mapfile:
+                nodes.extend(map(float, line.split()))
         nodes = np.array(nodes).reshape(*self.nodeshape[::-1], 3)
         nodes[...,2 ] /= 10      # Map files have a vertical resolution factor of 10
         return nodes.reshape(-1, 3)
 
 
+class SIMRA2DMeshReader(SIMRAReader):
+
+    reader_name = "SIMRA-2D"
+
+    filename: Path
+    meshfile: TextIO
+    shape: Tuple[int, int]
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        try:
+            with open(filename, 'r') as f:
+                assert next(f) == 'text\n'
+            return True
+        except:
+            return False
+
+    def __init__(self, filename: Path):
+        super().__init__()
+        self.filename = filename
+
+    def __enter__(self):
+        self.meshfile = open(self.filename, 'r').__enter__()
+        next(self.meshfile)
+        self.shape = tuple(int(s) - 1 for s in next(self.meshfile).split()[2:])
+        return self
+
+    def __exit__(self, *args):
+        self.meshfile.__exit__(*args)
+
+    @cache(1)
+    def patch(self) -> Patch:
+        return Patch(('geometry',), StructuredTopology(self.shape[::-1], celltype=Quad()))
+
+    @cache(1)
+    def nodes(self) -> Array2D:
+        nnodes = prod(s+1 for s in self.shape)
+        return np.array([tuple(map(float, next(self.meshfile).split()[1:])) for _ in range(nnodes)])
+
+
 class SIMRA3DMeshReader(SIMRAReader):
 
-    reader_name = "SIMRA-mesh"
+    reader_name = "SIMRA-3D"
 
     filename: Path
     mesh: FortranFile
+    nodeshape: Shape
 
     @classmethod
-    def applicable(cls, filename:  Path) -> bool:
+    def applicable(cls, filename: Path) -> bool:
         _, u4_type = dtypes(config.input_endianness)
         try:
             with FortranFile(filename, 'r', header_dtype=u4_type) as f:
@@ -180,6 +233,9 @@ class SIMRA3DMeshReader(SIMRAReader):
 
     def __enter__(self):
         self.mesh = FortranFile(self.filename, 'r', header_dtype=self.u4_type).__enter__()
+        with save_excursion(self.mesh._fp):
+            _, _, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
+        self.nodeshape = (jmax, imax, kmax)
         return self
 
     def __exit__(self, *args):
@@ -188,16 +244,16 @@ class SIMRA3DMeshReader(SIMRAReader):
     @cache(1)
     def patch(self) -> Patch:
         with save_excursion(self.mesh._fp):
-            npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
             fortran_skip_record(self.mesh)
-            cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-            return UnstructuredPatch(('geometry',), npts, cells, celltype=Hex())
+            fortran_skip_record(self.mesh)
+            i, j, k = self.nodeshape
+            return Patch(('geometry',), StructuredTopology((j-1, i-1, k-1), celltype=Hex()))
 
     @cache(1)
     def nodes(self) -> Array2D:
         with save_excursion(self.mesh._fp):
-            npts, _, _, _, _, _ = self.mesh.read_ints(self.u4_type)
-            return self.mesh.read_reals(self.f4_type).reshape(npts, 3)
+            fortran_skip_record(self.mesh)
+            return transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
 
 
 class SIMRAResultReader(SIMRAReader):
@@ -226,10 +282,29 @@ class SIMRAResultReader(SIMRAReader):
         except:
             return False
 
-    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None):
+    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None, input_fn: Optional[Path] = None):
         super().__init__()
         self.result_fn = Path(result_fn)
         self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
+        self.input_fn = input_fn or self.result_fn.parent / 'simra.in'
+
+        if not self.mesh_fn.is_file():
+            raise IOError(f"Unable to find mesh file: {self.mesh_fn}")
+
+        if self.input_fn.is_file():
+            self.input_data = f90nml.read(self.input_fn)
+        else:
+            self.input_data = {}
+            log.warning(f"SIMRA input file not found, scales will be missing")
+
+        endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
+        self.f4_type = np.dtype(f'{endian}f4')
+        self.u4_type = np.dtype(f'{endian}u4')
+
+    def validate(self):
+        super().validate()
+        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
+        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
 
     def __enter__(self):
         self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
@@ -257,16 +332,22 @@ class SIMRAResultReader(SIMRAReader):
     @cache(1)
     def data(self) -> Array2D:
         data = self.result.read_reals(dtype=self.f4_type)
-        _, data = data[0], data[1:].reshape(-1, 11)
-        return data
+        _, data = data[0], data[1:]
+        return transpose(data, self.mesh.nodeshape)
+
+    def scale(self, name: str) -> float:
+        return self.input_data.get('param_data', {}).get(name, 1.0)
 
     def fields(self) -> Iterable[Field]:
         yield from self.mesh.fields()
-        yield SIMRAField('u', 0, 3, self)
-        yield SIMRAField('ps', 3, 1, self)
-        yield SIMRAField('tk', 4, 1, self)
-        yield SIMRAField('td', 5, 1, self)
-        yield SIMRAField('vtef', 6, 1, self)
+
+        uref = self.scale('uref')
+        lref = self.scale('lenref')
+        yield SIMRAField('u', 0, 3, self, scale=uref)
+        yield SIMRAField('ps', 3, 1, self, scale=uref**2)
+        yield SIMRAField('tk', 4, 1, self, scale=uref**2)
+        yield SIMRAField('td', 5, 1, self, scale=uref**3/lref)
+        yield SIMRAField('vtef', 6, 1, self, scale=uref*lref)
         yield SIMRAField('pt', 7, 1, self)
         yield SIMRAField('pts', 8, 1, self)
         yield SIMRAField('rho', 9, 1, self)

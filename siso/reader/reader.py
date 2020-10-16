@@ -7,13 +7,13 @@ import treelog as log
 from typing import Iterable, Tuple
 from ..typing import StepData
 
-from ..geometry import Patch
+from ..filters import Source
 from ..fields import Field
 
 from ..util import subclasses
 
 
-class Reader(ABC):
+class Reader(Source):
 
     reader_name: str
 
@@ -45,14 +45,4 @@ class Reader(ABC):
 
     @abstractmethod
     def __exit__(self, *args):
-        pass
-
-    @abstractmethod
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        """Iterate over all steps with associated data."""
-        pass
-
-    @abstractmethod
-    def fields(self) -> Iterable[Field]:
-        """Iterate over all fields."""
         pass

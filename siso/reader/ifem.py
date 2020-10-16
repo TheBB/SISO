@@ -14,7 +14,7 @@ from .reader import Reader
 from .. import config, ConfigTarget
 from ..coords import Local
 from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement, Geometry, FieldPatches
-from ..geometry import Patch, SplinePatch, LRPatch, UnstructuredPatch
+from ..geometry import SplineTopology, LRTopology, UnstructuredTopology, Patch
 from ..util import ensure_ncomps, bounding_box
 from ..writer import Writer
 
@@ -92,24 +92,21 @@ class Basis(ABC):
 
     # @lru_cache(24)
     def patch_at(self, stepid: int, patchid: int) -> Tuple[Patch, Array2D]:
-        oldkey = (self.name, patchid)
-
         while not self.update_at(stepid):
             stepid -= 1
 
         subpath = self.group_path(stepid)
         g2bytes = self.reader.h5[f'{subpath}/{patchid+1}'][:].tobytes()
         if g2bytes.startswith(b'# LAGRANGIAN'):
-            patch, nodes = UnstructuredPatch.from_lagrangian(oldkey, g2bytes)
+            topo, nodes = UnstructuredTopology.from_lagrangian(g2bytes)
         elif g2bytes.startswith(b'# LRSPLINE'):
-            patch, nodes = next(LRPatch.from_string(oldkey, g2bytes))
+            topo, nodes = next(LRTopology.from_string(g2bytes))
         else:
-            patch, nodes = next(SplinePatch.from_string(oldkey, g2bytes))
+            topo, nodes = next(SplineTopology.from_string(g2bytes))
 
-        newkey = self.reader.patch_catalogue.setdefault(nodes, patch.key)
-        if newkey != patch.key:
-            patch.key = newkey
-        return patch, nodes
+        oldkey = (self.name, patchid)
+        newkey = self.reader.patch_catalogue.setdefault(nodes, oldkey)
+        return Patch(newkey, topo), nodes
 
 
 
@@ -172,12 +169,11 @@ class IFEMGeometryField(SimpleField):
     basis: Basis
 
     cells = False
-    fieldtype = Geometry()
 
     def __init__(self, basis: Basis):
         self.name = basis.name
         self.basis = basis
-        self.fieldtype = Geometry(Local(basis.name))
+        self.fieldtype = Geometry(Local(basis.name).substitute())
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         if not force and not self.basis.update_at(stepid):
@@ -202,7 +198,7 @@ class IFEMField(SimpleField):
         # Calculate number of components
         stepid = next(i for i in count() if self.update_at(i))
         patch, _ = self.basis.patch_at(stepid, 0)
-        denominator = patch.num_cells if cells else patch.num_nodes
+        denominator = patch.topology.num_cells if cells else patch.topology.num_nodes
         ncoeffs = len(self.reader.h5[self.coeff_path(stepid, 0)])
         if ncoeffs % denominator != 0:
             raise ValueError(

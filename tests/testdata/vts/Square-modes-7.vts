@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<VTKFile type="StructuredGrid" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <StructuredGrid WholeExtent="0 8 0 8 0 0">
+  <Piece Extent="0 8 0 8 0 0">
+    <PointData>
+      <DataArray type="Float64" Name="Mode Shape" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="0.03426111473418695">
+        AQAAAACAAACYBwAADgIAAA==eJxjYEAFR+fMtVvTtdAeTZjBzdRJXvt7KYb4ZtfJuStSyvaji0dsrrt+nB9TfX2EXv7p0xUY6uevx66+xBO7+SEa2N1zYBZ29/PxLfr1YXsRhrjAldqImMQ+DHFGZbNffjGY7nSYNPPZU/ZyDPHuIOtO9qdNGOacnYJdvY0advMjzmN3TwQLdvd3rJ9Ztn5xEYY5s3azT0jor8IQz7tsKS4iVYAhfqFa2ufvyl4M8w0muUy8NmUKhnpBHOr1b2A33+MAdveobsXufpaMW6KiVbkY5h98x/y45wamep+aY1O1z3RjqDddxLHxwZuZGOq9fVc/yNKci6F+MQ71ltXYzef7jN09y+Kwu79nv8iUs0sx1Wd9uvK2a3cthnoT9Q06PZqTMcPf93r6bec5GOpj9nxWmvtlAYb6Gz7Y1d/FYX7OB+zu2XcQu/sdL+Vlhn5IxFDP1MV4Sb6iEEO95oeGDrbWTgz1/bKSJ03mzMBQr8vNJ31q/mwM9edwqI95j938sG7s7mk8j939xe0TJGo50zHU33e5K7PDtB5D3H6W/Otb2akY4i/cI99VfenAMP/FhGLWhL8TMdQ34VB/YDZ28/NcsbvnVAd29yfYS4VzVAdhmK9yXe7p4SOY+Tp5/d6LqU/rMMsr96R1y1lyMMQvf1R5Hd5dg2GOEQ71H3CY74jDPXcssLt/uAAAw7QdXw==
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            0.034261114734
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </PointData>
+    <CellData>
+    </CellData>
+    <Points>
+      <DataArray type="Float64" Name="Points" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="2.8284271247461903">
+        AQAAAACAAACYBwAABQEAAA==eJyFlTsKAkEQRBf1Xnr/xCO42Zi5MBNsoNvip4Su6sIJBJ9F0Y8exmmqzxavcz7Wv87C3/FoJr8YPgxfhR/en3eTn06Giwe+P4h/5r8cOQ+vuudm8l04vJjDq+4J04Mzixc82KvmTTi86nwXDi+eB151T0ie56q9mvFi3oRnL8534fDaiOd9cU+YHpzFeN2MF/MmPHtxvguHF8+T98U9Ifl8hvHqxot5E569ON+FZ69hvLgnJF/38TvC79MsPN8Dzi+GD8NX4buvV53He/j/HYXXnjj2VfMmHPuq81045uN5kKt7QvK1N/K4h2H2xf8bV8MXw4fhq/B8D3meX+6XfwKHZnd1
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            2.8284271247
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </Points>
+  </Piece>
+  </StructuredGrid>
+</VTKFile>

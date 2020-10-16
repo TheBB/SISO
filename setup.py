@@ -20,6 +20,7 @@ setup(
         'cachetools',
         'click',
         'dataclasses',
+        'f90nml',
         'numpy',
         'Splipy>=1.4',
         'lrsplines>=1.5',

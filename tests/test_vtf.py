@@ -5,7 +5,7 @@ import re
 import numpy as np
 from click.testing import CliRunner
 
-from .shared import TESTCASES, PreparedTestCase
+from .shared import TESTCASES, TESTIDS, PreparedTestCase
 
 try:
     import vtfwriter
@@ -36,7 +36,7 @@ def compare_vtf(out, ref, case: PreparedTestCase):
 
 
 @pytest.mark.skipif(not has_vtf, reason="VTF tests not runnable without vtfwriter")
-@pytest.mark.parametrize('case', TESTCASES['vtf'])
+@pytest.mark.parametrize('case', TESTCASES['vtf'], ids=TESTIDS['vtf'])
 def test_vtf_integrity(case: PreparedTestCase):
     with case.invoke('vtf') as tempdir:
         for out, ref in case.check_files(tempdir):

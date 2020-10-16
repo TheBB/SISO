@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from io import StringIO
 
+from dataclasses import dataclass
 import lrspline as lr
 import numpy as np
 from singledispatchmethod import singledispatchmethod
@@ -32,6 +33,11 @@ class CellType:
     num_pardim: int
     structured: bool
 
+    def __eq__(self, other):
+        if not isinstance(other, CellType):
+            return NotImplemented
+        return type(self) == type(other)
+
 
 class Quad(CellType):
 
@@ -52,9 +58,14 @@ class Hex(CellType):
 # ----------------------------------------------------------------------
 
 
-class Patch(ABC):
+@dataclass
+class Patch:
 
     key: PatchKey
+    topology: Optional['Patch'] = None
+
+
+class Topology(ABC):
 
     @property
     @abstractmethod
@@ -75,9 +86,9 @@ class Patch(ABC):
         pass
 
     @abstractmethod
-    def tesselate(self) -> 'UnstructuredPatch':
+    def tesselate(self) -> 'UnstructuredTopology':
         """Convert to a suitable discrete representation.
-        Currently an UnstructuredPatch.
+        Currently an UnstructuredTopology.
         """
         pass
 
@@ -91,15 +102,15 @@ class Patch(ABC):
 
 class Tesselator(ABC):
 
-    def __init__(self, patch: Patch):
-        self.source_patch = patch
+    def __init__(self, topo: Topology):
+        self.source_topo = topo
 
     @abstractmethod
-    def tesselate(self, patch: Patch) -> Patch:
+    def tesselate(self, topo: Topology) -> Topology:
         pass
 
     @abstractmethod
-    def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def tesselate_field(self, topo: Topology, coeffs: Array2D, cells: bool = False) -> Array2D:
         pass
 
 
@@ -108,9 +119,9 @@ class Tesselator(ABC):
 # ----------------------------------------------------------------------
 
 
-class UnstructuredPatch(Patch):
-    """A patch that represents an unstructured collection of nodes and
-    cells.  This is the lowest common grid form: all other grids
+class UnstructuredTopology(Topology):
+    """A topology that represents an unstructured collection of nodes
+    and cells.  This is the lowest common grid form: all other grids
     should be convertable to it.
     """
 
@@ -120,15 +131,23 @@ class UnstructuredPatch(Patch):
 
     cells: Array2D
 
-    def __init__(self, key: PatchKey, num_nodes: int, cells: Array2D, celltype: CellType):
-        self.key = key
+    def __init__(self, num_nodes: int, cells: Array2D, celltype: CellType):
         self.cells = cells
         self._num_nodes = num_nodes
         self.celltype = celltype
         assert cells.shape[-1] == celltype.num_nodes
 
     @classmethod
-    def from_lagrangian(cls, key: PatchKey, data: Union[bytes, str]) -> Tuple['UnstructuredPatch', Array2D]:
+    def join(cls, left: 'UnstructuredTopology', right: 'UnstructuredTopology') -> 'UnstructuredTopology':
+        assert left.celltype == right.celltype
+        return cls(
+            left.num_nodes + right.num_nodes,
+            np.vstack((left.cells, right.cells + left.num_nodes)),
+            left.celltype
+        )
+
+    @classmethod
+    def from_lagrangian(cls, data: Union[bytes, str]) -> Tuple['UnstructuredTopology', Array2D]:
         if isinstance(data, bytes):
             data = data.decode()
         assert isinstance(data, str)
@@ -158,7 +177,7 @@ class UnstructuredPatch(Patch):
         cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
         cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
 
-        return cls(key, nnodes, cells, celltype=Hex()), nodes
+        return cls(nnodes, cells, celltype=Hex()), nodes
 
     @property
     def num_pardim(self) -> int:
@@ -172,22 +191,21 @@ class UnstructuredPatch(Patch):
     def num_cells(self) -> int:
         return len(self.cells)
 
-    def tesselate(self) -> 'UnstructuredPatch':
+    def tesselate(self) -> 'UnstructuredTopology':
         return self
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
         return coeffs
 
 
-class StructuredPatch(UnstructuredPatch):
-    """A patch that represents an structured collection of nodes and
-    cells.  This is interchangeable with UnstructuredPatch
+class StructuredTopology(UnstructuredTopology):
+    """A topology that represents an structured collection of nodes
+    and cells.  This is interchangeable with UnstructuredTopology.
     """
 
     shape: Shape
 
-    def __init__(self, key: PatchKey, shape: Shape, celltype: CellType):
-        self.key = key
+    def __init__(self, shape: Shape, celltype: CellType):
         self.celltype = celltype
         self.shape = shape
         self._num_nodes = prod(k+1 for k in shape)
@@ -208,23 +226,22 @@ class StructuredPatch(UnstructuredPatch):
 # ----------------------------------------------------------------------
 
 
-class LRPatch(Patch):
+class LRTopology(Topology):
 
     obj: lr.LRSplineObject
 
-    def __init__(self, key: PatchKey, obj: lr.LRSplineObject):
+    def __init__(self, obj: lr.LRSplineObject):
         self.obj = obj
-        self.key = key
 
     @classmethod
-    def from_string(cls, key: PatchKey, data: Union[bytes, str]) -> Iterable[Tuple['LRPatch', Array2D]]:
+    def from_string(cls, data: Union[bytes, str]) -> Iterable[Tuple['LRTopology', Array2D]]:
         if isinstance(data, bytes):
             data = data.decode()
         data = StringIO(data)
         for i, obj in enumerate(lr.LRSplineObject.read_many(data)):
             cps = obj.controlpoints.reshape(-1, obj.dimension)
             obj.dimension = 0
-            yield cls((*key, i), obj), cps
+            yield cls(obj), cps
 
     @property
     def num_pardim(self) -> int:
@@ -238,7 +255,7 @@ class LRPatch(Patch):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
-    def tesselate(self) -> UnstructuredPatch:
+    def tesselate(self) -> UnstructuredTopology:
         tess = LRTesselator(self)
         return tess.tesselate(self)
 
@@ -249,32 +266,32 @@ class LRPatch(Patch):
 
 class LRTesselator(Tesselator):
 
-    def __init__(self, patch: LRPatch):
-        super().__init__(patch)
+    def __init__(self, topo: LRTopology):
+        super().__init__(topo)
         nodes: Dict[Tuple[float, ...], int] = dict()
         cells: List[List[int]] = []
-        subdivider = subdivide_face if patch.obj.pardim == 2 else subdivide_volume
-        for el in patch.obj.elements:
+        subdivider = subdivide_face if topo.obj.pardim == 2 else subdivide_volume
+        for el in topo.obj.elements:
             subdivider(el, nodes, cells, config.nvis)
         self.nodes = np.array(list(nodes))
         self.cells = np.array(cells, dtype=int)
 
     @singledispatchmethod
-    def tesselate(self, patch: Patch) -> UnstructuredPatch:
+    def tesselate(self, topo: Topology) -> UnstructuredTopology:
         raise NotImplementedError
 
-    @tesselate.register(LRPatch)
-    def _(self, patch: LRPatch) -> UnstructuredPatch:
+    @tesselate.register(LRTopology)
+    def _(self, patch: LRTopology) -> UnstructuredTopology:
         spline = patch.obj
         celltype = Hex() if patch.num_pardim == 3 else Quad()
-        return UnstructuredPatch((*patch.key, 'tesselated'), len(self.nodes), self.cells, celltype=celltype)
+        return UnstructuredTopology(len(self.nodes), self.cells, celltype=celltype)
 
     @singledispatchmethod
-    def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def tesselate_field(self, topo: Topology, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
-    @tesselate_field.register(LRPatch)
-    def _(self, patch: LRPatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    @tesselate_field.register(LRTopology)
+    def _(self, patch: LRTopology, coeffs: Array2D, cells: bool = False) -> Array2D:
         spline = patch.obj
 
         if not cells:
@@ -308,19 +325,18 @@ class G2Object(splipy.io.G2):
         return self
 
 
-class SplinePatch(Patch):
+class SplineTopology(Topology):
     """A representation of a Splipy SplineObject."""
 
     bases: List[BSplineBasis]
     weights: Optional[Array1D]
 
-    def __init__(self, key: PatchKey, bases: List[BSplineBasis], weights: Optional[Array1D] = None):
-        self.key = key
+    def __init__(self, bases: List[BSplineBasis], weights: Optional[Array1D] = None):
         self.bases = bases
         self.weights = weights
 
     @classmethod
-    def from_string(cls, key: PatchKey, data: Union[bytes, str]) -> Iterable[Tuple['SplinePatch', Array2D]]:
+    def from_string(cls, data: Union[bytes, str]) -> Iterable[Tuple['SplinePatch', Array2D]]:
         if isinstance(data, bytes):
             data = data.decode()
         g2data = StringIO(data)
@@ -331,7 +347,7 @@ class SplinePatch(Patch):
                 if obj.rational:
                     weights = cps[:, -1]
                     cps = cps[:, :-1]
-                yield cls((*key, i), obj.bases, weights), cps
+                yield cls(obj.bases, weights), cps
 
     @property
     def num_pardim(self) -> int:
@@ -357,7 +373,7 @@ class SplinePatch(Patch):
     def rational(self) -> bool:
         return self.weights is not None
 
-    def tesselate(self) -> UnstructuredPatch:
+    def tesselate(self) -> UnstructuredTopology:
         tess = TensorTesselator(self)
         return tess.tesselate(self)
 
@@ -368,39 +384,39 @@ class SplinePatch(Patch):
 
 class TensorTesselator(Tesselator):
 
-    def __init__(self, patch: SplinePatch):
-        super().__init__(patch)
-        self.knots = list(subdivide_linear(b.knot_spans(), config.nvis) for b in patch.bases)
+    def __init__(self, topo: SplineTopology):
+        super().__init__(topo)
+        self.knots = list(subdivide_linear(b.knot_spans(), config.nvis) for b in topo.bases)
 
     @singledispatchmethod
-    def tesselate(self, patch: Patch) -> Patch:
+    def tesselate(self, topo: Topology) -> Topology:
         raise NotImplementedError
 
-    @tesselate.register(SplinePatch)
-    def _1(self, patch: SplinePatch) -> UnstructuredPatch:
-        celltype = Hex() if patch.num_pardim == 3 else Quad()
+    @tesselate.register(SplineTopology)
+    def _1(self, topo: SplineTopology) -> UnstructuredTopology:
+        celltype = Hex() if topo.num_pardim == 3 else Quad()
         cellshape = tuple(len(kts) - 1 for kts in self.knots)
-        return StructuredPatch((*patch.key, 'tesselated'), cellshape, celltype=celltype)
+        return StructuredTopology(cellshape, celltype=celltype)
 
     @singledispatchmethod
-    def tesselate_field(self, patch: Patch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    def tesselate_field(self, topo: Topology, coeffs: Array2D, cells: bool = False) -> Array2D:
         raise NotImplementedError
 
-    @tesselate_field.register(SplinePatch)
-    def _(self, patch: SplinePatch, coeffs: Array2D, cells: bool = False) -> Array2D:
+    @tesselate_field.register(SplineTopology)
+    def _(self, topo: SplineTopology, coeffs: Array2D, cells: bool = False) -> Array2D:
         if not cells:
             # Create a new patch with substituted control points, and
             # evaluate it at the predetermined knot values.
-            if patch.weights is not None:
-                coeffs = np.concatenate((coeffs, flatten_2d(patch.weights)), axis=-1)
-            coeffs = splipy.utils.reshape(coeffs, patch.nodeshape, order='F')
-            newspline = SplineObject(patch.bases, coeffs, patch.rational, raw=True)
+            if topo.weights is not None:
+                coeffs = np.concatenate((coeffs, flatten_2d(topo.weights)), axis=-1)
+            coeffs = splipy.utils.reshape(coeffs, topo.nodeshape, order='F')
+            newspline = SplineObject(topo.bases, coeffs, topo.rational, raw=True)
             knots = self.knots
 
         else:
             # Create a piecewise constant spline object, and evaluate
             # it in cell centers.
-            bases = [BSplineBasis(1, b.knot_spans()) for b in patch.bases]
+            bases = [BSplineBasis(1, b.knot_spans()) for b in topo.bases]
             shape = tuple(b.num_functions() for b in bases)
             coeffs = splipy.utils.reshape(coeffs, shape, order='F')
             newspline = SplineObject(bases, coeffs, False, raw=True)
@@ -429,20 +445,20 @@ class GeometryManager:
                 key = key[:-1]
         raise KeyError
 
-    def update(self, patch: Patch, data: Array2D) -> int:
+    def update(self, key: PatchKey, data: Array2D) -> int:
         try:
-            patchid = self.id_by_key(patch.key)
+            patchid = self.id_by_key(key)
         except KeyError:
             patchid = len(self.patch_keys)
-            log.debug(f"New unique patch detected {patch.key}, assigned ID {patchid}")
-            self.patch_keys[patch.key] = patchid
+            log.debug(f"New unique patch detected {key}, assigned ID {patchid}")
+            self.patch_keys[key] = patchid
         return patchid
 
-    def global_id(self, patch: Patch) -> int:
+    def global_id(self, key: PatchKey) -> int:
         try:
-            return self.id_by_key(patch.key)
+            return self.id_by_key(key)
         except KeyError:
-            msg = f"Unable to find corresponding geometry patch for {patch.key}"
+            msg = f"Unable to find corresponding geometry patch for {key}"
             if config.strict_id:
                 msg += f", consider trying without {config.cname('strict_id')}"
             raise ValueError(msg)

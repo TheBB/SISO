@@ -7,7 +7,7 @@ from click.testing import CliRunner
 from dataclasses import dataclass
 import numpy as np
 
-from typing import List, Optional, Iterator, Tuple
+from typing import List, Optional, Iterator, Tuple, Dict
 
 import vtk
 import vtk.util.numpy_support as vtknp
@@ -69,6 +69,7 @@ class PreparedTestCase:
 # programmatically. The TESTCASES dictionary maps output format name
 # to a list of test cases.
 TESTCASES = {}
+TESTIDS = {}
 
 # The root of the repository's test data path.
 TESTDATA_DIR = Path(__file__).parent / 'testdata'
@@ -79,7 +80,8 @@ MULTISTEP_FORMATS = {'pvd', 'vtf'}
 
 
 def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
-             *extra_args: str, suffix: str = '', abs_tol=1e-15, rel_tol=1e-7):
+             *extra_args: str, suffix: str = '', abs_tol=1e-15, rel_tol=1e-7,
+             format_args: Dict[str, List[str]] = {}):
     """Create test cases for converting SOURCEFILE to every format listed
     in FORMATS.  NSTEPS should be None if the source data has no
     timesteps, or the number of steps if it does.
@@ -94,10 +96,13 @@ def testcase(sourcefile: Path, nsteps: Optional[int], formats: str,
             target_format=fmt,
             reference_path=TESTDATA_DIR/fmt,
             reference_files=reference_files,
-            extra_args=list(extra_args),
+            extra_args=list(extra_args) + format_args.get(fmt, []),
             abs_tol=abs_tol,
             rel_tol=rel_tol,
         ))
+
+        args = ' '.join(extra_args)
+        TESTIDS.setdefault(fmt, []).append(f'{sourcefile.name} {args}')
 
 
 def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
@@ -118,53 +123,67 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
     return maker
 
 
-# List of test cases
-FORMATS = ['vtk', 'vtu', 'pvd', 'vtf']
+# These data sets are structured. The VTK reference files were
+# generated before structured output was added, so they are compared
+# using the --unstructured option.
+formats = ['vtk', 'vtu', 'vts', 'pvd', 'vtf']
+kwargs = {'format_args': {'vtk': ['--unstructured']}}
+testcase('hdf5/Annulus.hdf5', 3, formats, **kwargs)
+testcase('hdf5/Cavity-mixed.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Cavity3D-compatible.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square-ad.hdf5', 11, formats, **kwargs)
+testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square-modes.hdf5', 10, formats, **kwargs)
+testcase('hdf5/Square-modes-freq.hdf5', 10, formats, **kwargs)
+testcase('hdf5/Waterfall3D.hdf5', 1, formats, **kwargs)
+testcase('g2/annulus3D.g2', None, formats, **kwargs)
 
-# General tests of IFEM, LR, G2 and SIMRA readers and VTK, VTF, VTU and PVD readers
-testcase('hdf5/Annulus.hdf5', 3, FORMATS)
-testcase('hdf5/Cavity-mixed.hdf5', 1, FORMATS)
-testcase('hdf5/Cavity3D-compatible.hdf5', 1, FORMATS)
-testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, FORMATS)
-testcase('hdf5/NACA0015_a6_small_weak_mixed_SA.hdf5', 4, FORMATS)
-testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, FORMATS)
-testcase('hdf5/SmallBox.hdf5', 3, FORMATS)
-testcase('hdf5/Square.hdf5', 1, FORMATS)
-testcase('hdf5/Square-ad.hdf5', 11, FORMATS)
-testcase('hdf5/Square-LR.hdf5', 1, FORMATS)
-testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, FORMATS)
-testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, FORMATS)
-testcase('hdf5/Square-modes.hdf5', 10, FORMATS)
-testcase('hdf5/Square-modes-freq.hdf5', 10, FORMATS)
-testcase('hdf5/Waterfall3D.hdf5', 1, FORMATS)
-testcase('g2/Backstep2D.g2', None, FORMATS)
-testcase('g2/annulus3D.g2', None, FORMATS)
-testcase('lr/square-2.lr', None, FORMATS)
-testcase('lr/backstep-3.lr', None, FORMATS)
-testcase('lr/cube-3.lr', None, FORMATS)
-testcase('res/box/box.res', None, FORMATS)
-testcase('simra-map.dat/map.dat', None, FORMATS)
-testcase('simra-mesh.dat/mesh.dat', None, FORMATS, abs_tol=1e-5)  # Single precision
+# Single precision, therefore inflated tolerance
+testcase('res/box/box.res', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-map.dat/map.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-mesh2d.dat/mesh2d.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-mesh.dat/mesh.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 
-# WRF reader to PVD writer with various CLI options
+# Unstructured data sets
+formats = ['vtk', 'vtu', 'pvd', 'vtf']
+testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, formats)
+testcase('hdf5/NACA0015_a6_small_weak_mixed_SA.hdf5', 4, formats)
+testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, formats)
+testcase('hdf5/Square-LR.hdf5', 1, formats)
+testcase('hdf5/SmallBox.hdf5', 3, formats)
+testcase('g2/Backstep2D.g2', None, formats)
+testcase('lr/square-2.lr', None, formats)
+testcase('lr/backstep-3.lr', None, formats)
+testcase('lr/cube-3.lr', None, formats)
+
+# WRF reader with various options.  We only use PVD, VTU and VTS here
+# to save some space.
+pr = '--periodic'
+pl = '--planar'
+ex = '--extrude'
+gl = ['--coords', 'geocentric:sphere']
 for n in ['eastward', 'northward', 'outward']:
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], suffix='-volumetric')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', suffix='-planar')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', suffix='-extrude')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--coords', 'geocentric:sphere', suffix='-volumetric-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', '--coords', 'geocentric:sphere', suffix='-planar-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--coords', 'geocentric:sphere', suffix='-extrude-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
-             '--planar', '--coords', 'geocentric:sphere', '--periodic', suffix='-planar-periodic')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
-             '--volumetric', '--coords', 'geocentric:sphere', '--periodic', suffix='-volumetric-periodic')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
-             '--extrude', '--coords', 'geocentric:sphere', '--periodic', suffix='-extrude-periodic')
+    formats = ['vtu', 'vts', 'pvd']
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, suffix='-volumetric')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, suffix='-planar')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, suffix='-extrude')
+
+    formats = ['vtu', 'pvd']
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, suffix='-volumetric-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, suffix='-planar-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, suffix='-extrude-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, pr, suffix='-planar-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, pr, suffix='-volumetric-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, pr, suffix='-extrude-periodic')
 
 # Miscellaneous CLI options
-testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
-testcase('hdf5/Annulus.hdf5', 3, FORMATS, '--nvis', '2', suffix='-with-nvis')
-testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis')
+formats = ['vtk', 'vtu', 'pvd', 'vtf']
+kwargs = {'format_args': {'vtk': ['--unstructured']}}
+testcase('hdf5/SmallBox.hdf5', None, formats, '--last', suffix='-with-last')
+testcase('hdf5/Annulus.hdf5', 3, formats, '--nvis', '2', suffix='-with-nvis', **kwargs)
+testcase('g2/annulus3D.g2', None, formats, '--nvis', '5', suffix='-with-nvis', **kwargs)
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--no-fields', suffix='-no-fields')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U', '-l', 'V', '-l', 'W', suffix='-filtered')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U,V,W', suffix='-filtered')
@@ -197,6 +216,19 @@ def compare_vtk_unstructured(out, ref, case: PreparedTestCase):
     np.testing.assert_array_equal(
         vtknp.vtk_to_numpy(out.GetCells().GetData()),
         vtknp.vtk_to_numpy(ref.GetCells().GetData()),
+    )
+    compare_vtk_data(out.GetPointData(), ref.GetPointData(), case)
+    compare_vtk_data(out.GetCellData(), ref.GetCellData(), case)
+
+
+def compare_vtk_structured(out, ref, case: PreparedTestCase):
+    """Helper function for comparing two vtkDataSet objects."""
+    assert out.GetDimensions() == ref.GetDimensions()
+    np.testing.assert_allclose(
+        vtknp.vtk_to_numpy(out.GetPoints().GetData()),
+        vtknp.vtk_to_numpy(ref.GetPoints().GetData()),
+        atol=case.abs_tol,
+        rtol=case.rel_tol,
     )
     compare_vtk_data(out.GetPointData(), ref.GetPointData(), case)
     compare_vtk_data(out.GetCellData(), ref.GetCellData(), case)
