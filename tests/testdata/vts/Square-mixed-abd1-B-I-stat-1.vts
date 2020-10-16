@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<VTKFile type="StructuredGrid" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <StructuredGrid WholeExtent="0 4 0 4 0 0">
+  <Piece Extent="0 4 0 4 0 0">
+    <PointData>
+      <DataArray type="Float64" Name="T" format="binary" RangeMin="0" RangeMax="0.0625">
+        AQAAAACAAADIAAAANgAAAA==eJxjYCAN/PsPBPZT7MH0/4X2jCBBhyn26Or+Q+UhvA32TGB6EYY6Jqh+mDwrDvMIAQAhVBm2
+      </DataArray>
+      <DataArray type="Float64" Name="p" format="binary" RangeMin="-0.5625000000000003" RangeMax="0.5624999999999999">
+        AQAAAACAAADIAAAAtwAAAA==eJxjYICA//8D553tPLKHgeFA24cVG/f8/3/dpKL3MJD/heNp4ac9TAwF1WWtjUBxEHhoD9G1eA8zmH60////4zUbAw/vWbUq68/dWQtsCmWeb3qps8fmiUWfdidjrU1oqKlIR/5moP7+dbbKh4H80I7WyuM2PyHm7V+zCgT6bP5Azf/33z7/SNp+oP0Mn7Xdp9kwMFzIXh5yEUgnfIpyuWDz/3/7bLFzJ4DyDte7F97cAwDZVmkM
+      </DataArray>
+      <DataArray type="Float64" Name="u" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="0.18750000000000006">
+        AQAAAACAAABYAgAAWgAAAA==eJxjYBiMYLc9M4TeDxNhApMn7CG8CXtg4ixQ9UxQmiJrD1TbQO3ZjyrRZgOhu/YgxDo6cvOroeInyLb3738Q2LWfA8zbjWYvzB09cHvZUdRR6F8aAgBVRh22
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            0.1875
+          </Value>
+        </InformationKey>
+      </DataArray>
+      <DataArray type="Float64" Name="u_x" format="binary" RangeMin="-0.1875" RangeMax="0.18750000000000006">
+        AQAAAACAAADIAAAANwAAAA==eJxjYCAH7LZnAtMn7FmgfKzKDlTbQBhtQLqjIzcfxkeAv/9BYNd+CO/EfnaIeftJdREAGI4SVw==
+      </DataArray>
+      <DataArray type="Float64" Name="u_y" format="binary" RangeMin="-0.18750000000000006" RangeMax="0.1875">
+        AQAAAACAAADIAAAAMQAAAA==eJxjYCANMIPJ3fshvAl7mCB8e3R1EPETUHVdeyD0CQx1HCjm9UDVYZpHCAAAYw4LYA==
+      </DataArray>
+    </PointData>
+    <CellData>
+    </CellData>
+    <Points>
+      <DataArray type="Float64" Name="Points" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="1.4142135623730951">
+        AQAAAACAAABYAgAAZwAAAA==eJx1kbERwDAIA70Z+1cZIS7pYIHEviSnIgLR8X5bcB6jr3s9dVh/OgV3wVPwmoP+Iv6267R+Li/880P4dQ94yOFc5sjt/TB+n+/1+3vJZf7v2Q/ho5J87BvkY27+Nxd+Fn8DUFOqjA==
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            1.4142135624
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </Points>
+  </Piece>
+  </StructuredGrid>
+</VTKFile>

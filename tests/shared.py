@@ -123,37 +123,39 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
     return maker
 
 
-# List of test cases
-FORMATS = ['vtk', 'vtu', 'pvd', 'vtf']
-
-# General tests of IFEM, LR, G2 and SIMRA readers and VTK, VTF, VTU and PVD readers
-# Most of the vtk reference files were generated before structured output was added,
-# so they are compared using the --unstructured option.
-testcase('hdf5/Annulus.hdf5', 3, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Cavity-mixed.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Cavity3D-compatible.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, FORMATS)
-testcase('hdf5/NACA0015_a6_small_weak_mixed_SA.hdf5', 4, FORMATS)
-testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, FORMATS)
-testcase('hdf5/SmallBox.hdf5', 3, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Square.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Square-ad.hdf5', 11, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Square-LR.hdf5', 1, FORMATS)
-testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Square-modes.hdf5', 10, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Square-modes-freq.hdf5', 10, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('hdf5/Waterfall3D.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('g2/Backstep2D.g2', None, FORMATS)
-testcase('g2/annulus3D.g2', None, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('lr/square-2.lr', None, FORMATS)
-testcase('lr/backstep-3.lr', None, FORMATS)
-testcase('lr/cube-3.lr', None, FORMATS)
+# These data sets are structured. The VTK reference files were
+# generated before structured output was added, so they are compared
+# using the --unstructured option.
+formats = ['vtk', 'vtu', 'vts', 'pvd', 'vtf']
+kwargs = {'format_args': {'vtk': ['--unstructured']}}
+testcase('hdf5/Annulus.hdf5', 3, formats, **kwargs)
+testcase('hdf5/Cavity-mixed.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Cavity3D-compatible.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square-ad.hdf5', 11, formats, **kwargs)
+testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, formats, **kwargs)
+testcase('hdf5/Square-modes.hdf5', 10, formats, **kwargs)
+testcase('hdf5/Square-modes-freq.hdf5', 10, formats, **kwargs)
+testcase('hdf5/Waterfall3D.hdf5', 1, formats, **kwargs)
+testcase('g2/annulus3D.g2', None, formats, **kwargs)
 
 # Single precision, therefore inflated tolerance
-testcase('res/box/box.res', None, FORMATS, format_args={'vtk': ['--unstructured']}, abs_tol=1e-5, rel_tol=1e-5)
-testcase('simra-map.dat/map.dat', None, FORMATS, format_args={'vtk': ['--unstructured']}, abs_tol=1e-5, rel_tol=1e-5)
-testcase('simra-mesh.dat/mesh.dat', None, FORMATS, abs_tol=1e-5, format_args={'vtk': ['--unstructured']})
+testcase('res/box/box.res', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-map.dat/map.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-mesh.dat/mesh.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+
+# Unstructured data sets
+formats = ['vtk', 'vtu', 'pvd', 'vtf']
+testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, formats)
+testcase('hdf5/NACA0015_a6_small_weak_mixed_SA.hdf5', 4, formats)
+testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, formats)
+testcase('hdf5/Square-LR.hdf5', 1, formats)
+testcase('hdf5/SmallBox.hdf5', 3, formats)
+testcase('g2/Backstep2D.g2', None, formats)
+testcase('lr/square-2.lr', None, formats)
+testcase('lr/backstep-3.lr', None, formats)
+testcase('lr/cube-3.lr', None, formats)
 
 # WRF reader to PVD writer with various CLI options
 for n in ['eastward', 'northward', 'outward']:
@@ -171,9 +173,11 @@ for n in ['eastward', 'northward', 'outward']:
              '--extrude', '--coords', 'geocentric:sphere', '--periodic', suffix='-extrude-periodic')
 
 # Miscellaneous CLI options
-testcase('hdf5/SmallBox.hdf5', None, FORMATS, '--last', suffix='-with-last')
-testcase('hdf5/Annulus.hdf5', 3, FORMATS, '--nvis', '2', suffix='-with-nvis', format_args={'vtk': ['--unstructured']})
-testcase('g2/annulus3D.g2', None, FORMATS, '--nvis', '5', suffix='-with-nvis', format_args={'vtk': ['--unstructured']})
+formats = ['vtk', 'vtu', 'pvd', 'vtf']
+kwargs = {'format_args': {'vtk': ['--unstructured']}}
+testcase('hdf5/SmallBox.hdf5', None, formats, '--last', suffix='-with-last')
+testcase('hdf5/Annulus.hdf5', 3, formats, '--nvis', '2', suffix='-with-nvis', **kwargs)
+testcase('g2/annulus3D.g2', None, formats, '--nvis', '5', suffix='-with-nvis', **kwargs)
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--no-fields', suffix='-no-fields')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U', '-l', 'V', '-l', 'W', suffix='-filtered')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U,V,W', suffix='-filtered')
@@ -206,6 +210,19 @@ def compare_vtk_unstructured(out, ref, case: PreparedTestCase):
     np.testing.assert_array_equal(
         vtknp.vtk_to_numpy(out.GetCells().GetData()),
         vtknp.vtk_to_numpy(ref.GetCells().GetData()),
+    )
+    compare_vtk_data(out.GetPointData(), ref.GetPointData(), case)
+    compare_vtk_data(out.GetCellData(), ref.GetCellData(), case)
+
+
+def compare_vtk_structured(out, ref, case: PreparedTestCase):
+    """Helper function for comparing two vtkDataSet objects."""
+    assert out.GetDimensions() == ref.GetDimensions()
+    np.testing.assert_allclose(
+        vtknp.vtk_to_numpy(out.GetPoints().GetData()),
+        vtknp.vtk_to_numpy(ref.GetPoints().GetData()),
+        atol=case.abs_tol,
+        rtol=case.rel_tol,
     )
     compare_vtk_data(out.GetPointData(), ref.GetPointData(), case)
     compare_vtk_data(out.GetCellData(), ref.GetCellData(), case)

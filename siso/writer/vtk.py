@@ -30,9 +30,11 @@ from ..typing import Array2D, StepData
 
 
 
-def transpose(data, grid):
+def transpose(data, grid, cells=False):
     if isinstance(grid, vtkStructuredGrid):
         shape = grid.GetDimensions()
+        if cells:
+            shape = tuple(max(s-1,1) for s in shape)
         data = data.reshape(*shape, -1).transpose(2, 1, 0, 3).reshape(prod(shape), -1)
     return data
 
@@ -97,7 +99,7 @@ class AbstractVTKWriter(Writer):
     def update_field(self, field: Field, patch: Patch, data: Array2D):
         target = self.grid.GetCellData() if field.cells else self.grid.GetPointData()
         data = ensure_ncomps(self.nan_filter(data), 3, allow_scalar=field.is_scalar)
-        data = transpose(data, self.grid)
+        data = transpose(data, self.grid, cells=field.cells)
         array = numpy_to_vtk(data)
         array.SetName(field.name)
         target.AddArray(array)

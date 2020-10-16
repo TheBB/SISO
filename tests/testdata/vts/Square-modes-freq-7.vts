@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<VTKFile type="StructuredGrid" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <StructuredGrid WholeExtent="0 8 0 8 0 0">
+  <Piece Extent="0 8 0 8 0 0">
+    <PointData>
+      <DataArray type="Float64" Name="Mode Shape" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="168.40677519452248">
+        AQAAAACAAACYBwAAqwIAAA==eJxjYEAFJc5LzCz6og6gCTN0rcz0ZeFNxRDfH6t95qV2Iob4ucSt62YvMcIQj3GbWfbiXQCG+NxZJcnKG8Mc0MUvlDlm3dlniyHuy+xY4rUtAUO87PCC1hj+WAzx09mPnIzsIzHsbXJYlcT4CNP9i15LNi8p88AQzy2s+iD81RVDPOnfgrq91xwxxO0Pb7+qkcqH4Z6qpPn2izbEYIivWHf4WNpJZwxxEZXq6VuzrDHEBd20V/IZYrqzf97Ted5OThjiGbfnGLNa+WKIy4drzFgXYo8h/vqgttTdKTYY9oa6/+HvDJbHEPe/oLJyspUXhniGBNs1pZ2JGOKXdGbevnk2BUN8ghe78dFN7hjiv21D2ZzXO2C4kzfGZsbGVAUM9bsTpk/weocZL8F1y30XzNPGEN8YzM3t7YzpX5HfdUsa7vtiiH+Tec+++ySm+L/gj5wxDzDjt/orw77mbA4McZ8UNq0tKaYY7hH+mJzfLamJIf5jl1PQlCABDHHNvRNV7252xhCvrv57gtXNAkO82NPD/yOjGoZ7mDddT9ixDTO9cUY2fwo6boQhfj5a2Mj3N6Y5tqcnn3Tt98QQX5l7qL1+rh6Ge87nz7z0vccKQ716oKjAKzPM+GIIe5Z79DNmuDm9dNE9UIKZ7+Lib5X3KHhgiCemZsTNZRPCMKdpRk52+5pQDPUrGib9uGtvgKH+Xen69P2HMdNDbGlW/t651hjqWe8olNTMxUy3NhY/C1hDMdPhrfX/mO8x+GGIN+3Oe/mVHTO/JIdW/ZSaYI4h3r5L/Pqm71EY4omeRdxfLmD6d+HDwBlmodIY7teYEBURLuyAof4h89+wpMkWGOInE4uy3subYIhr/IpWjDglj2G+/Hu5BwdEQzDUL6updY+LDcYQHy4AADgHBlc=
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            168.40677519
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </PointData>
+    <CellData>
+    </CellData>
+    <Points>
+      <DataArray type="Float64" Name="Points" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="2.8284271247461903">
+        AQAAAACAAACYBwAABQEAAA==eJyFlTsKAkEQRBf1Xnr/xCO42Zi5MBNsoNvip4Su6sIJBJ9F0Y8exmmqzxavcz7Wv87C3/FoJr8YPgxfhR/en3eTn06Giwe+P4h/5r8cOQ+vuudm8l04vJjDq+4J04Mzixc82KvmTTi86nwXDi+eB151T0ie56q9mvFi3oRnL8534fDaiOd9cU+YHpzFeN2MF/MmPHtxvguHF8+T98U9Ifl8hvHqxot5E569ON+FZ69hvLgnJF/38TvC79MsPN8Dzi+GD8NX4buvV53He/j/HYXXnjj2VfMmHPuq81045uN5kKt7QvK1N/K4h2H2xf8bV8MXw4fhq/B8D3meX+6XfwKHZnd1
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            2.8284271247
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </Points>
+  </Piece>
+  </StructuredGrid>
+</VTKFile>

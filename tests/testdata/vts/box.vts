@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<VTKFile type="StructuredGrid" version="0.1" byte_order="LittleEndian" header_type="UInt32" compressor="vtkZLibDataCompressor">
+  <StructuredGrid WholeExtent="0 2 0 3 0 4">
+  <Piece Extent="0 2 0 3 0 4">
+    <PointData>
+      <DataArray type="Float32" Name="ps" format="binary" RangeMin="99987.4453125" RangeMax="100000">
+        AQAAAACAAADwAAAAHgAAAA==eJxjCDjszkAC/uxHGrbxJQ07eJOGd3qShgF18Got
+      </DataArray>
+      <DataArray type="Float32" Name="pt" format="binary" RangeMin="272.29998779296875" RangeMax="272.3006896972656">
+        AQAAAACAAADwAAAAGgAAAA==eJxLU+twTiMBZ5GIC0jE5STiWhIxAIseUu0=
+      </DataArray>
+      <DataArray type="Float32" Name="pts" format="binary" RangeMin="272.29998779296875" RangeMax="272.3006896972656">
+        AQAAAACAAADwAAAAGgAAAA==eJxLU+twTiMBZ5KIC0jE5STiWhIxAIMmUuE=
+      </DataArray>
+      <DataArray type="Float32" Name="rho" format="binary" RangeMin="1.2794709205627441" RangeMax="1.2795889377593994">
+        AQAAAACAAADwAAAAIAAAAA==eJybdHKx/SQS8JsTpOF7x0nDy46RhrccJQ0DACm8kCU=
+      </DataArray>
+      <DataArray type="Float32" Name="rhos" format="binary" RangeMin="1.2794709205627441" RangeMax="1.2795889377593994">
+        AQAAAACAAADwAAAAIAAAAA==eJybdHKx/SQS8JsTpOF7x0nDy46RhrccJQ0DACm8kCU=
+      </DataArray>
+      <DataArray type="Float32" Name="td" format="binary" RangeMin="1.562448263168335" RangeMax="2.821387529373169">
+        AQAAAACAAADwAAAAIwAAAA==eJzjD1Vw4CcBz51oQhJuzuMmCfvtu2lPEv53nCQMAKd7YSE=
+      </DataArray>
+      <DataArray type="Float32" Name="tk" format="binary" RangeMin="1.5447070598602295" RangeMax="2.993133306503296">
+        AQAAAACAAADwAAAAJAAAAA==eJz7tuOo/TcSsOsJfgdS8NlCFZJw+lIDknB9vz1JGABQUmit
+      </DataArray>
+      <DataArray type="Float32" Name="u" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="1">
+        AQAAAACAAADQAgAAxwAAAA==eJxjYBhc4EWWth0p7Lw6LTsJ1zMWacL/dvAv17Cb71C0q1LVzhJZjWupll13m+XODSIpFrx7NOw2BSRZiXw0sSDK/MUPSWJLzHtgl3Fv5s5j/jN2tj26Z2e+YK3Vv3udO5HVbJj2wK5OrsjSvKZ958V39+yCFPbsWmi9Ygcx5i/d62hPCps/zdF+y4NnFh6MC3bon3aw/2chvot3wZsdyGp2ZTraq9lt3cFR+mW75FEH+5mS0lYdDoY7iTGfgaFhULEB6XZ42g==
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            1
+          </Value>
+        </InformationKey>
+      </DataArray>
+      <DataArray type="Float32" Name="u_x" format="binary" RangeMin="0" RangeMax="1">
+        AQAAAACAAADwAAAAVwAAAA==eJxjYCANvMjStkPGeXVadvzLNcBs11ItO949Gqjyix+iYIl5D+zaHt0DszdMe2B38d09FPmlex3tkTF/mqO9/mkHMHtXpqO95FEHFHkGhgaSMACyjEsj
+      </DataArray>
+      <DataArray type="Float32" Name="u_y" format="binary" RangeMin="-0.001435289392247796" RangeMax="0.0013246600283309817">
+        AQAAAACAAADwAAAASQAAAA==eJxjYKAMSLiesZjvULQLxO5us9y5KSDJCp/6jHszd5ovWAtWUydXZBmksGcXPvVbHjyz+GchDlajZrd1x0xJabzmEwIAOysWJA==
+      </DataArray>
+      <DataArray type="Float32" Name="u_z" format="binary" RangeMin="-0.0002905113506130874" RangeMax="0.00018133771663997322">
+        AQAAAACAAADwAAAASgAAAA==eJxjYKAMpAn/21GpamcJYm8QSbEQ+WhigU/9Mf8ZO//d69wJYpvXtO9caL1iBz71HowLdvAueANWw1H6ZXuHg+FOStwLAJ/lF5U=
+      </DataArray>
+      <DataArray type="Float32" Name="vtef" format="binary" RangeMin="1" RangeMax="1">
+        AQAAAACAAADwAAAADwAAAA==eJxjYGiwZxhBGADvOCzF
+      </DataArray>
+    </PointData>
+    <CellData>
+    </CellData>
+    <Points>
+      <DataArray type="Float32" Name="Points" NumberOfComponents="3" format="binary" RangeMin="0" RangeMax="1.7320508763943954">
+        AQAAAACAAADQAgAAsQAAAA==eJxVzrENAlEMA9DQUVzPDrDDRfRswSKuEAU7XMUViBlYgR5BwSYIRbZzqV7h/+2IxaUJeXM5T4f5NjJjQx5O6+l13/JN2mhe/Js2svf9733cjdxThsw9zNiQuYcZG83V7S6ku9AyEc/rV3vKkLmHGRsy9zBjo7n2uAvpLrRMxOexT+4pQ+YeZmzI3MOMjeba4y6ku9AyEavqTxsy9zBjQ+YeZmw01x53Id1V/gGH3rvo
+        <InformationKey name="L2_NORM_RANGE" location="vtkDataArray" length="2">
+          <Value index="0">
+            0
+          </Value>
+          <Value index="1">
+            1.7320508764
+          </Value>
+        </InformationKey>
+      </DataArray>
+    </Points>
+  </Piece>
+  </StructuredGrid>
+</VTKFile>
