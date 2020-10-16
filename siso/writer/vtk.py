@@ -1,6 +1,6 @@
 """Module for VTK format writers."""
 
-from abc import abstractmethod
+from abc import abstractmethod, abstractclassmethod
 from contextlib import contextmanager
 from os import makedirs
 from pathlib import Path
@@ -23,10 +23,18 @@ from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
 from .. import config
 from ..fields import Field
 from ..geometry import StructuredTopology, Hex, Patch
-from ..util import ensure_ncomps
+from ..util import ensure_ncomps, prod
 from .writer import Writer
 
 from ..typing import Array2D, StepData
+
+
+
+def transpose(data, grid):
+    if isinstance(grid, vtkStructuredGrid):
+        shape = grid.GetDimensions()
+        data = data.reshape(*shape, -1).transpose(2, 1, 0, 3).reshape(prod(shape), -1)
+    return data
 
 
 
@@ -71,8 +79,10 @@ class AbstractVTKWriter(Writer):
         elif not self.grid:
             self.grid = vtkUnstructuredGrid()
 
-        points = vtkPoints()
         data = ensure_ncomps(self.nan_filter(data), 3, allow_scalar=False)
+        data = transpose(data, self.grid)
+
+        points = vtkPoints()
         points.SetData(numpy_to_vtk(data))
         self.grid.SetPoints(points)
 
@@ -87,6 +97,7 @@ class AbstractVTKWriter(Writer):
     def update_field(self, field: Field, patch: Patch, data: Array2D):
         target = self.grid.GetCellData() if field.cells else self.grid.GetPointData()
         data = ensure_ncomps(self.nan_filter(data), 3, allow_scalar=field.is_scalar)
+        data = transpose(data, self.grid)
         array = numpy_to_vtk(data)
         array.SetName(field.name)
         target.AddArray(array)
@@ -139,6 +150,10 @@ class VTKLegacyWriter(AbstractVTKWriter):
 
 class VTKXMLWriter(AbstractVTKWriter):
     """Writer for VTK XML-based format."""
+
+    @abstractclassmethod
+    def applicable(cls, fmt: str) -> bool:
+        pass
 
     def validate(self):
         super().validate()

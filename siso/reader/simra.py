@@ -8,13 +8,13 @@ from scipy.io import FortranFile
 import treelog as log
 
 from typing import Optional, Iterable, Tuple, TextIO
-from ..typing import StepData, Array2D
+from ..typing import StepData, Array2D, Shape
 
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..fields import Field, SimpleField, Geometry, FieldPatches
 from ..geometry import Topology, UnstructuredTopology, StructuredTopology, Hex, Quad, Patch
-from ..util import fortran_skip_record, save_excursion, cache
+from ..util import fortran_skip_record, save_excursion, cache, prod
 from ..writer import Writer
 
 
@@ -26,6 +26,10 @@ from ..writer import Writer
 def dtypes(endianness):
     endian = {'native': '=', 'big': '>', 'small': '<'}[endianness]
     return np.dtype(f'{endian}f4'), np.dtype(f'{endian}u4')
+
+
+def transpose(array, nodeshape):
+    return array.reshape(*nodeshape, -1).transpose(1, 0, 2, 3).reshape(prod(nodeshape), -1)
 
 
 
@@ -170,6 +174,7 @@ class SIMRA3DMeshReader(SIMRAReader):
 
     filename: Path
     mesh: FortranFile
+    nodeshape: Shape
 
     @classmethod
     def applicable(cls, filename:  Path) -> bool:
@@ -187,6 +192,9 @@ class SIMRA3DMeshReader(SIMRAReader):
 
     def __enter__(self):
         self.mesh = FortranFile(self.filename, 'r', header_dtype=self.u4_type).__enter__()
+        with save_excursion(self.mesh._fp):
+            _, _, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
+        self.nodeshape = (jmax, imax, kmax)
         return self
 
     def __exit__(self, *args):
@@ -195,16 +203,16 @@ class SIMRA3DMeshReader(SIMRAReader):
     @cache(1)
     def patch(self) -> Patch:
         with save_excursion(self.mesh._fp):
-            npts, nelems, _, _, _, _ = self.mesh.read_ints(self.u4_type)
             fortran_skip_record(self.mesh)
-            cells = self.mesh.read_ints(self.u4_type).reshape(nelems, 8) - 1
-            return Patch(('geometry',), UnstructuredTopology(npts, cells, celltype=Hex()))
+            fortran_skip_record(self.mesh)
+            i, j, k = self.nodeshape
+            return Patch(('geometry',), StructuredTopology((j-1, i-1, k-1), celltype=Hex()))
 
     @cache(1)
     def nodes(self) -> Array2D:
         with save_excursion(self.mesh._fp):
-            npts, _, _, _, _, _ = self.mesh.read_ints(self.u4_type)
-            return self.mesh.read_reals(self.f4_type).reshape(npts, 3)
+            fortran_skip_record(self.mesh)
+            return transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
 
 
 class SIMRAResultReader(SIMRAReader):
@@ -283,8 +291,8 @@ class SIMRAResultReader(SIMRAReader):
     @cache(1)
     def data(self) -> Array2D:
         data = self.result.read_reals(dtype=self.f4_type)
-        _, data = data[0], data[1:].reshape(-1, 11)
-        return data
+        _, data = data[0], data[1:]
+        return transpose(data, self.mesh.nodeshape)
 
     def scale(self, name: str) -> float:
         return self.input_data.get('param_data', {}).get(name, 1.0)

@@ -127,6 +127,8 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
 FORMATS = ['vtk', 'vtu', 'pvd', 'vtf']
 
 # General tests of IFEM, LR, G2 and SIMRA readers and VTK, VTF, VTU and PVD readers
+# Most of the vtk reference files were generated before structured output was added,
+# so they are compared using the --unstructured option.
 testcase('hdf5/Annulus.hdf5', 3, FORMATS, format_args={'vtk': ['--unstructured']})
 testcase('hdf5/Cavity-mixed.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
 testcase('hdf5/Cavity3D-compatible.hdf5', 1, FORMATS, format_args={'vtk': ['--unstructured']})
@@ -147,9 +149,11 @@ testcase('g2/annulus3D.g2', None, FORMATS, format_args={'vtk': ['--unstructured'
 testcase('lr/square-2.lr', None, FORMATS)
 testcase('lr/backstep-3.lr', None, FORMATS)
 testcase('lr/cube-3.lr', None, FORMATS)
-testcase('res/box/box.res', None, FORMATS)
-testcase('simra-map.dat/map.dat', None, FORMATS, format_args={'vtk': ['--unstructured']})
-testcase('simra-mesh.dat/mesh.dat', None, FORMATS, abs_tol=1e-5)  # Single precision
+
+# Single precision, therefore inflated tolerance
+testcase('res/box/box.res', None, FORMATS, format_args={'vtk': ['--unstructured']}, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-map.dat/map.dat', None, FORMATS, format_args={'vtk': ['--unstructured']}, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra-mesh.dat/mesh.dat', None, FORMATS, abs_tol=1e-5, format_args={'vtk': ['--unstructured']})
 
 # WRF reader to PVD writer with various CLI options
 for n in ['eastward', 'northward', 'outward']:
