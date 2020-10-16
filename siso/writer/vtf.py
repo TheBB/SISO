@@ -135,7 +135,7 @@ class VTFWriter(Writer):
 
         nblock, eblock = self.geometry_blocks[patchid]
         with self.out.ResultBlock(cells=field.cells, vector=field.is_vector) as rblock:
-            rblock.SetResults(data.flat)
+            rblock.SetResults(data.flatten())
             rblock.BindBlock(eblock if field.cells else nblock)
 
         if field.name not in self.field_blocks:

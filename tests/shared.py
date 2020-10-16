@@ -157,20 +157,25 @@ testcase('lr/square-2.lr', None, formats)
 testcase('lr/backstep-3.lr', None, formats)
 testcase('lr/cube-3.lr', None, formats)
 
-# WRF reader to PVD writer with various CLI options
+# WRF reader with various options.  We only use PVD, VTU and VTS here
+# to save some space.
+pr = '--periodic'
+pl = '--planar'
+ex = '--extrude'
+gl = ['--coords', 'geocentric:sphere']
 for n in ['eastward', 'northward', 'outward']:
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], suffix='-volumetric')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', suffix='-planar')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', suffix='-extrude')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--coords', 'geocentric:sphere', suffix='-volumetric-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--planar', '--coords', 'geocentric:sphere', suffix='-planar-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'], '--extrude', '--coords', 'geocentric:sphere', suffix='-extrude-global')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
-             '--planar', '--coords', 'geocentric:sphere', '--periodic', suffix='-planar-periodic')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
-             '--volumetric', '--coords', 'geocentric:sphere', '--periodic', suffix='-volumetric-periodic')
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, ['pvd'],
-             '--extrude', '--coords', 'geocentric:sphere', '--periodic', suffix='-extrude-periodic')
+    formats = ['vtu', 'vts', 'pvd']
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, suffix='-volumetric')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, suffix='-planar')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, suffix='-extrude')
+
+    formats = ['vtu', 'pvd']
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, suffix='-volumetric-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, suffix='-planar-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, suffix='-extrude-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, pr, suffix='-planar-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, pr, suffix='-volumetric-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, pr, suffix='-extrude-periodic')
 
 # Miscellaneous CLI options
 formats = ['vtk', 'vtu', 'pvd', 'vtf']
