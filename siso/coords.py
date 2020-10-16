@@ -8,6 +8,7 @@ from typing import Union, Dict, List, Tuple, Callable, Set, Iterable, Optional
 from .typing import Array2D
 
 from .util import subclasses, spherical_cartesian_vf
+from . import config
 
 
 
@@ -106,6 +107,9 @@ class Coords(ABC):
             return False
         return str(self) == str(other)
 
+    def substitute(self):
+        return self
+
 
 class Local(Coords):
     """This class represents an unspecified coordinate system to and
@@ -122,6 +126,9 @@ class Local(Coords):
 
     def __str__(self):
         return f'Local({self.specific_name})'
+
+    def substitute(self):
+        return config.input_coords.get(self.specific_name, self)
 
 
 class Geodetic(Coords):

@@ -92,6 +92,7 @@ def tracked_option(*args, **kwargs):
 @tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=CoordsType())
 @tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=CoordsType())
 @tracked_option('--coords', help='Output coordinate system', default='local', type=CoordsType())
+@tracked_option('--in-coords', 'input_coords', nargs=2, multiple=2, type=click.Tuple([str, CoordsType()]))
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
@@ -139,7 +140,9 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         outfile = Path(infile.name).with_suffix(f'.{fmt}')
 
     # Handle default values of multi-valued options that should be
-    # distinguished from empty, as well as comma splitting
+    # distinguished from empty, as well as comma splitting and other
+    # transformations
+    kwargs['input_coords'] = dict(kwargs['input_coords'])
     for k in ['field_filter', 'only_bases']:
         kwargs[k] = tuple(split_commas(kwargs[k]))
     explicit_options = getattr(ctx, 'explicit_options', set())

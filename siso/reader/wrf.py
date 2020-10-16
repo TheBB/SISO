@@ -134,7 +134,7 @@ class WRFLocalGeometryField(WRFGeometryField):
 
     def __init__(self, reader: 'WRFReader'):
         super().__init__(reader)
-        self.fieldtype = Geometry(Local())
+        self.fieldtype = Geometry(Local().substitute())
         self.name = 'local'
 
     def nodes(self, stepid: int) -> Array2D:

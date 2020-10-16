@@ -8,6 +8,7 @@ from typing import Iterable, Tuple, Optional
 from ..typing import StepData, Array2D
 
 from .. import config, ConfigTarget
+from ..coords import Local
 from ..geometry import SplineTopology, LRTopology, Patch
 from ..fields import Field, SimpleField, Geometry, FieldPatches
 from .reader import Reader
@@ -53,13 +54,13 @@ class PureGeometryReader(Reader, ABC):
 class PureGeometryField(SimpleField):
 
     name = 'Geometry'
-    fieldtype = Geometry()
     cells = False
 
     reader: PureGeometryReader
 
     def __init__(self, reader: PureGeometryReader):
         self.reader = reader
+        self.fieldtype = Geometry(Local().substitute())
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield from self.reader.patches()

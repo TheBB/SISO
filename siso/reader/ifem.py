@@ -169,12 +169,11 @@ class IFEMGeometryField(SimpleField):
     basis: Basis
 
     cells = False
-    fieldtype = Geometry()
 
     def __init__(self, basis: Basis):
         self.name = basis.name
         self.basis = basis
-        self.fieldtype = Geometry(Local(basis.name))
+        self.fieldtype = Geometry(Local(basis.name).substitute())
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         if not force and not self.basis.update_at(stepid):

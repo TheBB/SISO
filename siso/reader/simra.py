@@ -12,6 +12,7 @@ from ..typing import StepData, Array2D, Shape
 
 from .reader import Reader
 from .. import config, ConfigTarget
+from ..coords import Local
 from ..fields import Field, SimpleField, Geometry, FieldPatches
 from ..geometry import Topology, UnstructuredTopology, StructuredTopology, Hex, Quad, Patch
 from ..util import fortran_skip_record, save_excursion, cache, prod
@@ -64,13 +65,13 @@ class SIMRAGeometryField(SimpleField):
 
     name = 'Geometry'
     cells = False
-    fieldtype = Geometry()
     ncomps = 3
 
     reader: 'SIMRAReader'
 
     def __init__(self, reader: 'SIMRAReader'):
         self.reader = reader
+        self.fieldtype = Geometry(Local().substitute())
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield self.reader.patch(), self.reader.nodes()
