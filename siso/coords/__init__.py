@@ -8,8 +8,10 @@ from typing import Union, Dict, List, Tuple, Callable, Set, Iterable, Optional
 from ..typing import Array2D
 
 from ..geometry import PatchKey
-from ..util import subclasses, spherical_cartesian_vf
+from ..util import subclasses
 from .. import config
+
+from .util import spherical_cartesian_vf, utm_to_lonlat, utm_to_lonlat_vf
 
 
 
@@ -136,6 +138,22 @@ class Geodetic(Coords):
     """Latitude, longitude and height above the reference ellipsoid."""
 
     name = 'geodetic'
+
+
+class UTM(Coords):
+    """Universal Transversal Mercator"""
+
+    zone_number: int
+    zone_letter: str
+
+    name = 'utm'
+
+    def __init__(self, zone: str):
+        self.zone_number = int(zone[:-1])
+        self.zone_letter = zone[-1].upper()
+
+    def __str__(self):
+        return f'{self.name}:{self.zone_number}{self.zone_letter}'
 
 
 class Geocentric(Coords):
@@ -295,3 +313,13 @@ def _(src: Geodetic, tgt: Geocentric, data: Array2D) -> Array2D:
 def _(src: Geodetic, tgt: Geocentric, data: Array2D, nodes: Array2D) -> Array2D:
     lon, lat = nodes[:,0], nodes[:,1]
     return spherical_cartesian_vf(lon, lat, data)
+
+@graph.points('utm', 'geodetic')
+def _(src: UTM, tgt: Geodetic, data: Array2D) -> Array2D:
+    lon, lat = utm_to_lonlat(data[:,0], data[:,1], src.zone_number, src.zone_letter)
+    return np.hstack([lon.reshape(-1,1), lat.reshape(-1,1), data[:,2:]])
+
+@graph.vectors('utm', 'geodetic', trivial=False)
+def _(src: UTM, tgt: Geodetic, data: Array2D, nodes: Array2D) -> Array2D:
+    vx, vy = utm_to_lonlat_vf(nodes[:,0], nodes[:,1], data[:,0], data[:,1], src.zone_number, src.zone_letter)
+    return np.hstack([vx.reshape(-1,1), vy.reshape(-1,1), data[:,2:]])

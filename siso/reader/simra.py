@@ -33,6 +33,18 @@ def transpose(array, nodeshape):
     return array.reshape(*nodeshape, -1).transpose(1, 0, 2, 3).reshape(prod(nodeshape), -1)
 
 
+def translate(path: Path, data: Array2D) -> Array2D:
+    info_path = path / 'info.txt'
+    if not info_path.exists():
+        log.warning("Unable to find mesh origin info, coordinates may be unreliable")
+        return data
+    with open(info_path, 'r') as f:
+        x, y = map(float, next(f).split())
+    data[:,0] += x
+    data[:,1] += y
+    return data
+
+
 
 # Fields
 # ----------------------------------------------------------------------
@@ -166,7 +178,7 @@ class SIMRA2DMapReader(SIMRAReader):
                 nodes.extend(map(float, line.split()))
         nodes = np.array(nodes).reshape(*self.nodeshape[::-1], 3)
         nodes[...,2 ] /= 10      # Map files have a vertical resolution factor of 10
-        return nodes.reshape(-1, 3)
+        return translate(self.filename.parent, nodes.reshape(-1, 3))
 
 
 class SIMRA2DMeshReader(SIMRAReader):
@@ -206,7 +218,8 @@ class SIMRA2DMeshReader(SIMRAReader):
     @cache(1)
     def nodes(self) -> Array2D:
         nnodes = prod(s+1 for s in self.shape)
-        return np.array([tuple(map(float, next(self.meshfile).split()[1:])) for _ in range(nnodes)])
+        nodes = np.array([tuple(map(float, next(self.meshfile).split()[1:])) for _ in range(nnodes)])
+        return translate(self.filename.parent, nodes)
 
 
 class SIMRA3DMeshReader(SIMRAReader):
@@ -253,7 +266,8 @@ class SIMRA3DMeshReader(SIMRAReader):
     def nodes(self) -> Array2D:
         with save_excursion(self.mesh._fp):
             fortran_skip_record(self.mesh)
-            return transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
+            nodes = transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
+        return translate(self.filename.parent, nodes)
 
 
 class SIMRAResultReader(SIMRAReader):
