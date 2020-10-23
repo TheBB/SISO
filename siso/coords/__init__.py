@@ -7,6 +7,7 @@ import numpy as np
 from typing import Union, Dict, List, Tuple, Callable, Set, Iterable, Optional
 from ..typing import Array2D
 
+from ..geometry import PatchKey
 from ..util import subclasses, spherical_cartesian_vf
 from .. import config
 
@@ -245,10 +246,12 @@ class Converter:
 
     graph: ConversionGraph
     path: List[str]
+    nodes: Dict[Tuple[Tuple[str, str], PatchKey], Array2D]
 
     def __init__(self, graph: ConversionGraph, path: List[str]):
         self.graph = graph
         self.path = path
+        self.nodes = dict()
 
     def __len__(self):
         return len(self.path)
@@ -260,19 +263,24 @@ class Converter:
             for a, b in zip(self.path[:-1], self.path[1:])
         )
 
-    def convert(self, src: Coords, tgt: Coords, data: Array2D, lookup: ConvDict, **kwargs) -> Array2D:
+    def convert(self, src: Coords, tgt: Coords, data: Array2D, lookup: ConvDict, key: PatchKey, store: bool) -> Array2D:
         if not self.path:
             return data
         path = [src] + [Coords.find(c) for c in self.path[1:-1]] + [tgt]
         for a, b in zip(path[:-1], path[1:]):
-            data = lookup[(a.name, b.name)](a, b, data, **kwargs)
+            edge = (a.name, b.name)
+            if store:
+                self.nodes[edge, key] = data
+                data = lookup[edge](a, b, data)
+            else:
+                data = lookup[edge](a, b, data, nodes=self.nodes[edge, key])
         return data
 
-    def points(self, src: Coords, tgt: Coords, data: Array2D) -> Array2D:
-        return self.convert(src, tgt, data, self.graph.point_converters)
+    def points(self, src: Coords, tgt: Coords, data: Array2D, key: PatchKey) -> Array2D:
+        return self.convert(src, tgt, data, self.graph.point_converters, key=key, store=True)
 
-    def vectors(self, src: Coords, tgt: Coords, data: Array2D, nodes: Optional[Array2D] = None) -> Array2D:
-        return self.convert(src, tgt, data, self.graph.vector_converters, nodes=nodes)
+    def vectors(self, src: Coords, tgt: Coords, data: Array2D, key: PatchKey) -> Array2D:
+        return self.convert(src, tgt, data, self.graph.vector_converters, key=key, store=False)
 
 
 @graph.points('geodetic', 'geocentric')
