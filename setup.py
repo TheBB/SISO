@@ -15,7 +15,7 @@ setup(
     long_description=desc,
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
-    packages=['siso', 'siso.writer', 'siso.reader'],
+    packages=['siso', 'siso.writer', 'siso.reader', 'siso.coords'],
     install_requires=[
         'cachetools',
         'click',

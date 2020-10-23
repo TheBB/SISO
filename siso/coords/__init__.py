@@ -5,10 +5,10 @@ import erfa
 import numpy as np
 
 from typing import Union, Dict, List, Tuple, Callable, Set, Iterable, Optional
-from .typing import Array2D
+from ..typing import Array2D
 
-from .util import subclasses, spherical_cartesian_vf
-from . import config
+from ..util import subclasses, spherical_cartesian_vf
+from .. import config
 
 
 
