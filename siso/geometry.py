@@ -39,6 +39,13 @@ class CellType:
         return type(self) == type(other)
 
 
+class Line(CellType):
+
+    num_nodes = 2
+    num_pardim = 1
+    structured = True
+
+
 class Quad(CellType):
 
     num_nodes = 4
@@ -394,7 +401,11 @@ class TensorTesselator(Tesselator):
 
     @tesselate.register(SplineTopology)
     def _1(self, topo: SplineTopology) -> UnstructuredTopology:
-        celltype = Hex() if topo.num_pardim == 3 else Quad()
+        celltype = {
+            1: Line(),
+            2: Quad(),
+            3: Hex()
+        }[topo.num_pardim]
         cellshape = tuple(len(kts) - 1 for kts in self.knots)
         return StructuredTopology(cellshape, celltype=celltype)
 

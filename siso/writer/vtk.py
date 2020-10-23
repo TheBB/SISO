@@ -14,7 +14,7 @@ import treelog as log
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import (
     vtkDataSet, vtkUnstructuredGrid, vtkStructuredGrid, vtkCellArray,
-    VTK_HEXAHEDRON, VTK_QUAD,
+    VTK_HEXAHEDRON, VTK_QUAD, VTK_LINE
 )
 from vtkmodules.vtkIOLegacy import vtkUnstructuredGridWriter, vtkStructuredGridWriter
 from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridWriter, vtkXMLStructuredGridWriter
@@ -22,7 +22,7 @@ from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
 
 from .. import config
 from ..fields import Field
-from ..geometry import StructuredTopology, Hex, Patch
+from ..geometry import StructuredTopology, Hex, Quad, Line, Patch
 from ..util import ensure_ncomps, prod
 from .writer import Writer
 
@@ -89,11 +89,18 @@ class AbstractVTKWriter(Writer):
         self.grid.SetPoints(points)
 
         if isinstance(self.grid, vtkUnstructuredGrid):
+            if patch.topology.celltype not in [Line(), Quad(), Hex()]:
+                raise TypeError(f"Unexpected cell type found: needed line, quad or hex")
             cells = patch.topology.cells
             cells = np.hstack([cells.shape[-1] * np.ones((len(cells), 1), dtype=int), cells]).ravel()
             cellarray = vtkCellArray()
             cellarray.SetCells(len(cells), numpy_to_vtkIdTypeArray(cells))
-            celltype = VTK_HEXAHEDRON if isinstance(patch.topology.celltype, Hex) else VTK_QUAD
+            if patch.topology.celltype == Hex():
+                celltype = VTK_HEXAHEDRON
+            elif patch.topology.celltype == Quad():
+                celltype = VTK_QUAD
+            else:
+                celltype = VTK_LINE
             self.grid.SetCells(celltype, cellarray)
 
     def update_field(self, field: Field, patch: Patch, data: Array2D):
