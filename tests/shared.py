@@ -158,6 +158,10 @@ testcase('lr/square-2.lr', None, formats)
 testcase('lr/backstep-3.lr', None, formats)
 testcase('lr/cube-3.lr', None, formats)
 
+# 1D so far untested with VTF
+formats = ['vtk', 'vtu', 'pvd']
+testcase('hdf5/TestCell1D.hdf5', 1, formats)
+
 # WRF reader with various options.  We only use PVD, VTU and VTS here
 # to save some space.
 pr = '--periodic'
