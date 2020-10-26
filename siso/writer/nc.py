@@ -1,5 +1,6 @@
-from netCDF4 import Dataset
+from contextlib import contextmanager
 
+from netCDF4 import Dataset
 import treelog as log
 
 from .writer import Writer
@@ -7,13 +8,15 @@ from ..fields import Field
 from ..geometry import Patch, Hex, StructuredTopology
 from ..coords import Geodetic
 
-from ..typing import Array2D
-from typing import Any
+from ..typing import Array2D, StepData
+from typing import Any, Optional
 
 
 class NetCDFCFWriter(Writer):
 
     writer_name = "NetCDF4-CF"
+
+    coordinates: Optional[str]
 
     @classmethod
     def applicable(cls, fmt: str) -> bool:
@@ -22,6 +25,7 @@ class NetCDFCFWriter(Writer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.initialized_geometry = False
+        self.coordinates = None
 
     def __enter__(self):
         self.out = Dataset(self.outpath, 'w').__enter__()
@@ -37,12 +41,14 @@ class NetCDFCFWriter(Writer):
         log.user(self.outpath)
         return super().__exit__(*args)
 
-    def add_step(self, **stepdata: Any):
-        super().add_step(**stepdata)
-        if 'time' in stepdata:
-            self.out['time'][self.stepid] = stepdata['time']
-        else:
-            self.out['time'][self.stepid] = self.stepid
+    @contextmanager
+    def step(self, stepdata: StepData):
+        with super().step(stepdata) as step:
+            if 'time' in stepdata:
+                self.out['time'][self.stepid] = stepdata['time']
+            else:
+                self.out['time'][self.stepid] = self.stepid
+            yield step
 
     def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
         if self.initialized_geometry:
@@ -57,28 +63,30 @@ class NetCDFCFWriter(Writer):
             raise TypeError("NetCDF4-CF writer only supports hex-cells")
 
         nodeshape = tuple(s+1 for s in topo.shape)
-        self.out.createDimension('i', nodeshape[0])
-        self.out.createDimension('j', nodeshape[1])
-        self.out.createDimension('k', nodeshape[2])
+        self.out.createDimension('xc', nodeshape[0])
+        self.out.createDimension('yc', nodeshape[1])
+        self.out.createDimension('lev', nodeshape[2])
 
         if isinstance(geometry.fieldtype.coords, Geodetic):
-            x = self.out.createVariable('lon', 'f8', ('i', 'j', 'k'))
+            x = self.out.createVariable('lon', 'f8', ('xc', 'yc', 'lev'))
             x.long_name = 'longitude'
             x.units = 'degrees_east'
 
-            y = self.out.createVariable('lat', 'f8', ('i', 'j', 'k'))
+            y = self.out.createVariable('lat', 'f8', ('xc', 'yc', 'lev'))
             y.long_name = 'latitude'
             y.units = 'degrees_north'
+
+            self.coordinates = 'lon lat'
         else:
-            x = self.out.createVariable('x', 'f8', ('i', 'j', 'k'))
+            x = self.out.createVariable('x', 'f8', ('xc', 'yc', 'lev'))
             x.long_name = 'x-coordinate'
             x.units = 'm'
 
-            y = self.out.createVariable('y', 'f8', ('i', 'j', 'k'))
+            y = self.out.createVariable('y', 'f8', ('xc', 'yc', 'lev'))
             y.long_name = 'y-coordinate'
             y.units = 'm'
 
-        z = self.out.createVariable('z', 'f8', ('i', 'j', 'k'))
+        z = self.out.createVariable('lev', 'f8', ('xc', 'yc', 'lev'))
         z.long_name = 'altitude'
         z.units = 'm'
 
@@ -102,7 +110,10 @@ class NetCDFCFWriter(Writer):
         try:
             var = self.out[field.name]
         except IndexError:
-            var = self.out.createVariable(field.name, data.dtype, ('time', 'i', 'j', 'k'))
+            var = self.out.createVariable(field.name, data.dtype, ('time', 'xc', 'yc', 'lev'))
+            if self.coordinates is not None:
+                var.coordinates = self.coordinates
+
         var[self.stepid, ...] = data.reshape(var.shape[1:])
 
         # TODO: Hardcoded!
