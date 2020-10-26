@@ -5,6 +5,7 @@ import treelog as log
 from .writer import Writer
 from ..fields import Field
 from ..geometry import Patch, Hex, StructuredTopology
+from ..coords import Geodetic
 
 from ..typing import Array2D
 from typing import Any
@@ -60,20 +61,30 @@ class NetCDFCFWriter(Writer):
         self.out.createDimension('j', nodeshape[1])
         self.out.createDimension('k', nodeshape[2])
 
-        x = self.out.createVariable('x', 'f8', ('i', 'j', 'k'))
-        x[:] = data[:,0].reshape(nodeshape)
-        x.long_name = 'x-coordinate'
-        x.units = 'm'
+        if isinstance(geometry.fieldtype.coords, Geodetic):
+            x = self.out.createVariable('lon', 'f8', ('i', 'j', 'k'))
+            x.long_name = 'longitude'
+            x.units = 'degrees_east'
 
-        y = self.out.createVariable('y', 'f8', ('i', 'j', 'k'))
-        y[:] = data[:,1].reshape(nodeshape)
-        y.long_name = 'y-coordinate'
-        y.units = 'm'
+            y = self.out.createVariable('lat', 'f8', ('i', 'j', 'k'))
+            y.long_name = 'latitude'
+            y.units = 'degrees_north'
+        else:
+            x = self.out.createVariable('x', 'f8', ('i', 'j', 'k'))
+            x.long_name = 'x-coordinate'
+            x.units = 'm'
+
+            y = self.out.createVariable('y', 'f8', ('i', 'j', 'k'))
+            y.long_name = 'y-coordinate'
+            y.units = 'm'
 
         z = self.out.createVariable('z', 'f8', ('i', 'j', 'k'))
-        z[:] = data[:,2].reshape(nodeshape)
         z.long_name = 'altitude'
         z.units = 'm'
+
+        x[:] = data[:,0].reshape(nodeshape)
+        y[:] = data[:,1].reshape(nodeshape)
+        z[:] = data[:,2].reshape(nodeshape)
 
         self.initialized_geometry = True
 

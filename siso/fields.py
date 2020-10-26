@@ -129,6 +129,8 @@ class SourcedField(Field):
 
     @property
     def fieldtype(self) -> FieldType:
+        if hasattr(self, '_fieldtype') and self._fieldtype is not None:
+            return self._fieldtype
         return self.src.fieldtype
 
     def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:

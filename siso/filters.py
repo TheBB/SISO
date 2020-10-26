@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 from . import config
 from .coords import Coords, Converter, graph, CoordinateConversionError
-from .fields import Field, CombinedField, SimpleField, SourcedField, PatchData, FieldData, FieldPatches
+from .fields import Field, CombinedField, SimpleField, SourcedField, PatchData, FieldData, FieldPatches, Geometry
 from .geometry import GeometryManager, Patch, PatchKey, UnstructuredTopology
 
 from .typing import StepData, Array2D
@@ -260,6 +260,7 @@ class CoordinateTransformGeometryField(SourcedField):
     def __init__(self, src: Field, manager: CoordinateTransformFilter):
         self.src = src
         self.manager = manager
+        self._fieldtype = Geometry(coords=self.manager.target)
 
     def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
         if self.manager.converter is None:
