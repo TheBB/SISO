@@ -4,10 +4,10 @@ import re
 
 import f90nml
 import numpy as np
-from scipy.io import FortranFile
+from scipy.io import FortranFile, FortranFormattingError
 import treelog as log
 
-from typing import Optional, Iterable, Tuple, TextIO
+from typing import Optional, Iterable, Tuple, TextIO, Any, Dict
 from ..typing import StepData, Array2D, Shape
 
 from .reader import Reader
@@ -69,7 +69,7 @@ class SIMRAField(SimpleField):
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         yield (
             self.reader.patch(),
-            self.reader.data()[:, self.index : self.index + self.ncomps] * self.scale,
+            self.reader.data(stepid)[:, self.index : self.index + self.ncomps] * self.scale,
         )
 
 
@@ -101,7 +101,6 @@ class SIMRAReader(Reader):
 
     def validate(self):
         super().validate()
-        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
         config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
 
     def __init__(self):
@@ -127,7 +126,14 @@ class SIMRAReader(Reader):
 # ----------------------------------------------------------------------
 
 
-class SIMRA2DMapReader(SIMRAReader):
+class SIMRAMeshReader(SIMRAReader):
+
+    def validate(self):
+        super().validate()
+        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
+
+
+class SIMRA2DMapReader(SIMRAMeshReader):
 
     reader_name = "SIMRA-map"
 
@@ -181,7 +187,7 @@ class SIMRA2DMapReader(SIMRAReader):
         return translate(self.filename.parent, nodes.reshape(-1, 3))
 
 
-class SIMRA2DMeshReader(SIMRAReader):
+class SIMRA2DMeshReader(SIMRAMeshReader):
 
     reader_name = "SIMRA-2D"
 
@@ -222,7 +228,7 @@ class SIMRA2DMeshReader(SIMRAReader):
         return translate(self.filename.parent, nodes)
 
 
-class SIMRA3DMeshReader(SIMRAReader):
+class SIMRA3DMeshReader(SIMRAMeshReader):
 
     reader_name = "SIMRA-3D"
 
@@ -270,31 +276,27 @@ class SIMRA3DMeshReader(SIMRAReader):
         return translate(self.filename.parent, nodes)
 
 
-class SIMRAResultReader(SIMRAReader):
-
-    reader_name = "SIMRA"
+class SIMRADataReader(SIMRAReader):
 
     result_fn: Path
     mesh_fn: Path
+    input_fn: Path
 
     result: FortranFile
     mesh: SIMRA3DMeshReader
+    input_data: Dict[str, Any]
 
-    @classmethod
-    def applicable(cls, filename: Path) -> bool:
-        _, u4_type = dtypes(config.input_endianness)
-        try:
-            # It's too easy to mistake other files for SIMRA results,
-            # so we require a certain suffix
-            assert filename.suffix == '.res'
-            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
-                size = f._read_size()
-                assert size % 4 == 0
-                assert (size // 4 - 1) % 11 == 0  # Eleven scalars per point plus a time
-            assert SIMRA3DMeshReader.applicable(filename.with_name('mesh.dat'))
-            return True
-        except:
-            return False
+    f4_type: np.dtype
+    u4_type: np.dtype
+
+    def __enter__(self):
+        self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
+        self.mesh = SIMRA3DMeshReader(self.mesh_fn).__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self.mesh.__exit__(*args)
+        self.result.__exit__(*args)
 
     def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None, input_fn: Optional[Path] = None):
         super().__init__()
@@ -311,43 +313,11 @@ class SIMRAResultReader(SIMRAReader):
             self.input_data = {}
             log.warning(f"SIMRA input file not found, scales will be missing")
 
-        endian = {'native': '=', 'big': '>', 'small': '<'}[config.input_endianness]
-        self.f4_type = np.dtype(f'{endian}f4')
-        self.u4_type = np.dtype(f'{endian}u4')
-
-    def validate(self):
-        super().validate()
-        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
-        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
-
-    def __enter__(self):
-        self.result = FortranFile(self.result_fn, 'r', header_dtype=self.u4_type).__enter__()
-        self.mesh = SIMRA3DMeshReader(self.mesh_fn).__enter__()
-        return self
-
-    def __exit__(self, *args):
-        self.mesh.__exit__(*args)
-        self.result.__exit__(*args)
-
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        # This is slightly hacky, but grabs the time value for the
-        # next timestep without reading the whole dataset
-        with save_excursion(self.result._fp):
-            self.result._read_size()
-            time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
-        yield (0, {'time': time})
-
     def patch(self) -> Patch:
         return self.mesh.patch()
 
     def nodes(self) -> Array2D:
         return self.mesh.nodes()
-
-    @cache(1)
-    def data(self) -> Array2D:
-        data = self.result.read_reals(dtype=self.f4_type)
-        _, data = data[0], data[1:]
-        return transpose(data, self.mesh.nodeshape)
 
     def scale(self, name: str) -> float:
         return self.input_data.get('param_data', {}).get(name, 1.0)
@@ -366,3 +336,109 @@ class SIMRAResultReader(SIMRAReader):
         yield SIMRAField('pts', 8, 1, self)
         yield SIMRAField('rho', 9, 1, self)
         yield SIMRAField('rhos', 10, 1, self)
+
+    @abstractmethod
+    def data(self, stepid: int) -> Array2D:
+        pass
+
+
+class SIMRAContinuationReader(SIMRADataReader):
+
+    reader_name = "SIMRA-Cont"
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        _, u4_type = dtypes(config.input_endianness)
+        try:
+            # It's too easy to mistake other files for SIMRA results,
+            # so we require a certain suffix
+            assert filename.suffix == '.res'
+            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
+                size = f._read_size()
+                print(size)
+                assert size % u4_type.itemsize == 0
+                assert size > u4_type.itemsize
+                assert (size // u4_type.itemsize - 1) % 11 == 0  # Eleven scalars per point plus a time
+            assert SIMRA3DMeshReader.applicable(filename.with_name('mesh.dat'))
+            return True
+        except:
+            return False
+
+    def validate(self):
+        super().validate()
+        config.require(multiple_timesteps=False, reason="SIMRA files do not support multiple timesteps")
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        # This is slightly hacky, but grabs the time value for the
+        # next timestep without reading the whole dataset
+        with save_excursion(self.result._fp):
+            self.result._read_size()
+            time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
+        yield (0, {'time': time})
+
+    @cache(1)
+    def data(self, stepid: int) -> Array2D:
+        data = self.result.read_reals(dtype=self.f4_type)
+        _, data = data[0], data[1:]
+        return transpose(data, self.mesh.nodeshape)
+
+
+class SIMRAHistoryReader(SIMRADataReader):
+
+    reader_name = "SIMRA-Hist"
+
+    cur_stepid: int
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        _, u4_type = dtypes(config.input_endianness)
+        try:
+            # It's too easy to mistake other files for SIMRA results,
+            # so we require a certain suffix
+            assert filename.suffix == '.res'
+            with FortranFile(filename, 'r', header_dtype=u4_type) as f:
+                with save_excursion(f._fp):
+                    size = f._read_size()
+                    assert size == u4_type.itemsize
+                assert f.read_ints(u4_type)[0] == u4_type.itemsize
+                size = f._read_size()
+                assert size % u4_type.itemsize == 0
+                assert size > u4_type.itemsize
+                assert (size // u4_type.itemsize - 1) % 12 == 0  # Twelve scalars per point plus a time
+            assert SIMRA3DMeshReader.applicable(filename.with_name('mesh.dat'))
+            return True
+        except:
+            return False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cur_stepid = -1
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        # Skip the word size indicator
+        self.result.read_ints(self.u4_type)
+
+        while True:
+            # This is slightly hacky, but grabs the time value for the
+            # next timestep without reading the whole dataset
+            with save_excursion(self.result._fp):
+                try:
+                    self.result._read_size()
+                except FortranFormattingError:
+                    return
+                time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
+
+            self.cur_stepid += 1
+            yield (self.cur_stepid, {'time': time})
+
+    @cache(1)
+    def data(self, stepid: int) -> Array2D:
+        assert stepid == self.cur_stepid
+
+        data = self.result.read_reals(dtype=self.f4_type)
+        _, data = data[0], data[1:]
+
+        # Skip the cell data
+        self.result.read_reals(dtype=self.f4_type)
+
+        return transpose(data, self.mesh.nodeshape)
