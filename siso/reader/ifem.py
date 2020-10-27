@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import lru_cache
+from io import BytesIO
 from itertools import chain, count
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from .. import config, ConfigTarget
 from ..coords import Local
 from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement, Geometry, FieldPatches
 from ..geometry import SplineTopology, LRTopology, UnstructuredTopology, Patch
-from ..util import ensure_ncomps, bounding_box
+from ..util import ensure_ncomps, bounding_box, cache
 from ..writer import Writer
 
 
@@ -90,19 +91,21 @@ class Basis(ABC):
     def num_updates(self) -> int:
         pass
 
-    # @lru_cache(24)
+    @cache(1)
     def patch_at(self, stepid: int, patchid: int) -> Tuple[Patch, Array2D]:
         while not self.update_at(stepid):
             stepid -= 1
 
         subpath = self.group_path(stepid)
-        g2bytes = self.reader.h5[f'{subpath}/{patchid+1}'][:].tobytes()
-        if g2bytes.startswith(b'# LAGRANGIAN'):
+        patchdata = self.reader.h5[f'{subpath}/{patchid+1}'][:]
+        initial = patchdata[:20].tobytes()
+        g2bytes = BytesIO(memoryview(patchdata))
+        if initial.startswith(b'# LAGRANGIAN'):
             topo, nodes = UnstructuredTopology.from_lagrangian(g2bytes)
-        elif g2bytes.startswith(b'# LRSPLINE'):
-            topo, nodes = next(LRTopology.from_string(g2bytes))
+        elif initial.startswith(b'# LRSPLINE'):
+            topo, nodes = next(LRTopology.from_string(g2bytes.read()))
         else:
-            topo, nodes = next(SplineTopology.from_string(g2bytes))
+            topo, nodes = next(SplineTopology.from_string(g2bytes.read()))
 
         oldkey = (self.name, patchid)
         newkey = self.reader.patch_catalogue.setdefault(nodes, oldkey)
@@ -439,7 +442,9 @@ class IFEMReader(Reader):
     def fields(self) -> Iterable[Field]:
         for basis in self.bases.values():
             yield IFEMGeometryField(basis)
-        yield from self._fields.values()
+        for field in self._fields.values():
+            if field.ncomps > 0:
+                yield field
 
 
 class IFEMEigenReader(IFEMReader):
