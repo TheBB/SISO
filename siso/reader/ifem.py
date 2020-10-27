@@ -16,7 +16,7 @@ from .. import config, ConfigTarget
 from ..coords import Local
 from ..fields import Field, SimpleField, CombinedField, ComponentField, Displacement, Geometry, FieldPatches
 from ..geometry import SplineTopology, LRTopology, UnstructuredTopology, Patch
-from ..util import ensure_ncomps, bounding_box
+from ..util import ensure_ncomps, bounding_box, cache
 from ..writer import Writer
 
 
@@ -91,7 +91,7 @@ class Basis(ABC):
     def num_updates(self) -> int:
         pass
 
-    # @lru_cache(24)
+    @cache(1)
     def patch_at(self, stepid: int, patchid: int) -> Tuple[Patch, Array2D]:
         while not self.update_at(stepid):
             stepid -= 1
