@@ -10,7 +10,7 @@ import splipy.io
 from splipy import SplineObject, BSplineBasis
 import treelog as log
 
-from typing import Tuple, Any, Union, IO, Dict, List, Iterable, Optional
+from typing import Tuple, Any, Union, IO, Dict, List, Iterable, Optional, BinaryIO
 from .typing import Array1D, Array2D, PatchKey, Shape, Knots
 
 from . import config
@@ -154,35 +154,32 @@ class UnstructuredTopology(Topology):
         )
 
     @classmethod
-    def from_lagrangian(cls, data: Union[bytes, str]) -> Tuple['UnstructuredTopology', Array2D]:
-        if isinstance(data, bytes):
-            data = data.decode()
-        assert isinstance(data, str)
-        assert data.startswith('# LAGRANGIAN')
-        all_lines = data.split('\n')
-        specs, lines = all_lines[0][12:].split(), iter(all_lines[1:])
+    def from_lagrangian(cls, data: BinaryIO) -> Tuple['UnstructuredTopology', Array2D]:
+        first_line = next(data)
+        assert first_line.startswith(b'# LAGRANGIAN')
+        specs = first_line.split()[2:]
 
         # Decode nodes, elements, type
-        assert specs[0].startswith('nodes=')
-        nnodes = int(specs[0].split('=')[-1])
-        assert specs[1].startswith('elements=')
-        ncells = int(specs[1].split('=')[-1])
-        assert specs[2].startswith('type=')
-        celltype = specs[2].split('=')[-1]
+        assert specs[0].startswith(b'nodes=')
+        nnodes = int(specs[0].split(b'=')[-1])
+        assert specs[1].startswith(b'elements=')
+        ncells = int(specs[1].split(b'=')[-1])
+        assert specs[2].startswith(b'type=')
+        celltype = specs[2].split(b'=')[-1]
 
-        if celltype not in ('hexahedron',):
-            raise ValueError("Unknown cell type: {}".format(celltype))
+        if celltype not in (b'hexahedron',):
+            raise ValueError("Unknown cell type: {}".format(celltype.decode()))
 
         # Read nodes and cells
         nodes = np.zeros((nnodes, 3))
         for i in range(nnodes):
-            nodes[i] = list(map(float, next(lines).split()))
+            nodes[i] = list(map(float, next(data).split()))
 
         cells = np.zeros((ncells, 8), dtype=np.int32)
         for i in range(ncells):
-            cells[i] = list(map(int, next(lines).split()))
-        cells[:,6], cells[:,7] = np.array(cells[:,7]), np.array(cells[:,6])
-        cells[:,2], cells[:,3] = np.array(cells[:,3]), np.array(cells[:,2])
+            cells[i] = list(map(int, next(data).split()))
+            cells[i,6], cells[i,7] = cells[i,7], cells[i,6]
+            cells[i,2], cells[i,3] = cells[i,3], cells[i,2]
 
         return cls(nnodes, cells, celltype=Hex()), nodes
 

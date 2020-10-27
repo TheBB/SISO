@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import lru_cache
+from io import BytesIO
 from itertools import chain, count
 from pathlib import Path
 
@@ -96,13 +97,15 @@ class Basis(ABC):
             stepid -= 1
 
         subpath = self.group_path(stepid)
-        g2bytes = self.reader.h5[f'{subpath}/{patchid+1}'][:].tobytes()
-        if g2bytes.startswith(b'# LAGRANGIAN'):
+        patchdata = self.reader.h5[f'{subpath}/{patchid+1}'][:]
+        initial = patchdata[:20].tobytes()
+        g2bytes = BytesIO(memoryview(patchdata))
+        if initial.startswith(b'# LAGRANGIAN'):
             topo, nodes = UnstructuredTopology.from_lagrangian(g2bytes)
-        elif g2bytes.startswith(b'# LRSPLINE'):
-            topo, nodes = next(LRTopology.from_string(g2bytes))
+        elif initial.startswith(b'# LRSPLINE'):
+            topo, nodes = next(LRTopology.from_string(g2bytes.read()))
         else:
-            topo, nodes = next(SplineTopology.from_string(g2bytes))
+            topo, nodes = next(SplineTopology.from_string(g2bytes.read()))
 
         oldkey = (self.name, patchid)
         newkey = self.reader.patch_catalogue.setdefault(nodes, oldkey)
