@@ -439,7 +439,9 @@ class IFEMReader(Reader):
     def fields(self) -> Iterable[Field]:
         for basis in self.bases.values():
             yield IFEMGeometryField(basis)
-        yield from self._fields.values()
+        for field in self._fields.values():
+            if field.ncomps > 0:
+                yield field
 
 
 class IFEMEigenReader(IFEMReader):
