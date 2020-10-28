@@ -5,10 +5,13 @@ import erfa
 import numpy as np
 
 from typing import Union, Dict, List, Tuple, Callable, Set, Iterable, Optional
-from .typing import Array2D
+from ..typing import Array2D
 
-from .util import subclasses, spherical_cartesian_vf
-from . import config
+from ..geometry import PatchKey
+from ..util import subclasses
+from .. import config
+
+from .util import spherical_cartesian_vf, utm_to_lonlat, utm_to_lonlat_vf
 
 
 
@@ -137,6 +140,22 @@ class Geodetic(Coords):
     name = 'geodetic'
 
 
+class UTM(Coords):
+    """Universal Transversal Mercator"""
+
+    zone_number: int
+    zone_letter: str
+
+    name = 'utm'
+
+    def __init__(self, zone: str):
+        self.zone_number = int(zone[:-1])
+        self.zone_letter = zone[-1].upper()
+
+    def __str__(self):
+        return f'{self.name}:{self.zone_number}{self.zone_letter}'
+
+
 class Geocentric(Coords):
     """Geocentric coordinates with origin in the center of the Earth,
     positive z pointing toward the north pole, the xy-plane aligned
@@ -245,10 +264,12 @@ class Converter:
 
     graph: ConversionGraph
     path: List[str]
+    nodes: Dict[Tuple[Tuple[str, str], PatchKey], Array2D]
 
     def __init__(self, graph: ConversionGraph, path: List[str]):
         self.graph = graph
         self.path = path
+        self.nodes = dict()
 
     def __len__(self):
         return len(self.path)
@@ -260,19 +281,24 @@ class Converter:
             for a, b in zip(self.path[:-1], self.path[1:])
         )
 
-    def convert(self, src: Coords, tgt: Coords, data: Array2D, lookup: ConvDict, **kwargs) -> Array2D:
+    def convert(self, src: Coords, tgt: Coords, data: Array2D, lookup: ConvDict, key: PatchKey, store: bool) -> Array2D:
         if not self.path:
             return data
         path = [src] + [Coords.find(c) for c in self.path[1:-1]] + [tgt]
         for a, b in zip(path[:-1], path[1:]):
-            data = lookup[(a.name, b.name)](a, b, data, **kwargs)
+            edge = (a.name, b.name)
+            if store:
+                self.nodes[edge, key] = data
+                data = lookup[edge](a, b, data)
+            else:
+                data = lookup[edge](a, b, data, nodes=self.nodes[edge, key])
         return data
 
-    def points(self, src: Coords, tgt: Coords, data: Array2D) -> Array2D:
-        return self.convert(src, tgt, data, self.graph.point_converters)
+    def points(self, src: Coords, tgt: Coords, data: Array2D, key: PatchKey) -> Array2D:
+        return self.convert(src, tgt, data, self.graph.point_converters, key=key, store=True)
 
-    def vectors(self, src: Coords, tgt: Coords, data: Array2D, nodes: Optional[Array2D] = None) -> Array2D:
-        return self.convert(src, tgt, data, self.graph.vector_converters, nodes=nodes)
+    def vectors(self, src: Coords, tgt: Coords, data: Array2D, key: PatchKey) -> Array2D:
+        return self.convert(src, tgt, data, self.graph.vector_converters, key=key, store=False)
 
 
 @graph.points('geodetic', 'geocentric')
@@ -287,3 +313,13 @@ def _(src: Geodetic, tgt: Geocentric, data: Array2D) -> Array2D:
 def _(src: Geodetic, tgt: Geocentric, data: Array2D, nodes: Array2D) -> Array2D:
     lon, lat = nodes[:,0], nodes[:,1]
     return spherical_cartesian_vf(lon, lat, data)
+
+@graph.points('utm', 'geodetic')
+def _(src: UTM, tgt: Geodetic, data: Array2D) -> Array2D:
+    lon, lat = utm_to_lonlat(data[:,0], data[:,1], src.zone_number, src.zone_letter)
+    return np.hstack([lon.reshape(-1,1), lat.reshape(-1,1), data[:,2:]])
+
+@graph.vectors('utm', 'geodetic', trivial=False)
+def _(src: UTM, tgt: Geodetic, data: Array2D, nodes: Array2D) -> Array2D:
+    vx, vy = utm_to_lonlat_vf(nodes[:,0], nodes[:,1], data[:,0], data[:,1], src.zone_number, src.zone_letter)
+    return np.hstack([vx.reshape(-1,1), vy.reshape(-1,1), data[:,2:]])

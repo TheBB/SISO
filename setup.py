@@ -15,7 +15,7 @@ setup(
     long_description=desc,
     maintainer='Eivind Fonn',
     maintainer_email='eivind.fonn@sintef.no',
-    packages=['siso', 'siso.writer', 'siso.reader'],
+    packages=['siso', 'siso.writer', 'siso.reader', 'siso.coords'],
     install_requires=[
         'cachetools',
         'click',
@@ -34,6 +34,7 @@ setup(
     ],
     extras_require={
         'VTF': ['vtfwriter'],
+        'UTM': ['jax'],
         'testing': ['pytest'],
         'deploy': ['twine', 'cibuildwheel==1.1.0'],
     },

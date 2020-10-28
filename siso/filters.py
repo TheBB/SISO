@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 from . import config
 from .coords import Coords, Converter, graph, CoordinateConversionError
-from .fields import Field, CombinedField, SimpleField, SourcedField, PatchData, FieldData, FieldPatches
+from .fields import Field, CombinedField, SimpleField, SourcedField, PatchData, FieldData, FieldPatches, Geometry
 from .geometry import GeometryManager, Patch, PatchKey, UnstructuredTopology
 
 from .typing import StepData, Array2D
@@ -230,18 +230,12 @@ class CoordinateTransformFilter(Source):
     src: Source
     target: Coords
     converter: Optional[Converter]
-    has_vector: bool
-    is_trivial: bool
-    nodes: Dict[PatchKey, Array2D]
     source_coords: Optional[Coords]
 
     def __init__(self, src: Source, target: Coords):
         self.src = src
         self.target = target
         self.converter = None
-        self.has_vector = any(f.is_vector for f in self.src.fields())
-        self.is_trivial = True
-        self.nodes = dict()
 
     def steps(self) -> Iterable[Tuple[int, StepData]]:
         yield from self.src.steps()
@@ -266,18 +260,16 @@ class CoordinateTransformGeometryField(SourcedField):
     def __init__(self, src: Field, manager: CoordinateTransformFilter):
         self.src = src
         self.manager = manager
+        self._fieldtype = Geometry(coords=self.manager.target)
 
     def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
         if self.manager.converter is None:
             self.manager.converter = graph.path(self.src.coords, self.manager.target)
-            self.manager.is_trivial = self.manager.converter.is_trivial or not self.manager.has_vector
             self.manager.source_coords = self.src.coords
-        conv = self.manager.converter
 
+        conv = self.manager.converter
         for patch, data in self.src.patches(stepid, force=force, coords=coords):
-            if not self.manager.is_trivial:
-                self.manager.nodes[patch.key] = data
-            yield patch, conv.points(self.src.coords, self.manager.target, data)
+            yield patch, conv.points(self.src.coords, self.manager.target, data, patch.key)
 
 
 class CoordinateTransformField(SourcedField):
@@ -291,10 +283,7 @@ class CoordinateTransformField(SourcedField):
     def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
         conv = self.manager.converter
         for patch, data in self.src.patches(stepid, force=force, coords=coords):
-            if self.is_vector and self.manager.is_trivial:
-                yield patch, conv.vectors(self.manager.source_coords, self.manager.target, data)
-            elif self.is_vector:
-                nodes = self.manager.nodes[patch.key]
-                yield patch, conv.vectors(self.manager.source_coords, self.manager.target, data, nodes=nodes)
+            if self.is_vector:
+                yield patch, conv.vectors(self.manager.source_coords, self.manager.target, data, patch.key)
             else:
                 yield patch, data

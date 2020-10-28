@@ -14,9 +14,10 @@ from ..typing import Shape, Array2D, StepData
 from .reader import Reader
 from .. import config, ConfigTarget
 from ..coords import Local, Geocentric, Geodetic, Coords
+from ..coords.util import spherical_cartesian_vf
 from ..fields import Field, SimpleField, Geometry, FieldPatches
 from ..geometry import Quad, Hex, StructuredTopology, UnstructuredTopology, Patch
-from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap, flatten_2d, spherical_cartesian_vf
+from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap, flatten_2d
 from ..writer import Writer
 
 
