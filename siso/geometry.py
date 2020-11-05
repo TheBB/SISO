@@ -16,7 +16,7 @@ from .typing import Array1D, Array2D, PatchKey, Shape, Knots
 from . import config
 
 from .util import (
-    prod, flatten_2d, ensure_ncomps,
+    cache, prod, flatten_2d, ensure_ncomps,
     subdivide_face, subdivide_linear, subdivide_volume,
     structured_cells, transpose_butlast
 )
@@ -259,13 +259,15 @@ class LRTopology(Topology):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
+    @cache(1)
+    def tesselator(self) -> 'LRTesselator':
+        return LRTesselator(self)
+
     def tesselate(self) -> UnstructuredTopology:
-        tess = LRTesselator(self)
-        return tess.tesselate(self)
+        return self.tesselator().tesselate(self)
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        tess = LRTesselator(self)
-        return tess.tesselate_field(self, coeffs, cells=cells)
+        return self.tesselator().tesselate_field(self, coeffs, cells=cells)
 
 
 class LRTesselator(Tesselator):
@@ -377,13 +379,15 @@ class SplineTopology(Topology):
     def rational(self) -> bool:
         return self.weights is not None
 
+    @cache(1)
+    def tesselator(self) -> 'TensorTesselator':
+        return TensorTesselator(self)
+
     def tesselate(self) -> UnstructuredTopology:
-        tess = TensorTesselator(self)
-        return tess.tesselate(self)
+        return self.tesselator().tesselate(self)
 
     def tesselate_field(self, coeffs: Array2D, cells: bool = False) -> Array2D:
-        tess = TensorTesselator(self)
-        return tess.tesselate_field(self, coeffs, cells=cells)
+        return self.tesselator().tesselate_field(self, coeffs, cells=cells)
 
 
 class TensorTesselator(Tesselator):
