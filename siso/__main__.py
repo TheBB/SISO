@@ -67,8 +67,10 @@ def tracked_option(*args, **kwargs):
     return click.option(*args, **kwargs, cls=Option)
 
 
+FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
+
 @click.command()
-@click.option('--fmt', '-f', type=click.Choice(['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc']), required=False, help='Output format.')
+@click.option('--fmt', '-f', type=click.Choice(FORMATS), required=False, help='Output format.')
 
 # Options that are forwarded to config
 @tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
