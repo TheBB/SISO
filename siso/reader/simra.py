@@ -355,7 +355,6 @@ class SIMRAContinuationReader(SIMRADataReader):
             assert filename.suffix == '.res'
             with FortranFile(filename, 'r', header_dtype=u4_type) as f:
                 size = f._read_size()
-                print(size)
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
                 assert (size // u4_type.itemsize - 1) % 11 == 0  # Eleven scalars per point plus a time
