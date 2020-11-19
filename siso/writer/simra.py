@@ -49,14 +49,28 @@ class SIMRAWriter(Writer):
         cells[:,1], cells[:,3] = cells[:,3].copy(), cells[:,1].copy()
         cells[:,5], cells[:,7] = cells[:,7].copy(), cells[:,5].copy()
 
+        # Compute macro elements
+        rshape = tuple(c - 1 for c in cellshape)
+        mcells = structured_cells(tuple(c - 1 for c in cellshape), 3).reshape(*rshape, -1) + 1
+        mcells = mcells[::2, ::2, ::2, ...].transpose((1, 0, 2, 3))
+        mcells = mcells.reshape(-1, 8)
+        mcells[:,1], mcells[:,3] = mcells[:,3].copy(), mcells[:,1].copy()
+        mcells[:,5], mcells[:,7] = mcells[:,7].copy(), mcells[:,5].copy()
+
         # Write single precision
         data = data.astype('f4')
         cells = cells.astype('u4')
+        mcells = mcells.astype('u4')
 
         with FortranFile(self.outpath, 'w', header_dtype='u4') as f:
-            f.write_record(np.array([data.size // 3, cells.size // 8, data.shape[1], data.shape[0], data.shape[2], 0], dtype='u4'))
+            f.write_record(np.array([
+                data.size // 3, cells.size // 8,
+                data.shape[1], data.shape[0], data.shape[2],
+                mcells.size // 8,
+            ], dtype='u4'))
             f.write_record(data.flatten())
             f.write_record(cells.flatten())
+            f.write_record(mcells.flatten())
         log.user(self.outpath)
 
     def update_field(self, field: Field, patch: Patch, data: Array2D):
