@@ -262,11 +262,8 @@ class SIMRA3DMeshReader(SIMRAMeshReader):
 
     @cache(1)
     def patch(self) -> Patch:
-        with save_excursion(self.mesh._fp):
-            fortran_skip_record(self.mesh)
-            fortran_skip_record(self.mesh)
-            i, j, k = self.nodeshape
-            return Patch(('geometry',), StructuredTopology((j-1, i-1, k-1), celltype=Hex()))
+        i, j, k = self.nodeshape
+        return Patch(('geometry',), StructuredTopology((j-1, i-1, k-1), celltype=Hex()))
 
     @cache(1)
     def nodes(self) -> Array2D:
