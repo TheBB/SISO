@@ -252,8 +252,9 @@ class PVDWriter(VTUWriter):
         with super().step(stepdata) as step:
             yield step
         filename = self.make_filename(with_step=True)
+        relative_filename = filename.relative_to(self.rootfile.parent)
         if self.stepdata:
             timestep = next(iter(self.stepdata.values()))
         else:
             timestep = self.stepid
-        self.pvd.write('    <DataSet timestep="{}" part="0" file="{}" />\n'.format(timestep, filename))
+        self.pvd.write('    <DataSet timestep="{}" part="0" file="{}" />\n'.format(timestep, relative_filename))
