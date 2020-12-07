@@ -22,6 +22,7 @@ def suppress_warnings(func):
     def inner(*args, **kwargs):
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', r'Conversion of the second argument of issubdtype')
+            warnings.filterwarnings('ignore', r'No GPU/TPU found, falling back to CPU')
             return func(*args, **kwargs)
     return inner
 
