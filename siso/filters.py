@@ -245,6 +245,8 @@ class CoordinateTransformFilter(Source):
             if fld.is_geometry:
                 try:
                     converter = graph.path(fld.coords, self.target)
+                    path = ' -> '.join(str(k) for k in [fld.coords, *converter.path[1:-1], self.target])
+                    log.debug(f"Coordinate conversion path: {path}")
                     yield CoordinateTransformGeometryField(fld, self)
                 except CoordinateConversionError:
                     log.warning(f"Skipping {fld.name}: {fld.coords} not convertable to {self.target}")
