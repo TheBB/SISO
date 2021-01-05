@@ -68,12 +68,14 @@ class LastStepFilter(Source):
     def __init__(self, src: Source):
         """Filter that only returns the last timestep."""
         self.src = src
-        config.require(multiple_timesteps=False)
+        config.require(multiple_timesteps=True)
 
     def steps(self) -> Iterable[Tuple[int, StepData]]:
-        for step in self.src.steps():
-            pass
-        yield step
+        steps = list(self.src.steps())
+        yield from steps[-5:-1]
+        # for step in self.src.steps():
+            # pass
+        # yield step
 
     def fields(self) -> Iterable[Field]:
         yield from self.src.fields()
