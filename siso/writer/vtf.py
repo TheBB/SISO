@@ -90,7 +90,7 @@ class VTFWriter(Writer):
                 key, value = next(iter(data.items()))
                 func = states.SetStepData if key == 'time' else states.SetModeData
                 desc = {'value': 'Eigenvalue', 'frequency': 'Frequency', 'time': 'Time'}[key]
-                func(stepid+1, '{} {:.4f}'.format(desc, value), value)
+                func(stepid+1, '{} {:.4g}'.format(desc, value), value)
 
     @contextmanager
     def step(self, stepdata: StepData):
