@@ -105,6 +105,7 @@ class OperaGeometryField(SimpleField):
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
         dataset = OperaDataset(self.dataset.grp.parent[f'dataset{stepid+1}'])
+        elangle = dataset.where.get('elangle', 0.0)
 
         # Convert center
         c_lon, c_lat = dataset.where['lon'], dataset.where['lat']
@@ -114,19 +115,37 @@ class OperaGeometryField(SimpleField):
         north = np.array(lonlat_to_utm(c_lon, c_lat + 1e-3, self.coords.zone_number, self.coords.zone_letter)) - center
         north /= np.linalg.norm(north)
 
-        # Compute radial and azimuthal space
-        h_rscale = dataset.where['rscale'] * np.cos(np.deg2rad(dataset.where['elangle']))
-        rad = dataset.where['rstart'] + np.arange(dataset.where['nbins'] + 1) * h_rscale
-        az = np.pi / 2 - np.deg2rad(dataset.how['startazA'])
-        az = np.append(az, [az[0]])
+        if dataset.how['anglesync'] == b'azimuth':
+            elangle = dataset.where['elangle']
 
-        # Convert to cartesian coordinates
-        rad, az = np.meshgrid(rad, az)
-        x = rad * np.cos(az) + center[0]
-        y = rad * np.sin(az) + center[1]
+            # Compute radial and azimuthal space
+            h_rscale = dataset.where['rscale'] * np.cos(np.deg2rad(elangle))
+            rad = dataset.where['rstart'] + np.arange(dataset.where['nbins'] + 1) * h_rscale
+            az = np.pi / 2 - np.deg2rad(dataset.how['startazA'])
+            az = np.append(az, [az[0]])
 
-        # Compute altitude
-        z = rad * np.sin(np.deg2rad(dataset.where['elangle'])) + dataset.where['height']
+            # Convert to cartesian coordinates
+            rad, az = np.meshgrid(rad, az)
+            x = rad * np.cos(az) + center[0]
+            y = rad * np.sin(az) + center[1]
+
+            # Compute altitude
+            z = rad * np.sin(np.deg2rad(elangle)) + dataset.where['height']
+
+        elif dataset.how['anglesync'] == b'elevation':
+            # Compute radial and elevation space
+            rad = dataset.where['rstart'] + np.arange(dataset.where['nbins'] + 1) * dataset.where['rscale']
+            start_elev = dataset.how['startelA']
+            stop_elev = dataset.how['stopelA']
+            elev = np.deg2rad((np.append(start_elev, [stop_elev[-1]]) + np.append([start_elev[0]], stop_elev)) / 2)
+
+            # Convert to cartesian coordinates
+            rot = np.pi / 2 - np.deg2rad(dataset.where['azangle'])
+            rad, elev = np.meshgrid(rad, elev)
+            x = rad * np.cos(elev)
+            y = x * np.sin(rot)
+            x *= np.cos(rot)
+            z = rad * np.sin(elev) + dataset.where['height']
 
         topo = StructuredTopology((dataset.where['nrays'], dataset.where['nbins']), celltype=Quad())
         nodes = np.vstack([x.flatten(), y.flatten(), z.flatten()]).T
@@ -135,7 +154,7 @@ class OperaGeometryField(SimpleField):
 
 class OperaReader(Reader):
 
-    reader_name = "EUMETNET-OPERA"
+    object_type: bytes
 
     filename: Path
     h5: h5py.File
@@ -147,6 +166,7 @@ class OperaReader(Reader):
                 assert 'how' in f
                 assert 'what' in f
                 assert 'where' in f
+                assert f['what'].attrs['object'].decode() == cls.object_type
             return True
         except:
             return False
@@ -157,6 +177,7 @@ class OperaReader(Reader):
 
     def __enter__(self):
         self.h5 = h5py.File(self.filename, 'r').__enter__()
+        print(dict(self.h5['what'].attrs))
         return self
 
     def __exit__(self, *args):
@@ -197,3 +218,15 @@ class OperaReader(Reader):
             yield OperaField(name, datas)
 
         yield OperaGeometryField(next(self.datasets('SCAN')))
+
+
+class OperaScanReader(OperaReader):
+
+    object_type = 'SCAN'
+    reader_name = "EUMETNET-OPERA-SCAN"
+
+
+class OperaElevReader(OperaReader):
+
+    object_type = 'ELEV'
+    reader_name = "EUMETNET-OPERA-ELEV"
