@@ -114,6 +114,7 @@ class OperaGeometryField(SimpleField):
         # Convert a point to the north, to find zero azimuth
         north = np.array(lonlat_to_utm(c_lon, c_lat + 1e-3, self.coords.zone_number, self.coords.zone_letter)) - center
         north /= np.linalg.norm(north)
+        zero_az = np.arctan2(north[1], north[0])
 
         if dataset.how['anglesync'] == b'azimuth':
             elangle = dataset.where['elangle']
@@ -121,7 +122,7 @@ class OperaGeometryField(SimpleField):
             # Compute radial and azimuthal space
             h_rscale = dataset.where['rscale'] * np.cos(np.deg2rad(elangle))
             rad = dataset.where['rstart'] + np.arange(dataset.where['nbins'] + 1) * h_rscale
-            az = np.pi / 2 - np.deg2rad(dataset.how['startazA'])
+            az = zero_az - np.deg2rad(dataset.how['startazA'])
             az = np.append(az, [az[0]])
 
             # Convert to cartesian coordinates
@@ -140,7 +141,7 @@ class OperaGeometryField(SimpleField):
             elev = np.deg2rad((np.append(start_elev, [stop_elev[-1]]) + np.append([start_elev[0]], stop_elev)) / 2)
 
             # Convert to cartesian coordinates
-            rot = np.pi / 2 - np.deg2rad(dataset.where['azangle'])
+            rot = zero_az - np.deg2rad(dataset.where['azangle'])
             rad, elev = np.meshgrid(rad, elev)
             x = rad * np.cos(elev)
             y = x * np.sin(rot)
@@ -153,6 +154,8 @@ class OperaGeometryField(SimpleField):
 
 
 class OperaReader(Reader):
+
+    reader_name = "EUMETNET-OPERA"
 
     object_type: bytes
 
