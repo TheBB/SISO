@@ -160,6 +160,8 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         with config(source=ConfigSource.Default, **kwargs):
             for option in explicit_options:
                 config.upgrade_source(option, ConfigSource.User)
+            if not infile.exists():
+                raise IOError(f"File or directory does not exist: {infile}")
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
             with ReaderClass(infile) as reader, WriterClass(outfile) as writer:
