@@ -60,7 +60,10 @@ class OperaGroup:
 class OperaData(OperaGroup):
 
     def data(self):
-        return self.what['gain'] * self.grp['data'][:] + self.what['offset']
+        data = self.grp['data'][:]
+        retval = self.what['gain'] * data + self.what['offset']
+        retval[data == 0] = np.nan
+        return retval
 
 
 class OperaDataset(OperaGroup):
@@ -175,7 +178,6 @@ class OperaVolumeGeometryField(SimpleField):
         newtopo = StructuredTopology.stack(*topos)
         newnodes = np.stack([n.reshape(*topos[0].nodeshape, -1) for n in nodes], axis=-2).reshape(-1, nodes[0].shape[-1])
         yield Patch(('geometry',), newtopo), newnodes
-        # yield Patch(('geometry',), topos[0]), nodes[0]
 
 
 class OperaVolumeField(SimpleField):
