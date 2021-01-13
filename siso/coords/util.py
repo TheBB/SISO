@@ -8,6 +8,7 @@ try:
     HAS_JAX = True
 except ImportError:
     HAS_JAX = False
+    jnp = np
 
 
 
@@ -86,7 +87,7 @@ def normalize_pair(x, y):
 
 def utm_to_lonlat_vf(x: Array, y: Array, vx: Array, vy: Array, zone: int, zone_letter: str) -> Array:
     if not HAS_JAX:
-        raise TypeError(f"Jax must be installed for UTM vector field conversion")
+        raise TypeError(f"An autodifferentiation package must be installed for UTM vector field conversion, try pip install 'siso[autodiff]'")
     x, y = jnp.array(x), jnp.array(y)
     lon = lambda x, y: _utm_to_lonlat(x, y, zone, zone_letter)[0]
     lat = lambda x, y: _utm_to_lonlat(x, y, zone, zone_letter)[1]
