@@ -25,9 +25,6 @@ Supported writers:
 - PVD/VTU/VTK: for use with Paraview_
 - VTF: for use with GLView_
 
-The tool is so named because it was initially designed for IFEM, and
-only for output formats that started with "VT".
-
 
 Installation
 ------------
