@@ -8,7 +8,7 @@ import h5py
 import numpy as np
 import treelog as log
 
-from typing import Dict, Set, Optional, Any, Iterable, Tuple
+from typing import Dict, Set, Optional, Any, Iterable, Tuple, List
 from ..typing import Array2D, StepData, BoundingBox, PatchKey
 
 from .reader import Reader
@@ -135,7 +135,7 @@ class StandardBasis(Basis):
             self.npatches = max(self.npatches, len(reader.h5[subpath]))
 
     def group_path(self, stepid: int) -> str:
-        return f'{stepid}/{self.name}/basis'
+        return f'{self.reader.stepgroup[stepid]}/{self.name}/basis'
 
     def update_at(self, stepid: int) -> bool:
         return stepid in self.update_steps
@@ -227,7 +227,7 @@ class IFEMField(SimpleField):
 
     def group_path(self, stepid: int) -> str:
         celltype = 'knotspan' if self.cells else 'fields'
-        return f'{stepid}/{self.basisname}/{celltype}/{self.name}'
+        return f'{self.reader.stepgroup[stepid]}/{self.basisname}/{celltype}/{self.name}'
 
     def coeff_path(self, stepid: int, patchid: int) -> str:
         return f'{self.group_path(stepid)}/{patchid+1}'
@@ -274,6 +274,7 @@ class IFEMReader(Reader):
     bases: Dict[str, Basis]
     _fields: Dict[str, Field]
     _field_basis: Dict[str, str]
+    stepgroup: List[int]
 
     patch_catalogue: PatchCatalogue
 
@@ -303,6 +304,7 @@ class IFEMReader(Reader):
 
     def __enter__(self):
         self.h5 = h5py.File(str(self.filename), 'r').__enter__()
+        self.stepgroup = sorted(list(map(int, self.h5)))
 
         # Populate self.bases
         self.init_bases()
@@ -328,7 +330,7 @@ class IFEMReader(Reader):
         frequency).
         """
         try:
-            time = self.h5[f'{stepid}/timeinfo/level'][0]
+            time = self.h5[f'{self.stepgroup[stepid]}/timeinfo/level'][0]
         except KeyError:
             time = float(stepid)
         return {'time': time}
@@ -377,7 +379,7 @@ class IFEMReader(Reader):
     def init_fields(self):
         """Discover fields and populate the contents of self.fields."""
         for stepid, _ in self.steps():
-            stepgrp = self.h5[str(stepid)]
+            stepgrp = self.h5[str(self.stepgroup[stepid])]
             for basisname, basisgrp in stepgrp.items():
                 if basisname not in self.bases:
                     continue
