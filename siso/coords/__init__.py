@@ -11,7 +11,7 @@ from ..geometry import PatchKey
 from ..util import subclasses
 from .. import config
 
-from .util import spherical_cartesian_vf, utm_to_lonlat, utm_to_lonlat_vf
+from .util import spherical_cartesian_vf, utm_to_lonlat, utm_to_lonlat_vf, lonlat_to_utm
 
 
 
@@ -154,6 +154,26 @@ class UTM(Coords):
 
     def __str__(self):
         return f'{self.name}:{self.zone_number}{self.zone_letter}'
+
+    @classmethod
+    def optimal(cls, lon: float, lat: float):
+        zone = None
+        if 56 <= lat < 64 and 3 <= lon < 12:
+            zone = 32
+        elif 72 <= lat <= 84 and lon >= 0:
+            if lon < 9:
+                zone = 31
+            elif lon < 21:
+                zone = 33
+            elif lon < 33:
+                zone = 35
+            elif lon < 42:
+                zone = 37
+        if zone is None:
+            zone = int((lon + 180) / 6) + 1
+
+        letter = 'CDEFGHJKLMNPQRSTUVWXX'[int(lat + 80) >> 3]
+        return cls(f'{zone}{letter}')
 
 
 class Geocentric(Coords):
@@ -323,3 +343,8 @@ def _(src: UTM, tgt: Geodetic, data: Array2D) -> Array2D:
 def _(src: UTM, tgt: Geodetic, data: Array2D, nodes: Array2D) -> Array2D:
     vx, vy = utm_to_lonlat_vf(nodes[:,0], nodes[:,1], data[:,0], data[:,1], src.zone_number, src.zone_letter)
     return np.hstack([vx.reshape(-1,1), vy.reshape(-1,1), data[:,2:]])
+
+@graph.points('geodetic', 'utm')
+def _(src: Geodetic, tgt: UTM, data: Array2D) -> Array2D:
+    x, y = lonlat_to_utm(data[:,0], data[:,1], tgt.zone_number, tgt.zone_letter)
+    return np.hstack([x.reshape(-1,1), y.reshape(-1,1), data[:,2:]])

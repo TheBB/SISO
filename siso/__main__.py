@@ -22,6 +22,7 @@ def suppress_warnings(func):
     def inner(*args, **kwargs):
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', r'Conversion of the second argument of issubdtype')
+            warnings.filterwarnings('ignore', r'No GPU/TPU found, falling back to CPU')
             return func(*args, **kwargs)
     return inner
 
@@ -159,6 +160,8 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         with config(source=ConfigSource.Default, **kwargs):
             for option in explicit_options:
                 config.upgrade_source(option, ConfigSource.User)
+            if not infile.exists():
+                raise IOError(f"File or directory does not exist: {infile}")
             ReaderClass = Reader.find_applicable(infile)
             WriterClass = Writer.find_applicable(fmt)
             with ReaderClass(infile) as reader, WriterClass(outfile) as writer:

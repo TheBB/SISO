@@ -209,6 +209,16 @@ class StructuredTopology(UnstructuredTopology):
 
     shape: Shape
 
+    @classmethod
+    def stack(cls, *topos: 'StructuredTopology') -> 'StructuredTopology':
+        """Stack multiple structured topologies in a new one."""
+        celltype, shape = topos[0].celltype, topos[0].shape
+        assert all(topo.celltype == celltype for topo in topos[1:])
+        assert all(topo.shape == shape for topo in topos[1:])
+        assert celltype == Quad()
+        newshape = (*shape, len(topos) - 1)
+        return cls(newshape, celltype=Hex())
+
     def __init__(self, shape: Shape, celltype: CellType):
         self.celltype = celltype
         self.shape = shape
@@ -223,6 +233,10 @@ class StructuredTopology(UnstructuredTopology):
     @property
     def num_cells(self) -> int:
         return prod(self.shape)
+
+    @property
+    def nodeshape(self) -> Shape:
+        return tuple(s+1 for s in self.shape)
 
 
 

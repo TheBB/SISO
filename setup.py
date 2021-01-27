@@ -34,7 +34,7 @@ setup(
     ],
     extras_require={
         'VTF': ['vtfwriter'],
-        'UTM': ['jax'],
+        'autodiff': ['jax', 'jaxlib'],
         'testing': ['pytest'],
         'deploy': ['twine', 'cibuildwheel==1.1.0'],
     },
