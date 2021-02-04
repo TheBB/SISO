@@ -62,7 +62,10 @@ class OperaData(OperaGroup):
     def data(self):
         data = self.grp['data'][:]
         retval = self.what['gain'] * data + self.what['offset']
-        retval[data == 0] = np.nan
+        if 'undetect' in self.what:
+            retval[data == self.what['undetect']] = np.nan
+        if 'nodata' in self.what:
+            retval[data == self.what['nodata']] = np.nan
         return retval
 
 
@@ -137,6 +140,64 @@ class OperaField(SimpleField):
         dataset = OperaDataset(data.grp.parent)
         topo = StructuredTopology((dataset.where['nrays'], dataset.where['nbins']), celltype=Quad())
         yield Patch(('geometry',), topo), self.data[stepid].data().reshape(-1, 1)
+
+
+class OperaCartesianField(SimpleField):
+
+    data: List[OperaData]
+
+    ncomps = 1
+    cells = True
+    decompose = False
+
+    def __init__(self, name: str, data: List[OperaData]):
+        self.name = name
+        self.data = data
+
+    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
+        data = self.data[stepid]
+        dataset = OperaDataset(data.grp.parent)
+        topo = StructuredTopology((dataset.where['xsize'], dataset.where['ysize']), celltype=Quad())
+        yield Patch(('geometry',), topo), self.data[stepid].data()[::-1, :].reshape(-1, 1)
+
+
+class OperaCartesianGeometryField(SimpleField):
+
+    dataset: OperaDataset
+
+    name = 'Geometry'
+    ncomps = 2
+    cells = False
+    decompose = False
+
+    def __init__(self, dataset: OperaDataset):
+        self.dataset = dataset
+        assert dataset.what['product'] == b'PCAPPI'
+        self.fieldtype = Geometry(UTM.optimal(dataset.where['LL_lon'], dataset.where['LL_lat']))
+
+    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
+        conv = lambda c: lonlat_to_utm(
+            self.dataset.where[f'{c}_lon'],
+            self.dataset.where[f'{c}_lat'],
+            self.coords.zone_number,
+            self.coords.zone_letter,
+        )
+        x_ll, y_ll = conv('LL')
+        x_ul, y_ul = conv('UL')
+        x_lr, y_lr = conv('LR')
+        x_ur, y_ur = conv('UR')
+        nx, ny = self.dataset.where['xsize'], self.dataset.where['ysize']
+        xpts = np.linspace(0, 1, nx+1)
+        ypts = np.linspace(0, 1, ny+1)
+        xpts, ypts = np.meshgrid(xpts, ypts)
+        nodes = np.array([
+            x_ll * (1 - xpts) * (1 - ypts) + x_ul * (1 - xpts) * ypts +
+            x_lr * xpts * (1 - ypts) + x_ur * xpts * ypts,
+            y_ll * (1 - xpts) * (1 - ypts) + y_ul * (1 - xpts) * ypts +
+            y_lr * xpts * (1 - ypts) + y_ur * xpts * ypts,
+        ]).transpose(1, 2, 0).reshape(-1, 2)
+        topo = StructuredTopology((nx, ny), celltype=Quad())
+        yield Patch(('geometry',), topo), nodes
 
 
 class OperaGeometryField(SimpleField):
@@ -308,3 +369,27 @@ class OperaPvolReader(OperaReader):
             yield OperaVolumeField(name, datas)
 
         yield OperaVolumeGeometryField(datasets_sorted)
+
+
+class OperaImageReader(OperaReader):
+
+    object_type = 'IMAGE'
+    reader_name = "EUMETNET-OPERA-IMAGE"
+
+    def steps(self):
+        """Iterate over all steps with associated data."""
+        yield (0, {'time': 0.0})
+
+    def fields(self) -> Iterable[Field]:
+        """Iterate over all fields."""
+
+        field_data = {}
+        for dataset in self.datasets('PCAPPI'):
+            for data in dataset.data():
+                name = data.what['quantity'].decode()
+                field_data.setdefault(name, []).append(data)
+
+        for name, datas in field_data.items():
+            yield OperaCartesianField(name, datas)
+
+        yield OperaCartesianGeometryField(next(self.datasets('PCAPPI')))
