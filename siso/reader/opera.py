@@ -195,7 +195,8 @@ class OperaCartesianGeometryField(SimpleField):
             x_lr * xpts * (1 - ypts) + x_ur * xpts * ypts,
             y_ll * (1 - xpts) * (1 - ypts) + y_ul * (1 - xpts) * ypts +
             y_lr * xpts * (1 - ypts) + y_ur * xpts * ypts,
-        ]).transpose(1, 2, 0).reshape(-1, 2)
+            np.ones_like(xpts) * self.dataset.where['maxheight']
+        ]).transpose(1, 2, 0).reshape(-1, 3)
         topo = StructuredTopology((nx, ny), celltype=Quad())
         yield Patch(('geometry',), topo), nodes
 
