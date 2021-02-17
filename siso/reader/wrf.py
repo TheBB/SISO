@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -103,9 +104,11 @@ class WRFGeometryField(SimpleField):
     ncomps = 3
 
     reader: 'WRFReader'
+    heightname: str
 
-    def __init__(self, reader: 'WRFReader'):
+    def __init__(self, reader: 'WRFReader', heightname: str):
         self.reader = reader
+        self.heightname = heightname
 
     @abstractmethod
     def nodes(self, stepid: int) -> Array2D:
@@ -114,7 +117,7 @@ class WRFGeometryField(SimpleField):
     def height(self, stepid: int, x: Array2D, y: Array2D) -> Tuple[Array2D, Array2D, Array2D]:
         if config.volumetric == 'planar':
             # PLANAR: Use the terrain height according to the dataset.
-            return x, y, self.reader.variable_at('HGT', stepid)
+            return x, y, self.reader.variable_at(self.heightname, stepid)
         # VOLUMETRIC: Compute the height using geopotential fields.
         z = (self.reader.variable_at('PH', stepid) + self.reader.variable_at('PHB', stepid)) / 9.81
         return x[__, ...], y[__, ...], z
@@ -133,8 +136,8 @@ class WRFLocalGeometryField(WRFGeometryField):
     cells = False
     ncomps = 3
 
-    def __init__(self, reader: 'WRFReader'):
-        super().__init__(reader)
+    def __init__(self, reader: 'WRFReader', heightname: str):
+        super().__init__(reader, heightname)
         self.fieldtype = Geometry(Local().substitute())
         self.name = 'local'
 
@@ -148,52 +151,26 @@ class WRFLocalGeometryField(WRFGeometryField):
 
 class WRFGeodeticGeometryField(WRFGeometryField):
 
-    def __init__(self, reader: 'WRFReader'):
-        super().__init__(reader)
+    def __init__(self, reader: 'WRFReader', heightname: str):
+        super().__init__(reader, heightname)
         self.fieldtype = Geometry(Geodetic())
         self.name = 'geodetic'
 
     def nodes(self, stepid: int) -> Array2D:
-        lon = self.reader.variable_at('XLONG', stepid)
-        lat = self.reader.variable_at('XLAT', stepid)
+        lon = self.reader.variable_at(self.reader.lon_name, stepid)
+        lat = self.reader.variable_at(self.reader.lat_name, stepid)
         return self.height(stepid, lon, lat)
 
 
-class WRFReader(Reader):
+class NetCDFHelper(Reader):
 
-    reader_name = "WRF"
-
-    filename: Path
     nc: netCDF4.Dataset
 
-    @classmethod
-    def applicable(cls, filepath: Path) -> bool:
-        try:
-            with netCDF4.Dataset(filepath, 'r') as f:
-                assert 'WRF' in f.TITLE
-            return True
-        except:
-            return False
+    lon_name: str
+    lat_name: str
 
     def __init__(self, filename: Path):
         self.filename = filename
-
-    def validate(self):
-        super().validate()
-
-        # Disable periodicity except in geocentric coordinates
-        if not isinstance(config.coords, Geocentric):
-            config.require(
-                periodic=False,
-                reason="WRF does not support periodic non-geocentric coordinates; try with --coords geocentric"
-            )
-        else:
-            log.warning("Geocentric coordinates of WRF data is experimental, please do not use indiscriminately")
-
-        config.ensure_limited(
-            ConfigTarget.Reader, 'volumetric', 'periodic',
-            reason="not supported by WRF"
-        )
 
     def __enter__(self):
         self.nc = netCDF4.Dataset(self.filename, 'r').__enter__()
@@ -207,10 +184,6 @@ class WRFReader(Reader):
         """Number of time steps in the dataset."""
         return len(self.nc.dimensions['Time'])
 
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        for stepid in range(self.nsteps):
-            yield stepid, {'time': self.nc['XTIME'][stepid] * 60}
-
     @property
     def nlat(self) -> int:
         """Number of points in latitudinal direction."""
@@ -222,6 +195,11 @@ class WRFReader(Reader):
         return len(self.nc.dimensions['west_east'])
 
     @property
+    def planar_shape(self) -> Shape:
+        """Shape (in terms of cells) of a single grid plane."""
+        return (self.nlat - 1, self.nlon - 1)
+
+    @property
     def nplanar(self) -> int:
         """Number of points in a single grid plane, not including possible
         polar points that are appended later.
@@ -229,32 +207,43 @@ class WRFReader(Reader):
         return self.nlat * self.nlon
 
     @property
-    def planar_shape(self) -> Shape:
-        """Shape (in terms of cells) of a single grid plane."""
-        return (self.nlat - 1, self.nlon - 1)
-
-    @property
     def nvert(self) -> int:
         """Number of points in vertical direction."""
-        return len(self.nc.dimensions['bottom_top'])
+        return 1
 
     @property
     def volumetric_shape(self) -> Shape:
         """Shape (in terms of cells) of the volumetric grid."""
         return (self.nvert - 1, *self.planar_shape)
 
-    def rotation(self) -> Rotation:
-        """Return a rotation that sends the north pole to the grid's
-        north pole, the south pole to the grid's south pole and the
-        prime meridian to the grid's prime meridian.
+    def variable_type(self, name: str) -> Optional[str]:
+        """Check if a variable is volumetric, planar or none of the above."""
+        try:
+            time, *dimensions = self.nc[name].dimensions
+        except IndexError:
+            return False
 
-        This is step 2 of the two-step coordinate transform outlined
-        in the beginning of the file.
-        """
+        if time != 'Time':
+            return None
 
-        # Note: the final rotation around Z is essentially guesswork.
-        intrinsic = 360 * np.ceil(self.nlon / 2) / self.nlon
-        return Rotation.from_euler('ZYZ', [-self.nc.STAND_LON, -self.nc.MOAD_CEN_LAT, intrinsic], degrees=True)
+        try:
+            assert len(dimensions) == 2
+            assert dimensions[0].startswith('south_north')
+            assert dimensions[1].startswith('west_east')
+            return 'planar'
+        except AssertionError:
+            pass
+
+        try:
+            assert len(dimensions) == 3
+            assert dimensions[0].startswith('bottom_top')
+            assert dimensions[1].startswith('south_north')
+            assert dimensions[2].startswith('west_east')
+            return 'volumetric'
+        except AssertionError:
+            pass
+
+        return None
 
     def variable_at(self, name: str, stepid: int,
                     include_poles: bool = True,
@@ -294,7 +283,7 @@ class WRFReader(Reader):
 
         # Compute polar values if necessary
         if include_poles and config.periodic:
-            if name in ('XLONG', 'XLAT'):
+            if name in (self.lon_name, self.lat_name):
                 south = angle_mean_deg(data[0])
                 north = angle_mean_deg(data[-1])
             else:
@@ -319,31 +308,6 @@ class WRFReader(Reader):
             data = newdata
 
         return data
-
-    def variable_type(self, name: str) -> Optional[str]:
-        """Check if a variable is volumetric, planar or none of the above."""
-        time, *dimensions = self.nc[name].dimensions
-        if time != 'Time':
-            return None
-
-        try:
-            assert len(dimensions) == 2
-            assert dimensions[0].startswith('south_north')
-            assert dimensions[1].startswith('west_east')
-            return 'planar'
-        except AssertionError:
-            pass
-
-        try:
-            assert len(dimensions) == 3
-            assert dimensions[0].startswith('bottom_top')
-            assert dimensions[1].startswith('south_north')
-            assert dimensions[2].startswith('west_east')
-            return 'volumetric'
-        except AssertionError:
-            pass
-
-        return None
 
     def patch_at(self, stepid: int) -> Patch:
         """Construct the patch object at the given time step.  This method
@@ -435,9 +399,67 @@ class WRFReader(Reader):
 
         return cells
 
+
+class WRFReader(NetCDFHelper):
+
+    reader_name = "WRF"
+
+    lon_name = 'XLONG'
+    lat_name = 'XLAT'
+
+    filename: Path
+
+    @classmethod
+    def applicable(cls, filepath: Path) -> bool:
+        try:
+            with netCDF4.Dataset(filepath, 'r') as f:
+                assert 'WRF' in f.TITLE
+            return True
+        except:
+            return False
+
+    def validate(self):
+        super().validate()
+
+        # Disable periodicity except in geocentric coordinates
+        if not isinstance(config.coords, Geocentric):
+            config.require(
+                periodic=False,
+                reason="WRF does not support periodic non-geocentric coordinates; try with --coords geocentric"
+            )
+        else:
+            log.warning("Geocentric coordinates of WRF data is experimental, please do not use indiscriminately")
+
+        config.ensure_limited(
+            ConfigTarget.Reader, 'volumetric', 'periodic',
+            reason="not supported by WRF"
+        )
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        for stepid in range(self.nsteps):
+            yield stepid, {'time': self.nc['XTIME'][stepid] * 60}
+
+    @property
+    def nvert(self) -> int:
+        """Number of points in vertical direction."""
+        return len(self.nc.dimensions['bottom_top'])
+
+    def rotation(self) -> Rotation:
+        """Return a rotation that sends the north pole to the grid's
+        north pole, the south pole to the grid's south pole and the
+        prime meridian to the grid's prime meridian.
+
+        This is step 2 of the two-step coordinate transform outlined
+        in the beginning of the file.
+        """
+
+        # Note: the final rotation around Z is essentially guesswork.
+        intrinsic = 360 * np.ceil(self.nlon / 2) / self.nlon
+        return Rotation.from_euler('ZYZ', [-self.nc.STAND_LON, -self.nc.MOAD_CEN_LAT, intrinsic], degrees=True)
+
     def fields(self) -> Iterable[Field]:
-        yield WRFLocalGeometryField(self)
-        yield WRFGeodeticGeometryField(self)
+        yield WRFLocalGeometryField(self, 'HGT')
+        yield WRFGeodeticGeometryField(self, 'HGT')
 
         if config.volumetric == 'volumetric':
             allowed_types = {'volumetric'}
@@ -450,3 +472,44 @@ class WRFReader(Reader):
 
         if all(self.variable_type(x) in allowed_types for x in 'UVW'):
             yield WRFVectorField('WIND', ['U', 'V', 'W'], self)
+
+
+class GeoGridReader(NetCDFHelper):
+
+    reader_name = "GeoGrid"
+
+    lon_name = 'XLONG_M'
+    lat_name = 'XLAT_M'
+
+    filename: Path
+    nc: netCDF4.Dataset
+
+    @classmethod
+    def applicable(cls, filepath: Path) -> bool:
+        try:
+            with netCDF4.Dataset(filepath, 'r') as f:
+                assert 'GEOGRID' in f.TITLE
+            return True
+        except:
+            return False
+
+    def validate(self):
+        super().validate()
+        config.require(volumetric='planar', reason="GeoGrid does not support volumetric")
+
+        config.ensure_limited(
+            ConfigTarget.Reader, 'periodic',
+            reason="not supported by WRF"
+        )
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        for stepid in range(self.nsteps):
+            yield stepid, {'time': float(stepid)}
+
+    def fields(self) -> Iterable[Field]:
+        yield WRFLocalGeometryField(self, 'HGT_M')
+        yield WRFGeodeticGeometryField(self, 'HGT_M')
+
+        for variable in self.nc.variables:
+            if self.variable_type(variable) == 'planar':
+                yield WRFScalarField(variable, self)
