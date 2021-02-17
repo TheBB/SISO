@@ -78,6 +78,7 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
 @tracked_option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
 @tracked_option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
+@tracked_option('--times', 'timestep_slice', help='Slice the timestep list (Python syntax).')
 @tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')

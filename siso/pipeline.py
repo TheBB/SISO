@@ -4,7 +4,10 @@ import treelog as log
 from typing import Iterable, List, Tuple
 
 from . import config
-from .filters import Source, LastStepFilter, TesselatorFilter, MergeTopologiesFilter, CoordinateTransformFilter
+from .filters import (
+    Source, LastStepFilter, StepSliceFilter, TesselatorFilter,
+    MergeTopologiesFilter, CoordinateTransformFilter,
+)
 from .coords import Coords, Converter, graph
 from .fields import Field, ComponentField
 from .reader import Reader
@@ -57,6 +60,8 @@ def pipeline(reader: Source, writer: Writer):
     # TODO: Streamline filter application
     if config.only_final_timestep:
         reader = LastStepFilter(reader)
+    elif config.timestep_slice:
+        reader = StepSliceFilter(reader, *map(int, config.timestep_slice.split(':')))
     reader = TesselatorFilter(reader)
 
     if writer.writer_name != 'VTF':

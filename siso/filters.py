@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+from itertools import islice
 
 from . import config
 from .coords import Coords, Converter, graph, CoordinateConversionError
@@ -74,6 +75,29 @@ class LastStepFilter(Source):
         for step in self.src.steps():
             pass
         yield step
+
+    def fields(self) -> Iterable[Field]:
+        yield from self.src.fields()
+
+
+
+# StepSlice
+# ----------------------------------------------------------------------
+
+
+class StepSliceFilter(Source):
+
+    src: Source
+    params: Tuple[Optional[int]]
+
+    def __init__(self, src: Source, *args: Optional[int]):
+        """Filter that acts as a time array slice."""
+        self.src = src
+        self.params = args
+
+    def steps(self) -> Iterable[Tuple[int, StepData]]:
+        for stepid, stepdata in islice(self.src.steps(), *self.params):
+            yield stepid, stepdata
 
     def fields(self) -> Iterable[Field]:
         yield from self.src.fields()

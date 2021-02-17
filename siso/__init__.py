@@ -98,6 +98,9 @@ class Config(metaclass=ConfigMeta):
     # Whether to copy only the final time step.
     only_final_timestep = Setting(False, Pipeline, name='--last')
 
+    # Whether to slice the time step iterator
+    timestep_slice = Setting(None, Pipeline, name='--times')
+
     # Desired output coordinate system.
     coords = Setting('local', Pipeline, name='--coords')
 
