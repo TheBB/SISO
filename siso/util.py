@@ -113,11 +113,8 @@ def subclasses(cls: Type[T], root: bool = False, invert: bool = False) -> Iterab
 
 
 def subdivide_linear(knots, nvis):
-    out = []
-    for left, right in zip(knots[:-1], knots[1:]):
-        out.extend(np.linspace(left, right, num=nvis, endpoint=False))
-    out.append(knots[-1])
-    return out
+    a, b = knots
+    return [((nvis - i) * a + i * b) / nvis for i in range(nvis + 1)]
 
 
 def subdivide_face(el, nodes, elements, nvis):
