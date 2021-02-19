@@ -149,6 +149,7 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
     kwargs['input_coords'] = dict(kwargs['input_coords'])
     for k in ['field_filter', 'only_bases']:
         kwargs[k] = tuple(split_commas(kwargs[k]))
+    kwargs['field_filter'] = tuple(f.lower() for f in kwargs['field_filter'])
     explicit_options = getattr(ctx, 'explicit_options', set())
     if 'field_filter' not in explicit_options:
         kwargs['field_filter'] = None

@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from functools import partial, wraps
-from itertools import product
+from itertools import product, chain
 from operator import attrgetter
 
 import cachetools
@@ -113,8 +113,12 @@ def subclasses(cls: Type[T], root: bool = False, invert: bool = False) -> Iterab
 
 
 def subdivide_linear(knots, nvis):
-    a, b = knots
-    return [((nvis - i) * a + i * b) / nvis for i in range(nvis + 1)]
+    z = list(chain.from_iterable(
+        [((nvis - i) * a + i * b) / nvis for i in range(nvis)]
+        for a, b in zip(knots[:-1], knots[1:])
+    ))
+    z.append(knots[-1])
+    return z
 
 
 def subdivide_face(el, nodes, elements, nvis):

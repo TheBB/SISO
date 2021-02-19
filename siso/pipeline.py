@@ -28,7 +28,7 @@ def discover_fields(reader: Reader) -> Tuple[List[Field], List[Field]]:
         if field.is_geometry:
             geometries.append(field)
             continue
-        if config.field_filter is not None and field.name not in config.field_filter:
+        if config.field_filter is not None and field.name.lower() not in config.field_filter:
             continue
         fields.append(field)
 
