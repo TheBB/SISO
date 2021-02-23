@@ -278,6 +278,7 @@ class SIMRA3DMeshReader(SIMRAMeshReader):
             fortran_skip_record(self.mesh)
             nodes = transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
         nodes = ensure_native(nodes)
+        print(nodes[:,0])
         return translate(self.filename.parent, nodes)
 
 

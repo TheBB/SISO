@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from itertools import islice
 
 from . import config
-from .coords import Coords, Converter, graph, CoordinateConversionError
+from .coords import Coords, Converter, graph, CoordinateConversionError, Local
 from .fields import Field, CombinedField, SimpleField, SourcedField, PatchData, FieldData, FieldPatches, Geometry
 from .geometry import GeometryManager, Patch, PatchKey, UnstructuredTopology
 
@@ -286,7 +286,11 @@ class CoordinateTransformGeometryField(SourcedField):
     def __init__(self, src: Field, manager: CoordinateTransformFilter):
         self.src = src
         self.manager = manager
-        self._fieldtype = Geometry(coords=self.manager.target)
+        if isinstance(self.manager.target, Local) and isinstance(self.src.coords, Local):
+            target = self.src.coords
+        else:
+            target = self.manager.target
+        self._fieldtype = Geometry(coords=target)
 
     def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
         if self.manager.converter is None:
@@ -295,7 +299,7 @@ class CoordinateTransformGeometryField(SourcedField):
 
         conv = self.manager.converter
         for patch, data in self.src.patches(stepid, force=force, coords=coords):
-            yield patch, conv.points(self.src.coords, self.manager.target, data, patch.key)
+            yield patch, conv.points(self.src.coords, self.coords, data, patch.key)
 
 
 class CoordinateTransformField(SourcedField):
