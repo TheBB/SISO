@@ -61,24 +61,25 @@ def ensure_native(data: np.ndarray) -> np.ndarray:
 
 class SIMRAField(SimpleField):
 
-    cells = False
     decompose = True
 
     index: int
     reader: 'SIMRAResultReader'
     scale: float
 
-    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader', scale: float = 1.0):
+    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader', scale: float = 1.0, cells: bool = False):
         self.name = name
         self.index = index
         self.ncomps = ncomps
         self.reader = reader
         self.scale = scale
+        self.cells = cells
 
     def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
+        data = self.reader.data(stepid)[int(self.cells)]
         yield (
             self.reader.patch(),
-            self.reader.data(stepid)[:, self.index : self.index + self.ncomps] * self.scale,
+            data[:, self.index : self.index + self.ncomps] * self.scale,
         )
 
 
@@ -351,8 +352,10 @@ class SIMRADataReader(SIMRAReader):
         yield SIMRAField('rho', 9, 1, self)
         yield SIMRAField('rhos', 10, 1, self)
 
+        yield SIMRAField('pressure', 0, 1, self, cells=True)
+
     @abstractmethod
-    def data(self, stepid: int) -> Array2D:
+    def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
         pass
 
 
@@ -396,11 +399,15 @@ class SIMRAContinuationReader(SIMRADataReader):
         yield (0, {'time': time})
 
     @cache(1)
-    def data(self, stepid: int) -> Array2D:
-        data = self.result.read_reals(dtype=self.f4_type)
+    def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
+        ndata = self.result.read_reals(dtype=self.f4_type)
         if self.result_fn.suffix == '.res':
-            _, data = data[0], data[1:]  # Strip away time
-        return ensure_native(transpose(data, self.mesh.nodeshape))
+            _, ndata = ndata[0], ndata[1:]  # Strip away time
+        cdata = self.result.read_reals(dtype=self.f4_type)
+        return (
+            ensure_native(transpose(ndata, self.mesh.nodeshape)),
+            ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
+        )
 
 
 class SIMRAHistoryReader(SIMRADataReader):
@@ -458,10 +465,13 @@ class SIMRAHistoryReader(SIMRADataReader):
     def data(self, stepid: int) -> Array2D:
         assert stepid == self.cur_stepid
 
-        data = self.result.read_reals(dtype=self.f4_type)
-        _, data = data[0], data[1:]
+        ndata = self.result.read_reals(dtype=self.f4_type)
+        _, ndata = ndata[0], ndata[1:]  # Strip away time
 
-        # Skip the cell data
-        self.result.read_reals(dtype=self.f4_type)
+        cdata = self.result.read_reals(dtype=self.f4_type)
 
-        return ensure_native(transpose(data, self.mesh.nodeshape))
+        return (
+            ensure_native(transpose(ndata, self.mesh.nodeshape)),
+            ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape))),
+        )
+
