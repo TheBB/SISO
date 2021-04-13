@@ -366,12 +366,15 @@ class SIMRAContinuationReader(SIMRADataReader):
         try:
             # It's too easy to mistake other files for SIMRA results,
             # so we require a certain suffix
-            assert filename.suffix == '.res'
+            assert filename.suffix == '.res' or filename.suffix == '.dat'
             with FortranFile(filename, 'r', header_dtype=u4_type) as f:
                 size = f._read_size()
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
-                assert (size // u4_type.itemsize - 1) % 11 == 0  # Eleven scalars per point plus a time
+                if filename.suffix == '.res':
+                    assert (size // u4_type.itemsize - 1) % 11 == 0  # Eleven scalars per point plus a time
+                elif filename.suffix == '.dat':
+                    assert (size // u4_type.itemsize) % 11 == 0  # Eleven scalars per point
             assert SIMRA3DMeshReader.applicable(
                 Path(config.mesh_file) if config.mesh_file
                 else filename.with_name('mesh.dat')
@@ -395,7 +398,8 @@ class SIMRAContinuationReader(SIMRADataReader):
     @cache(1)
     def data(self, stepid: int) -> Array2D:
         data = self.result.read_reals(dtype=self.f4_type)
-        _, data = data[0], data[1:]
+        if self.result_fn.suffix == '.res':
+            _, data = data[0], data[1:]  # Strip away time
         return ensure_native(transpose(data, self.mesh.nodeshape))
 
 
