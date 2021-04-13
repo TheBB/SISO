@@ -100,6 +100,18 @@ def utm_to_lonlat_vf(x: Array, y: Array, vx: Array, vy: Array, zone: int, zone_l
 def utm_to_lonlat(x: Array, y: Array, zone: int, zone_letter: str) -> Array:
     return _utm_to_lonlat(x, y, zone, zone_letter)
 
+def lonlat_to_utm_vf(x: Array, y: Array, vx: Array, vy: Array, zone: int, zone_letter: str) -> Array:
+    if not HAS_JAX:
+        raise TypeError(f"An autodifferentiation package must be installed for UTM vector field conversion, try pip install 'siso[autodiff]'")
+    lon, lat = jnp.array(x), jnp.array(y)
+    x = lambda lon, lat: _lonlat_to_utm(lon, lat, zone, zone_letter)[0]
+    y = lambda lon, lat: _lonlat_to_utm(lon, lat, zone, zone_letter)[0]
+    dx_dlon, dx_dlat = jax.vmap(jax.grad(x, (0, 1)))(lon, lat)
+    dy_dlon, dy_dlat = jax.vmap(jax.grad(y, (0, 1)))(lon, lat)
+    dx_dlon, dx_dlat = normalize_pair(dx_dlon, dx_dlat)
+    dy_dlon, dy_dlat = normalize_pair(dy_dlon, dy_dlat)
+    return dx_dlon * vx + dx_dlat * vy, dy_dlon * vx + dy_dlat * vy
+
 def lonlat_to_utm(x: Array, y: Array, zone: int, zone_letter: str) -> Array:
     return _lonlat_to_utm(x, y, zone, zone_letter)
 
@@ -198,7 +210,8 @@ def _lonlat_to_utm(lon: 'jnp.array', lat: 'jnp.array', zone: int, zone_letter: s
                                         a4 / 24 * (5 - lat_tan2 + 9 * c + 4 * c**2) +
                                         a6 / 720 * (61 - 58 * lat_tan2 + lat_tan4 + 600 * c - 330 * E_P2)))
 
-    if jnp.max(lat) < 0:
+    northern = (zone_letter >= 'N')
+    if not northern:
         northing += 10000000
 
     return easting, northing

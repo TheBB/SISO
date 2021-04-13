@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from pathlib import Path
 import re
+import sys
 
 import f90nml
 import numpy as np
@@ -43,6 +44,12 @@ def translate(path: Path, data: Array2D) -> Array2D:
     data[:,0] += x
     data[:,1] += y
     return data
+
+
+def ensure_native(data: np.ndarray) -> np.ndarray:
+    if data.dtype.byteorder in ('=', sys.byteorder):
+        return data
+    return data.byteswap().newbyteorder()
 
 
 
@@ -270,6 +277,8 @@ class SIMRA3DMeshReader(SIMRAMeshReader):
         with save_excursion(self.mesh._fp):
             fortran_skip_record(self.mesh)
             nodes = transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
+        nodes = ensure_native(nodes)
+        print(nodes[:,0])
         return translate(self.filename.parent, nodes)
 
 
@@ -376,7 +385,7 @@ class SIMRAContinuationReader(SIMRADataReader):
     def data(self, stepid: int) -> Array2D:
         data = self.result.read_reals(dtype=self.f4_type)
         _, data = data[0], data[1:]
-        return transpose(data, self.mesh.nodeshape)
+        return ensure_native(transpose(data, self.mesh.nodeshape))
 
 
 class SIMRAHistoryReader(SIMRADataReader):
@@ -437,4 +446,4 @@ class SIMRAHistoryReader(SIMRADataReader):
         # Skip the cell data
         self.result.read_reals(dtype=self.f4_type)
 
-        return transpose(data, self.mesh.nodeshape)
+        return ensure_native(transpose(data, self.mesh.nodeshape))

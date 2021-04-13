@@ -11,7 +11,7 @@ from ..geometry import PatchKey
 from ..util import subclasses
 from .. import config
 
-from .util import spherical_cartesian_vf, utm_to_lonlat, utm_to_lonlat_vf, lonlat_to_utm
+from .util import spherical_cartesian_vf, utm_to_lonlat, utm_to_lonlat_vf, lonlat_to_utm, lonlat_to_utm_vf
 
 
 
@@ -347,4 +347,9 @@ def _(src: UTM, tgt: Geodetic, data: Array2D, nodes: Array2D) -> Array2D:
 @graph.points('geodetic', 'utm')
 def _(src: Geodetic, tgt: UTM, data: Array2D) -> Array2D:
     x, y = lonlat_to_utm(data[:,0], data[:,1], tgt.zone_number, tgt.zone_letter)
+    return np.hstack([x.reshape(-1,1), y.reshape(-1,1), data[:,2:]])
+
+@graph.vectors('geodetic', 'utm')
+def _(src: Geodetic, tgt: UTM, data: Array2D, nodes: Array2D) -> Array2D:
+    x, y = lonlat_to_utm_vf(nodes[:,0], nodes[:,1], data[:,0], data[:,1], tgt.zone_number, tgt.zone_letter)
     return np.hstack([x.reshape(-1,1), y.reshape(-1,1), data[:,2:]])
