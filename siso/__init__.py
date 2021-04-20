@@ -120,6 +120,9 @@ class Config(metaclass=ConfigMeta):
     # Input endianness indicator. Used by the SIMRA reader.
     input_endianness = Setting('native', Reader, name='--endianness')
 
+    # Input mesh file. Used by the SIMRA reader.
+    mesh_file = Setting(None, Reader, name='--mesh')
+
     # List of basis objects to copy to output. Used by the IFEM reader.
     only_bases = Setting((), Reader, name='--basis')
 

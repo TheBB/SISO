@@ -108,7 +108,7 @@ class SIMRAReader(Reader):
 
     def validate(self):
         super().validate()
-        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', reason="not supported by SIMRA")
+        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', 'mesh_file', reason="not supported by SIMRA")
 
     def __init__(self):
         self.f4_type, self.u4_type = dtypes(config.input_endianness)
@@ -278,7 +278,6 @@ class SIMRA3DMeshReader(SIMRAMeshReader):
             fortran_skip_record(self.mesh)
             nodes = transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
         nodes = ensure_native(nodes)
-        print(nodes[:,0])
         return translate(self.filename.parent, nodes)
 
 
@@ -304,11 +303,11 @@ class SIMRADataReader(SIMRAReader):
         self.mesh.__exit__(*args)
         self.result.__exit__(*args)
 
-    def __init__(self, result_fn: Path, mesh_fn: Optional[Path] = None, input_fn: Optional[Path] = None):
+    def __init__(self, result_fn: Path):
         super().__init__()
         self.result_fn = Path(result_fn)
-        self.mesh_fn = mesh_fn or self.result_fn.parent / 'mesh.dat'
-        self.input_fn = input_fn or self.result_fn.parent / 'simra.in'
+        self.mesh_fn = Path(config.mesh_file) if config.mesh_file else self.result_fn.with_name('mesh.dat')
+        self.input_fn = self.result_fn.with_name('simra.in')
 
         if not self.mesh_fn.is_file():
             raise IOError(f"Unable to find mesh file: {self.mesh_fn}")
@@ -364,7 +363,10 @@ class SIMRAContinuationReader(SIMRADataReader):
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
                 assert (size // u4_type.itemsize - 1) % 11 == 0  # Eleven scalars per point plus a time
-            assert SIMRA3DMeshReader.applicable(filename.with_name('mesh.dat'))
+            assert SIMRA3DMeshReader.applicable(
+                Path(config.mesh_file) if config.mesh_file
+                else filename.with_name('mesh.dat')
+            )
             return True
         except:
             return False
@@ -410,7 +412,10 @@ class SIMRAHistoryReader(SIMRADataReader):
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
                 assert (size // u4_type.itemsize - 1) % 12 == 0  # Twelve scalars per point plus a time
-            assert SIMRA3DMeshReader.applicable(filename.with_name('mesh.dat'))
+            assert SIMRA3DMeshReader.applicable(
+                Path(config.mesh_file) if config.mesh_file
+                else filename.with_name('mesh.dat')
+            )
             return True
         except:
             return False

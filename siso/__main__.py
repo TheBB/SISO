@@ -92,6 +92,8 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
 @tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
+@tracked_option('--mesh', 'mesh_file', help='Name of mesh file.')
+
 @tracked_option('--geometry', '-g', 'coords', default=Local(), help='Use this basis to provide geometry.', type=CoordsType())
 @tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=CoordsType())
 @tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=CoordsType())
