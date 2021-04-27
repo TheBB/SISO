@@ -1,5 +1,6 @@
 from operator import attrgetter
 import treelog as log
+import time
 
 from typing import Iterable, List, Tuple
 
@@ -74,16 +75,26 @@ def pipeline(reader: Source, writer: Writer):
     geometry = geometries[0]
     log.debug(f"Using '{geometry.name}' as geometry input")
 
-    first = True
-    for stepid, stepdata in log.iter.plain('Step', reader.steps()):
-        with writer.step(stepdata) as step:
-            with step.geometry(geometry) as geom:
-                for patch, data in geometry.patches(stepid, force=first):
-                    geom(patch, data)
+    while True:
 
-            for field in fields:
-                with step.field(field) as fld:
-                    for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
-                        fld(patch, data)
+        first = True
+        for stepid, stepdata in log.iter.plain('Step', reader.steps()):
+            with writer.step(stepdata) as step:
+                with step.geometry(geometry) as geom:
+                    for patch, data in geometry.patches(stepid, force=first):
+                        geom(patch, data)
 
-            first = False
+                for field in fields:
+                    with step.field(field) as fld:
+                        for patch, data in field.patches(stepid, force=first, coords=geometry.coords):
+                            fld(patch, data)
+
+                first = False
+
+        if config.live is None:
+            break
+
+        while True:
+            time.sleep(config.live)
+            if reader.refresh():
+                break

@@ -21,6 +21,17 @@ from ..writer import Writer
 
 
 
+# Utilities
+# ----------------------------------------------------------------------
+
+def iter_datasets(h5):
+    if isinstance(h5, h5py.Group):
+        for sub in h5.values():
+            yield from iter_datasets(sub)
+    elif isinstance(h5, h5py.Dataset):
+        yield h5
+
+
 # PatchCatalogue
 # ----------------------------------------------------------------------
 
@@ -282,7 +293,7 @@ class IFEMReader(Reader):
     def applicable(cls, filename: Path) -> bool:
         """Check if it's a valid HDF5 file and that it contains a group called '0'."""
         try:
-            with h5py.File(filename, 'r') as f:
+            with h5py.File(filename, 'r', libver='latest', swmr=True) as f:
                 assert '0' in f
             return True
         except:
@@ -303,7 +314,7 @@ class IFEMReader(Reader):
         )
 
     def __enter__(self):
-        self.h5 = h5py.File(str(self.filename), 'r').__enter__()
+        self.h5 = h5py.File(str(self.filename), 'r', libver='latest', swmr=True).__enter__()
         self.stepgroup = sorted(list(map(int, self.h5)))
 
         # Populate self.bases
@@ -324,6 +335,11 @@ class IFEMReader(Reader):
     def nsteps(self) -> int:
         """Return number of steps in the data set."""
         return len(self.h5)
+
+    def refresh(self) -> bool:
+        for dset in iter_datasets(self.h5):
+            dset.refresh()
+        return True
 
     def stepdata(self, stepid: int) -> StepData:
         """Return the data associated with a step (time, eigenvalue or

@@ -89,6 +89,9 @@ class Config(metaclass=ConfigMeta):
     their needs.
     """
 
+    # Whether to enable live mode, number of seconds between refresh tries
+    live = Setting(None, Pipeline, name='--live')
+
     # Number of subdivisions for additional resolution.
     nvis = Setting(1)
 
