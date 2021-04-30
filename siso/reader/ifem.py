@@ -289,6 +289,8 @@ class IFEMReader(Reader):
 
     patch_catalogue: PatchCatalogue
 
+    _last_modified: int
+
     @classmethod
     def applicable(cls, filename: Path) -> bool:
         """Check if it's a valid HDF5 file and that it contains a group called '0'."""
@@ -301,10 +303,12 @@ class IFEMReader(Reader):
 
     def __init__(self, filename: Path):
         self.filename = filename
+        self.h5 = None
         self.bases = dict()
         self._fields = dict()
         self._field_basis = dict()
         self.patch_catalogue = PatchCatalogue()
+        self._last_modified = 0
 
     def validate(self):
         super().validate()
@@ -313,8 +317,25 @@ class IFEMReader(Reader):
             reason="not supported by IFEM"
         )
 
-    def __enter__(self):
+    def _open_file(self):
+        if self.h5 is not None:
+            self.h5.__exit__()
+        self._last_modified = self.filename.stat().st_mtime_ns
         self.h5 = h5py.File(str(self.filename), 'r', libver='latest', swmr=True).__enter__()
+
+    def open_file(self, retry_on_fail: bool = False):
+        if not retry_on_fail:
+            self._open_file()
+            return
+        while True:
+            try:
+                self._open_file()
+            except OSError:
+                continue
+            break
+
+    def __enter__(self):
+        self.open_file()
         self.stepgroup = sorted(list(map(int, self.h5)))
 
         # Populate self.bases
@@ -336,9 +357,22 @@ class IFEMReader(Reader):
         """Return number of steps in the data set."""
         return len(self.h5)
 
+    def has_changed(self, remember: bool = True) -> bool:
+        mtime = self.filename.stat().st_mtime_ns
+        retval = mtime > self._last_modified
+        if remember:
+            self._last_modified = mtime
+        return retval
+
     def refresh(self) -> bool:
-        for dset in iter_datasets(self.h5):
-            dset.refresh()
+        if not self.has_changed(remember=True):
+            return False
+        try:
+            for dset in iter_datasets(self.h5):
+                dset.refresh()
+        except RuntimeError:
+            # The file may have been rewritten
+            self.open_file(retry_on_fail=True)
         return True
 
     def stepdata(self, stepid: int) -> StepData:
@@ -401,10 +435,14 @@ class IFEMReader(Reader):
                     continue
 
                 for fieldname in basisgrp.get('fields', ()):
+                    if fieldname.startswith('Greville'):
+                        continue
                     if fieldname not in self._fields and basisname in self.bases:
                         self._fields[fieldname] = IFEMField(fieldname, self.bases[basisname], self)
                         self._field_basis[fieldname] = basisname
                 for fieldname in basisgrp.get('knotspan', ()):
+                    if fieldname.startswith('Greville'):
+                        continue
                     if fieldname not in self._fields and basisname in self.bases:
                         self._fields[fieldname] = IFEMField(fieldname, self.bases[basisname], self, cells=True)
                         self._field_basis[fieldname] = basisname
