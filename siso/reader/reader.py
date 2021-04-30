@@ -46,3 +46,6 @@ class Reader(Source):
     @abstractmethod
     def __exit__(self, *args):
         pass
+
+    def refresh(self) -> bool:
+        return False

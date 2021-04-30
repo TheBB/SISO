@@ -100,6 +100,8 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @tracked_option('--coords', help='Output coordinate system', default='local', type=CoordsType())
 @tracked_option('--in-coords', 'input_coords', nargs=2, multiple=2, type=click.Tuple([str, CoordsType()]))
 
+@tracked_option('--live', 'live', default=None, type=float)
+
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
 @click.option('--info', 'verbosity', flag_value='info', default=True)

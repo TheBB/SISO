@@ -56,6 +56,11 @@ class Source(ABC):
         """Iterate over all fields."""
         pass
 
+    @abstractmethod
+    def refresh(self) -> bool:
+        """Check for updates."""
+        pass
+
 
 
 # LastStep
@@ -79,6 +84,9 @@ class LastStepFilter(Source):
     def fields(self) -> Iterable[Field]:
         yield from self.src.fields()
 
+    def refresh(self) -> bool:
+        return self.src.refresh()
+
 
 
 # StepSlice
@@ -101,6 +109,9 @@ class StepSliceFilter(Source):
 
     def fields(self) -> Iterable[Field]:
         yield from self.src.fields()
+
+    def refresh(self) -> bool:
+        return self.src.refresh()
 
 
 
@@ -127,6 +138,9 @@ class TesselatorFilter(Source):
     def fields(self) -> Iterable[Field]:
         for field in self.src.fields():
             yield TesselatedField(field, self.manager)
+
+    def refresh(self) -> bool:
+        return self.src.refresh()
 
 
 class TesselatedField(SourcedField):
@@ -204,6 +218,9 @@ class MergeTopologiesFilter(Source):
     def get_indices(self, patches: Iterable[Patch]) -> Iterable[Tuple[int, int]]:
         return [self.indices[patch.key] for patch in patches]
 
+    def refresh(self) -> bool:
+        return self.src.refresh()
+
 
 class MergeTopologiesField(SourcedField):
 
@@ -277,6 +294,9 @@ class CoordinateTransformFilter(Source):
                     continue
             else:
                 yield CoordinateTransformField(fld, self)
+
+    def refresh(self) -> bool:
+        return self.src.refresh()
 
 
 class CoordinateTransformGeometryField(SourcedField):
