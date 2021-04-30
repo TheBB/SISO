@@ -5,13 +5,18 @@ from numpy.linalg import norm
 import treelog as log
 from scipy.io import FortranFile
 
-from .. import config
+from .. import config, ConfigTarget
 from ..fields import Field
 from ..geometry import Patch, StructuredTopology
 from ..util import structured_cells
 from .writer import Writer
 
 from ..typing import Array, Array2D
+
+
+def dtypes(endianness):
+    endian = {'native': '=', 'big': '>', 'small': '<'}[endianness]
+    return np.dtype(f'{endian}f4'), np.dtype(f'{endian}u4')
 
 
 def fix_orientation(data: Array, tol=1e-2) -> Array:
@@ -36,6 +41,7 @@ class SIMRAWriter(Writer):
         return fmt == 'dat'
 
     def validate(self):
+        config.ensure_limited(ConfigTarget.Writer, 'output_endianness', reason="not supported by SIMRA")
         config.require(multiple_timesteps=False)
 
     def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
@@ -58,16 +64,17 @@ class SIMRAWriter(Writer):
         mcells[:,5], mcells[:,7] = mcells[:,7].copy(), mcells[:,5].copy()
 
         # Write single precision
-        data = data.astype('f4')
-        cells = cells.astype('u4')
-        mcells = mcells.astype('u4')
+        f4_dtype, u4_dtype = dtypes(config.output_endianness)
+        data = data.astype(f4_dtype)
+        cells = cells.astype(u4_dtype)
+        mcells = mcells.astype(u4_dtype)
 
-        with FortranFile(self.outpath, 'w', header_dtype='u4') as f:
+        with FortranFile(self.outpath, 'w', header_dtype=u4_dtype) as f:
             f.write_record(np.array([
                 data.size // 3, cells.size // 8,
                 data.shape[1], data.shape[0], data.shape[2],
                 mcells.size // 8,
-            ], dtype='u4'))
+            ], dtype=u4_dtype))
             f.write_record(data.flatten())
             f.write_record(cells.flatten())
             f.write_record(mcells.flatten())

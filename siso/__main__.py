@@ -79,11 +79,14 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @tracked_option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
 @tracked_option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
 @tracked_option('--times', 'timestep_slice', help='Slice the timestep list (Python syntax).')
-@tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
 @tracked_option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
 @tracked_option('--unstructured', 'require_unstructured', is_flag=True, help='Ensure unstructured output format.')
+
+@tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@tracked_option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@tracked_option('--out-endianness', 'output_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 
 @tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
 @tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
@@ -133,6 +136,8 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         log.warning(f"--local is deprecated; use --coords local instead")
     if '--geometry' in sys.argv or '-g' in sys.argv:
         log.warning(f"--geometry is deprecated; use --coords instead")
+    if '--endianness' in sys.argv:
+        log.warning(f"--endianness is deprecated; use --in-endianness instead")
 
     # Convert to pathlib
     infile = Path(infile)

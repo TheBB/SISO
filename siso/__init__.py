@@ -114,11 +114,14 @@ class Config(metaclass=ConfigMeta):
     # Output mode. Used by the VTK and VTF writers.
     output_mode = Setting('binary', Writer, name='--mode')
 
+    # Output endianness indicator. Used by the SIMRA writer.
+    output_endianness = Setting('native', Writer, name='--out-endianness')
+
     # Input coordinate overrides.
     input_coords = Setting({}, Pipeline, name='--in-coords')
 
     # Input endianness indicator. Used by the SIMRA reader.
-    input_endianness = Setting('native', Reader, name='--endianness')
+    input_endianness = Setting('native', Reader, name='--in-endianness')
 
     # Input mesh file. Used by the SIMRA reader.
     mesh_file = Setting(None, Reader, name='--mesh')
