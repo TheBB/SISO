@@ -77,12 +77,16 @@ class AbstractVTKWriter(Writer):
             shape = patch.topology.shape
             while len(shape) < 3:
                 shape = (*shape, 0)
+            if not config.fix_orientation:
+                shape = shape[::-1]
             self.grid.SetDimensions(*(s + 1 for s in shape))
         elif not self.grid:
             self.grid = vtkUnstructuredGrid()
 
         data = ensure_ncomps(self.nan_filter(data), 3, allow_scalar=False)
-        data = transpose(data, self.grid)
+
+        if config.fix_orientation:
+            data = transpose(data, self.grid)
 
         points = vtkPoints()
         points.SetData(numpy_to_vtk(data))

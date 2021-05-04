@@ -31,7 +31,9 @@ def dtypes(endianness):
 
 
 def transpose(array, nodeshape):
-    return array.reshape(*nodeshape, -1).transpose(1, 0, 2, 3).reshape(prod(nodeshape), -1)
+    if config.fix_orientation:
+        return array.reshape(*nodeshape, -1).transpose(1, 0, 2, 3).reshape(prod(nodeshape), -1)
+    return array.reshape(prod(nodeshape), -1)
 
 
 def translate(path: Path, data: Array2D) -> Array2D:
@@ -108,7 +110,11 @@ class SIMRAReader(Reader):
 
     def validate(self):
         super().validate()
-        config.ensure_limited(ConfigTarget.Reader, 'input_endianness', 'mesh_file', reason="not supported by SIMRA")
+        config.ensure_limited(
+            ConfigTarget.Reader,
+            'input_endianness', 'mesh_file', 'fix_orientation',
+            reason="not supported by SIMRA"
+        )
 
     def __init__(self):
         self.f4_type, self.u4_type = dtypes(config.input_endianness)
@@ -261,7 +267,10 @@ class SIMRA3DMeshReader(SIMRAMeshReader):
         self.mesh = FortranFile(self.filename, 'r', header_dtype=self.u4_type).__enter__()
         with save_excursion(self.mesh._fp):
             _, _, imax, jmax, kmax, _ = self.mesh.read_ints(self.u4_type)
-        self.nodeshape = (jmax, imax, kmax)
+        if config.fix_orientation:
+            self.nodeshape = (jmax, imax, kmax)
+        else:
+            self.nodeshape = (imax, jmax, kmax)
         return self
 
     def __exit__(self, *args):

@@ -141,6 +141,9 @@ class Config(metaclass=ConfigMeta):
     # Hint to the reader that the data may be periodic. Used by the WRF reader.
     periodic = Setting(False, Reader)
 
+    # Whether to attempt to automatically resolve RHS/LHS systems
+    fix_orientation = Setting(True, Reader, Writer, name='--(no-)fix-orientation')
+
     def cname(self, key: str) -> str:
         """Get the canonical name of a setting."""
         return self._canonical_names[key]

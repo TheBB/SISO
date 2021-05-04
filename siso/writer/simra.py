@@ -20,6 +20,8 @@ def dtypes(endianness):
 
 
 def fix_orientation(data: Array, tol=1e-2) -> Array:
+    if not config.fix_orientation:
+        return data
     a = data[1,0,0] - data[0,0,0]
     b = data[0,1,0] - data[0,0,0]
     c = data[0,0,1] - data[0,0,0]
@@ -41,7 +43,7 @@ class SIMRAWriter(Writer):
         return fmt == 'dat'
 
     def validate(self):
-        config.ensure_limited(ConfigTarget.Writer, 'output_endianness', reason="not supported by SIMRA")
+        config.ensure_limited(ConfigTarget.Writer, 'output_endianness', 'fix_orientation', reason="not supported by SIMRA")
         config.require(multiple_timesteps=False)
 
     def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):

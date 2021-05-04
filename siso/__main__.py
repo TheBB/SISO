@@ -83,6 +83,7 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
                 default='binary', help='Output mode.')
 @tracked_option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
 @tracked_option('--unstructured', 'require_unstructured', is_flag=True, help='Ensure unstructured output format.')
+@tracked_option('--fix-orientation/--no-fix-orientation', 'fix_orientation', default=True)
 
 @tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @tracked_option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
