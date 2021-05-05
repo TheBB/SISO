@@ -114,11 +114,14 @@ class Config(metaclass=ConfigMeta):
     # Output mode. Used by the VTK and VTF writers.
     output_mode = Setting('binary', Writer, name='--mode')
 
+    # Output endianness indicator. Used by the SIMRA writer.
+    output_endianness = Setting('native', Writer, name='--out-endianness')
+
     # Input coordinate overrides.
     input_coords = Setting({}, Pipeline, name='--in-coords')
 
     # Input endianness indicator. Used by the SIMRA reader.
-    input_endianness = Setting('native', Reader, name='--endianness')
+    input_endianness = Setting('native', Reader, name='--in-endianness')
 
     # Input mesh file. Used by the SIMRA reader.
     mesh_file = Setting(None, Reader, name='--mesh')
@@ -137,6 +140,9 @@ class Config(metaclass=ConfigMeta):
 
     # Hint to the reader that the data may be periodic. Used by the WRF reader.
     periodic = Setting(False, Reader)
+
+    # Whether to attempt to automatically resolve RHS/LHS systems
+    fix_orientation = Setting(True, Reader, Writer, name='--(no-)fix-orientation')
 
     def cname(self, key: str) -> str:
         """Get the canonical name of a setting."""
