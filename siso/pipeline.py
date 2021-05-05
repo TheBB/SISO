@@ -60,7 +60,7 @@ def pipeline(reader: Source, writer: Writer):
     # TODO: Streamline filter application
     if config.only_final_timestep:
         reader = LastStepFilter(reader)
-    elif config.timestep_slice:
+    elif config.timestep_slice is not None:
         reader = StepSliceFilter(reader, *map(int, config.timestep_slice.split(':')))
     reader = TesselatorFilter(reader)
 

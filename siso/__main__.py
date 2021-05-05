@@ -78,7 +78,8 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
 @tracked_option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
 @tracked_option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
-@tracked_option('--times', 'timestep_slice', help='Slice the timestep list (Python syntax).')
+@tracked_option('--times', 'timestep_slice', default=None, help='Slice the timestep list (Python syntax).')
+@tracked_option('--time', 'timestep_index', type=int, default=None)
 @tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
                 default='binary', help='Output mode.')
 @tracked_option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
@@ -161,6 +162,15 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
     explicit_options = getattr(ctx, 'explicit_options', set())
     if 'field_filter' not in explicit_options:
         kwargs['field_filter'] = None
+    if isinstance(kwargs['timestep_index'], int):
+        n = kwargs['timestep_index']
+        kwargs['timestep_slice'] = f'{n}:{n+1}:1'
+        config.require(multiple_timesteps=False, reason="--time is set")
+
+    # Remove meta-options
+    for k in ['timestep_index']:
+        kwargs.pop(k)
+        explicit_options.discard(k)
 
     try:
         # The config can influence the choice of readers or writers,
