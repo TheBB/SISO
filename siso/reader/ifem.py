@@ -283,7 +283,7 @@ class IFEMReader(Reader):
         """Check if it's a valid HDF5 file and that it contains a group called '0'."""
         try:
             with h5py.File(filename, 'r') as f:
-                assert '0' in f
+                list(map(int, f))   # All groups must have integer names
             return True
         except:
             return False
