@@ -38,34 +38,18 @@ class RichOutputLog(log.RichOutputLog):
         click.echo(message, file=self.stream, nl=False)
 
 
-class Option(click.Option):
-    """A custom option class that tracks which options have been
-    explicitly set by the user, and stores them in a special attribute
-    attached to the context object.  Also handles deprectation
-    warnings.
-    """
-
-    def process_value(self, ctx, value):
-        if value is not None:
-            if not hasattr(ctx, 'explicit_options'):
-                ctx.explicit_options = set()
-            ctx.explicit_options.add(self.name)
-        return super().process_value(ctx, value)
-
-
 class CoordsType(click.ParamType):
     """Parameter type for coordinate systems."""
 
     name = "coords"
 
     def convert(self, value, param, ctx):
+        if value is None or value is False:
+            return None
         if value is None or isinstance(value, Coords):
             return value
-        return Coords.find(value)
-
-
-def tracked_option(*args, **kwargs):
-    return click.option(*args, **kwargs, cls=Option)
+        rval = Coords.find(value)
+        return rval
 
 
 FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
@@ -74,36 +58,36 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @click.option('--fmt', '-f', type=click.Choice(FORMATS), required=False, help='Output format.')
 
 # Options that are forwarded to config
-@tracked_option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
-@tracked_option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
-@tracked_option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
-@tracked_option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
-@tracked_option('--times', 'timestep_slice', default=None, help='Slice the timestep list (Python syntax).')
-@tracked_option('--time', 'timestep_index', type=int, default=None)
-@tracked_option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
-                default='binary', help='Output mode.')
-@tracked_option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
-@tracked_option('--unstructured', 'require_unstructured', is_flag=True, help='Ensure unstructured output format.')
-@tracked_option('--fix-orientation/--no-fix-orientation', 'fix_orientation', default=True)
+@click.option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
+@click.option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
+@click.option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
+@click.option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
+@click.option('--times', 'timestep_slice', default=None, help='Slice the timestep list (Python syntax).')
+@click.option('--time', 'timestep_index', type=int, default=None)
+@click.option('--mode', '-m', 'output_mode', type=click.Choice(['binary', 'ascii', 'appended']),
+              default='binary', help='Output mode.')
+@click.option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
+@click.option('--unstructured', 'require_unstructured', is_flag=True, help='Ensure unstructured output format.')
+@click.option('--fix-orientation/--no-fix-orientation', 'fix_orientation', default=True)
 
-@tracked_option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
-@tracked_option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
-@tracked_option('--out-endianness', 'output_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@click.option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@click.option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
+@click.option('--out-endianness', 'output_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 
-@tracked_option('--no-fields', 'field_filter', is_flag=True, flag_value=())
-@tracked_option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
+@click.option('--no-fields', 'field_filter', is_flag=True, flag_value=())
+@click.option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
 
-@tracked_option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
-@tracked_option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
-@tracked_option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
+@click.option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
+@click.option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
+@click.option('--extrude', 'volumetric', flag_value='extrude', help='Extrude planar (surface) fields.')
 
-@tracked_option('--mesh', 'mesh_file', help='Name of mesh file.')
+@click.option('--mesh', 'mesh_file', help='Name of mesh file.')
 
-@tracked_option('--geometry', '-g', 'coords', default=Local(), help='Use this basis to provide geometry.', type=CoordsType())
-@tracked_option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=CoordsType())
-@tracked_option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=CoordsType())
-@tracked_option('--coords', help='Output coordinate system', default='local', type=CoordsType())
-@tracked_option('--in-coords', 'input_coords', nargs=2, multiple=2, type=click.Tuple([str, CoordsType()]))
+@click.option('--geometry', '-g', 'coords', default=Local(), help='Use this basis to provide geometry.', type=CoordsType())
+@click.option('--local', 'coords', flag_value=Local(), help='Local (cartesian) mapping.', type=CoordsType())
+@click.option('--global', 'coords', flag_value=Geocentric(), help='Global (spherical) mapping.', type=CoordsType())
+@click.option('--coords', default=Local(), type=CoordsType())
+@click.option('--in-coords', 'input_coords', nargs=2, multiple=True, type=click.Tuple([str, CoordsType()]))
 
 # Logging and verbosity
 @click.option('--debug', 'verbosity', flag_value='debug')
@@ -155,13 +139,14 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
     # Handle default values of multi-valued options that should be
     # distinguished from empty, as well as comma splitting and other
     # transformations
+    explicit = {click.core.ParameterSource.COMMANDLINE, click.core.ParameterSource.ENVIRONMENT}
     kwargs['input_coords'] = dict(kwargs['input_coords'])
     for k in ['field_filter', 'only_bases']:
         kwargs[k] = tuple(split_commas(kwargs[k]))
-    kwargs['field_filter'] = tuple(f.lower() for f in kwargs['field_filter'])
-    explicit_options = getattr(ctx, 'explicit_options', set())
-    if 'field_filter' not in explicit_options:
+    if ctx.get_parameter_source('field_filter') not in explicit:
         kwargs['field_filter'] = None
+    else:
+        kwargs['field_filter'] = tuple(f.lower() for f in kwargs['field_filter'])
     if isinstance(kwargs['timestep_index'], int):
         n = kwargs['timestep_index']
         kwargs['timestep_slice'] = f'{n}:{n+1}:1'
@@ -170,7 +155,6 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
     # Remove meta-options
     for k in ['timestep_index']:
         kwargs.pop(k)
-        explicit_options.discard(k)
 
     try:
         # The config can influence the choice of readers or writers,
@@ -178,8 +162,9 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         # are not explicity set by the user, we set the source to
         # Default, and later use the upgrade_source method.
         with config(source=ConfigSource.Default, **kwargs):
-            for option in explicit_options:
-                config.upgrade_source(option, ConfigSource.User)
+            for name in kwargs:
+                if ctx.get_parameter_source(name) in explicit:
+                    config.upgrade_source(name, ConfigSource.User)
             if not infile.exists():
                 raise IOError(f"File or directory does not exist: {infile}")
             ReaderClass = Reader.find_applicable(infile)

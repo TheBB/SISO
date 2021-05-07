@@ -18,7 +18,7 @@ setup(
     packages=['siso', 'siso.writer', 'siso.reader', 'siso.coords'],
     install_requires=[
         'cachetools',
-        'click',
+        'click>=8',
         'dataclasses',
         'f90nml',
         'numpy',
