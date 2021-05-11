@@ -25,6 +25,25 @@ from ..writer import Writer
 # ----------------------------------------------------------------------
 
 
+def read_many(lines, n, tp, skip=True):
+    if skip:
+        next(lines)
+    values = []
+    while len(values) < n:
+        values.extend(map(tp, next(lines).split()))
+    return np.array(values)
+
+
+def split_sparse(values):
+    return values[0::2].astype(int), values[1::2]
+
+
+def make_mask(n, indices, values=1.0):
+    retval = np.zeros((n,))
+    retval[indices-1] = values
+    return retval
+
+
 def dtypes(endianness):
     endian = {'native': '=', 'big': '>', 'small': '<'}[endianness]
     return np.dtype(f'{endian}f4'), np.dtype(f'{endian}u4')
@@ -67,7 +86,7 @@ class SIMRAField(SimpleField):
     reader: 'SIMRAResultReader'
     scale: float
 
-    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAResultReader', scale: float = 1.0, cells: bool = False):
+    def __init__(self, name: str, index: int, ncomps: int, reader: 'SIMRAReader', scale: float = 1.0, cells: bool = False):
         self.name = name
         self.index = index
         self.ncomps = ncomps
@@ -289,6 +308,79 @@ class SIMRA3DMeshReader(SIMRAMeshReader):
             nodes = transpose(self.mesh.read_reals(self.f4_type), self.nodeshape)
         nodes = ensure_native(nodes)
         return translate(self.filename.parent, nodes)
+
+
+class SIMRABoundaryReader(SIMRAReader):
+
+    reader_name = "SIMRA-Boun"
+
+    data_fn: Path
+    mesh_fn: Path
+
+    io: TextIO
+
+    @classmethod
+    def applicable(cls, filename: Path) -> bool:
+        try:
+            with open(filename, 'r') as f:
+                assert next(f).startswith('Boundary conditions')
+            assert SIMRA3DMeshReader.applicable(
+                Path(config.mesh_file) if config.mesh_file
+                else filename.with_name('mesh.dat')
+            )
+            return True
+        except:
+            return False
+
+    def __init__(self, data_fn: Path, mesh_fn: Optional[Path] = None):
+        self.data_fn = data_fn
+        self.mesh_fn = Path(config.mesh_file) if config.mesh_file else self.data_fn.with_name('mesh.dat')
+
+    def __enter__(self):
+        self.io = open(self.data_fn, 'r').__enter__()
+        self.mesh = SIMRA3DMeshReader(self.mesh_fn).__enter__()
+        return self
+
+    def __exit__(self, *args):
+        self.io.__exit__(*args)
+        self.mesh.__exit__(*args)
+
+    def patch(self) -> Patch:
+        return self.mesh.patch()
+
+    def nodes(self) -> Array2D:
+        return self.mesh.nodes()
+
+    def fields(self) -> Iterable[Field]:
+        yield from self.mesh.fields()
+        yield SIMRAField('u', 0, 3, self)
+        yield SIMRAField('mask', 3, 3, self)
+
+    @cache(1)
+    def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
+        self.io.seek(0)
+        lines = iter(self.io)
+        next(lines)
+
+        *ints, z0 = next(lines).split()
+        nfixu, nfixv, nfixw, nfixp, nfixe, nfixk, nlog = map(int, ints)
+
+        z0_var = read_many(lines, nlog, float, skip=False)
+        ifixu, fixu = split_sparse(read_many(lines, 2*nfixu, float))
+        ifixv, fixv = split_sparse(read_many(lines, 2*nfixv, float))
+        ifixw, fixw = split_sparse(read_many(lines, 2*nfixw, float))
+
+        npts = prod(self.mesh.nodeshape)
+        ndata = np.array([
+            make_mask(npts, ifixu, fixu),
+            make_mask(npts, ifixv, fixv),
+            make_mask(npts, ifixw, fixw),
+            make_mask(npts, ifixu),
+            make_mask(npts, ifixv),
+            make_mask(npts, ifixw),
+        ]).T
+        return ndata, None
+
 
 
 class SIMRADataReader(SIMRAReader):
