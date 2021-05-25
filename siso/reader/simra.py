@@ -443,7 +443,7 @@ class SIMRADataReader(SIMRAReader):
         yield SIMRAField('rho', 9, 1, self)
         yield SIMRAField('rhos', 10, 1, self)
 
-        yield SIMRAField('pressure', 0, 1, self, cells=True)
+        # yield SIMRAField('pressure', 0, 1, self, cells=True)
 
     @abstractmethod
     def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
@@ -489,15 +489,22 @@ class SIMRAContinuationReader(SIMRADataReader):
             time = np.fromfile(self.result._fp, dtype=self.f4_type, count=1)[0]
         yield (0, {'time': time})
 
+    def fields(self) -> Iterable[Field]:
+        yield from super().fields()
+        yield SIMRAField('strat', 11, 1, self)
+
     @cache(1)
     def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
         ndata = self.result.read_reals(dtype=self.f4_type)
         if self.result_fn.suffix == '.res':
             _, ndata = ndata[0], ndata[1:]  # Strip away time
-        cdata = self.result.read_reals(dtype=self.f4_type)
+
+        sdata = self.result.read_reals(dtype=self.f4_type)
+        ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
+
         return (
             ensure_native(transpose(ndata, self.mesh.nodeshape)),
-            ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
+            None
         )
 
 
@@ -551,6 +558,10 @@ class SIMRAHistoryReader(SIMRADataReader):
 
             self.cur_stepid += 1
             yield (self.cur_stepid, {'time': time})
+
+    def fields(self) -> Iterable[Field]:
+        yield from super().fields()
+        yield SIMRAField('pressure', 11, 1, self, cells=True)
 
     @cache(1)
     def data(self, stepid: int) -> Array2D:
