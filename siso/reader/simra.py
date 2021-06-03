@@ -369,8 +369,8 @@ class SIMRABoundaryReader(SIMRAReader):
         ifixu, fixu = split_sparse(read_many(lines, 2*nfixu, float))
         ifixv, fixv = split_sparse(read_many(lines, 2*nfixv, float))
         ifixw, fixw = split_sparse(read_many(lines, 2*nfixw, float))
-
         npts = prod(self.mesh.nodeshape)
+
         ndata = np.array([
             make_mask(npts, ifixu, fixu),
             make_mask(npts, ifixv, fixv),
@@ -428,11 +428,11 @@ class SIMRADataReader(SIMRAReader):
     def scale(self, name: str) -> float:
         return self.input_data.get('param_data', {}).get(name, 1.0)
 
-    def fields(self) -> Iterable[Field]:
+    def fields(self, apply_scales: bool = True) -> Iterable[Field]:
         yield from self.mesh.fields()
 
-        uref = self.scale('uref')
-        lref = self.scale('lenref')
+        uref = self.scale('uref') if apply_scales else 1.0
+        lref = self.scale('lenref') if apply_scales else 1.0
         yield SIMRAField('u', 0, 3, self, scale=uref)
         yield SIMRAField('ps', 3, 1, self, scale=uref**2)
         yield SIMRAField('tk', 4, 1, self, scale=uref**2)
@@ -490,7 +490,9 @@ class SIMRAContinuationReader(SIMRADataReader):
         yield (0, {'time': time})
 
     def fields(self) -> Iterable[Field]:
-        yield from super().fields()
+        # Don't apply scaling on init.dat files
+        apply_scales = self.result_fn.suffix == '.res'
+        yield from super().fields(apply_scales=apply_scales)
         yield SIMRAField('strat', 11, 1, self)
 
     @cache(1)
