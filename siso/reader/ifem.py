@@ -386,10 +386,14 @@ class IFEMReader(Reader):
 
                 for fieldname in basisgrp.get('fields', ()):
                     if fieldname not in self._fields and basisname in self.bases:
+                        if config.field_filter is not None and fieldname.lower() not in config.field_filter:
+                            continue
                         self._fields[fieldname] = IFEMField(fieldname, self.bases[basisname], self)
                         self._field_basis[fieldname] = basisname
                 for fieldname in basisgrp.get('knotspan', ()):
                     if fieldname not in self._fields and basisname in self.bases:
+                        if config.field_filter is not None and fieldname.lower() not in config.field_filter:
+                            continue
                         self._fields[fieldname] = IFEMField(fieldname, self.bases[basisname], self, cells=True)
                         self._field_basis[fieldname] = basisname
 
