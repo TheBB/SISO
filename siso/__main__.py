@@ -74,7 +74,7 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @click.option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @click.option('--out-endianness', 'output_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 
-@click.option('--no-fields', 'no_fields', is_flag=True, flag_value=[])
+@click.option('--no-fields', 'no_fields', is_flag=True)
 @click.option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.', default=None)
 
 @click.option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
@@ -105,6 +105,7 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 
 @suppress_warnings
 def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
+    print(kwargs)
     # Set up logging
     if rich:
         logger = RichOutputLog(sys.stdout)
@@ -143,10 +144,10 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
     kwargs['input_coords'] = dict(kwargs['input_coords'])
     for k in ['field_filter', 'only_bases']:
         kwargs[k] = tuple(split_commas(kwargs[k]))
-    if ctx.get_parameter_source('field_filter') not in explicit:
-        kwargs['field_filter'] = None
-    elif kwargs['no_fields']:
+    if kwargs['no_fields']:
         kwargs['field_filter'] = []
+    elif ctx.get_parameter_source('field_filter') not in explicit:
+        kwargs['field_filter'] = None
     else:
         kwargs['field_filter'] = tuple(f.lower() for f in kwargs['field_filter'])
     if isinstance(kwargs['timestep_index'], int):
