@@ -74,8 +74,8 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @click.option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @click.option('--out-endianness', 'output_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 
-@click.option('--no-fields', 'field_filter', is_flag=True, flag_value=())
-@click.option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.')
+@click.option('--no-fields', 'no_fields', is_flag=True, flag_value=[])
+@click.option('--filter', '-l', 'field_filter', multiple=True, help='List of fields to include.', default=None)
 
 @click.option('--volumetric', 'volumetric', flag_value='volumetric', help='Only include volumetric fields.', default=True)
 @click.option('--planar', 'volumetric', flag_value='planar', help='Only include planar (surface) fields.')
@@ -145,6 +145,8 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         kwargs[k] = tuple(split_commas(kwargs[k]))
     if ctx.get_parameter_source('field_filter') not in explicit:
         kwargs['field_filter'] = None
+    elif kwargs['no_fields']:
+        kwargs['field_filter'] = []
     else:
         kwargs['field_filter'] = tuple(f.lower() for f in kwargs['field_filter'])
     if isinstance(kwargs['timestep_index'], int):
@@ -153,7 +155,7 @@ def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
         config.require(multiple_timesteps=False, reason="--time is set")
 
     # Remove meta-options
-    for k in ['timestep_index']:
+    for k in ['timestep_index', 'no_fields']:
         kwargs.pop(k)
 
     try:
