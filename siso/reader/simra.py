@@ -493,7 +493,9 @@ class SIMRAContinuationReader(SIMRADataReader):
         # Don't apply scaling on init.dat files
         apply_scales = self.result_fn.suffix == '.res'
         yield from super().fields(apply_scales=apply_scales)
-        yield SIMRAField('strat', 11, 1, self)
+
+        if self.result_fn.suffix == '.res':
+            yield SIMRAField('strat', 11, 1, self)
 
     @cache(1)
     def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
@@ -501,8 +503,9 @@ class SIMRAContinuationReader(SIMRADataReader):
         if self.result_fn.suffix == '.res':
             _, ndata = ndata[0], ndata[1:]  # Strip away time
 
-        sdata = self.result.read_reals(dtype=self.f4_type)
-        ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
+        if self.result_fn.suffix == '.res':
+            sdata = self.result.read_reals(dtype=self.f4_type)
+            ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
 
         return (
             ensure_native(transpose(ndata, self.mesh.nodeshape)),
