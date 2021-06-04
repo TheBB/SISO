@@ -496,6 +496,8 @@ class SIMRAContinuationReader(SIMRADataReader):
 
         if self.result_fn.suffix == '.res':
             yield SIMRAField('strat', 11, 1, self)
+        else:
+            yield SIMRAField('pressure', 0, 1, self, cells=True)
 
     @cache(1)
     def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
@@ -503,13 +505,17 @@ class SIMRAContinuationReader(SIMRADataReader):
         if self.result_fn.suffix == '.res':
             _, ndata = ndata[0], ndata[1:]  # Strip away time
 
+        cdata = None
         if self.result_fn.suffix == '.res':
             sdata = self.result.read_reals(dtype=self.f4_type)
             ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
+        else:
+            cdata = self.result.read_reals(dtype=self.f4_type)
+            cdata = ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
 
         return (
             ensure_native(transpose(ndata, self.mesh.nodeshape)),
-            None
+            cdata,
         )
 
 
@@ -581,4 +587,3 @@ class SIMRAHistoryReader(SIMRADataReader):
             ensure_native(transpose(ndata, self.mesh.nodeshape)),
             ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape))),
         )
-
