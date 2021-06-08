@@ -572,7 +572,7 @@ class SIMRAHistoryReader(SIMRADataReader):
 
     def fields(self) -> Iterable[Field]:
         yield from super().fields()
-        yield SIMRAField('pressure', 11, 1, self, cells=True)
+        yield SIMRAField('pressure', 0, 1, self, cells=True)
 
     @cache(1)
     def data(self, stepid: int) -> Array2D:
