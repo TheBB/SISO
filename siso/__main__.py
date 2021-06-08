@@ -105,7 +105,6 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 
 @suppress_warnings
 def convert(ctx, verbosity, rich, infile, fmt, outfile, **kwargs):
-    print(kwargs)
     # Set up logging
     if rich:
         logger = RichOutputLog(sys.stdout)
