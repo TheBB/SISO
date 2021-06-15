@@ -501,6 +501,25 @@ class SIMRAContinuationReader(SIMRADataReader):
 
     reader_name = "SIMRA-Cont"
 
+    has_strat: bool
+
+    def __enter__(self):
+        super().__enter__()
+
+        # Check whether file contains strat
+        with save_excursion(self.result._fp):
+            size = self.result._read_size()
+            self.result._fp.seek(size, 1)
+            self.result._read_size()
+
+            try:
+                size = self.result._read_size()
+                self.has_strat = True
+            except FortranFormattingError:
+                self.has_strat = False
+
+        return self
+
     @classmethod
     def applicable(cls, filename: Path) -> bool:
         _, u4_type = dtypes(config.input_endianness)
@@ -542,7 +561,8 @@ class SIMRAContinuationReader(SIMRADataReader):
         yield from super().fields(apply_scales=apply_scales)
 
         if self.result_fn.suffix == '.res':
-            yield SIMRAField('strat', 11, 1, self)
+            if self.has_strat:
+                yield SIMRAField('strat', 11, 1, self)
         else:
             yield SIMRAField('pressure', 0, 1, self, cells=True)
 
@@ -554,8 +574,9 @@ class SIMRAContinuationReader(SIMRADataReader):
 
         cdata = None
         if self.result_fn.suffix == '.res':
-            sdata = self.result.read_reals(dtype=self.f4_type)
-            ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
+            if self.has_strat:
+                sdata = self.result.read_reals(dtype=self.f4_type)
+                ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
         else:
             cdata = self.result.read_reals(dtype=self.f4_type)
             cdata = ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
