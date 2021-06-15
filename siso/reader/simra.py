@@ -377,7 +377,11 @@ class SIMRABoundaryReader(SIMRAReader):
         next(lines)
 
         *ints, z0 = next(lines).split()
-        nfixu, nfixv, nfixw, nfixp, nfixe, nfixk, *_, nlog = map(int, ints)
+        nfixu, nfixv, nfixw, nfixp, nfixe, nfixk, *rest, nlog = map(int, ints)
+
+        parallel = bool(rest)
+        if parallel:
+            nwalle = rest[0]
 
         z0_var = read_many(lines, nlog, float, skip=False)
         ifixu, fixu = split_sparse(read_many(lines, 2*nfixu, float))
@@ -386,17 +390,23 @@ class SIMRABoundaryReader(SIMRAReader):
         ifixp, fixp = split_sparse(read_many(lines, 2*nfixp, float))
 
         next(lines)
-        t = read_many(lines, 2*nlog, int)
+
+        if parallel:
+            walle = read_many(lines, nwalle, int)
+
+        t = read_many(lines, 2*nlog, int, skip=not parallel)
         iwall, ilog = t[::2], t[1::2]
 
         ifixk = read_many(lines, nfixk, int)
         t = read_many(lines, 2*nfixk, float, skip=False)
         fixk, fixd = t[::2], t[1::2]
 
+        npts = prod(self.mesh.nodeshape)
+        if parallel:
+            read_many(lines, npts, float, skip=False)
+
         ifixtemp = read_many(lines, nfixe, int)
         fixtemp = read_many(lines, nfixe, float, skip=False)
-
-        npts = prod(self.mesh.nodeshape)
 
         ndata = np.array([
             make_mask(npts, ifixu, fixu),
