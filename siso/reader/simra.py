@@ -501,7 +501,7 @@ class SIMRAContinuationReader(SIMRADataReader):
 
     reader_name = "SIMRA-Cont"
 
-    has_strat: bool
+    extra_field: Optional[bool] = None
 
     def __enter__(self):
         super().__enter__()
@@ -514,9 +514,12 @@ class SIMRAContinuationReader(SIMRADataReader):
 
             try:
                 size = self.result._read_size()
-                self.has_strat = True
+                if size == prod(self.mesh.nodeshape) * self.f4_type.itemsize:
+                    self.extra_field = 'strat'
+                elif size == prod(c-1 for c in self.mesh.nodeshape) * self.f4_type.itemsize:
+                    self.extra_field = '?'
             except FortranFormattingError:
-                self.has_strat = False
+                pass
 
         return self
 
@@ -561,8 +564,10 @@ class SIMRAContinuationReader(SIMRADataReader):
         yield from super().fields(apply_scales=apply_scales)
 
         if self.result_fn.suffix == '.res':
-            if self.has_strat:
+            if self.extra_field == 'strat':
                 yield SIMRAField('strat', 11, 1, self)
+            elif self.extra_field == '?':
+                yield SIMRAField('pressure?', 0, 1, self, cells=True)
         else:
             yield SIMRAField('pressure', 0, 1, self, cells=True)
 
@@ -574,9 +579,12 @@ class SIMRAContinuationReader(SIMRADataReader):
 
         cdata = None
         if self.result_fn.suffix == '.res':
-            if self.has_strat:
+            if self.extra_field == 'strat':
                 sdata = self.result.read_reals(dtype=self.f4_type)
                 ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
+            elif self.extra_field == '?':
+                cdata = self.result.read_reals(dtype=self.f4_type)
+                cdata = ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
         else:
             cdata = self.result.read_reals(dtype=self.f4_type)
             cdata = ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
