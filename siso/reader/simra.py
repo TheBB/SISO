@@ -34,8 +34,11 @@ def read_many(lines, n, tp, skip=True):
     return np.array(values)
 
 
-def split_sparse(values):
-    return values[0::2].astype(int), values[1::2]
+def split_sparse(values, ncomps=1):
+    jump = ncomps + 1
+    indexes = values[::jump].astype(int)
+    comps = [values[i::jump] for i in range(1, ncomps+1)]
+    return (indexes, *comps)
 
 
 def make_mask(n, indices, values=1.0):
@@ -353,8 +356,19 @@ class SIMRABoundaryReader(SIMRAReader):
 
     def fields(self) -> Iterable[Field]:
         yield from self.mesh.fields()
+
         yield SIMRAField('u', 0, 3, self)
-        yield SIMRAField('mask', 3, 3, self)
+        yield SIMRAField('p', 3, 1, self)
+        yield SIMRAField('k', 4, 1, self)
+        yield SIMRAField('eps', 5, 1, self)
+        yield SIMRAField('pt', 6, 1, self)
+
+        yield SIMRAField('u-mask', 7, 3, self)
+        yield SIMRAField('p-mask', 10, 1, self)
+        yield SIMRAField('wall-mask', 11, 1, self)
+        yield SIMRAField('log-mask', 12, 1, self)
+        yield SIMRAField('k,e-mask', 13, 1, self)
+        yield SIMRAField('pt-mask', 14, 1, self)
 
     @cache(1)
     def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
@@ -363,21 +377,54 @@ class SIMRABoundaryReader(SIMRAReader):
         next(lines)
 
         *ints, z0 = next(lines).split()
-        nfixu, nfixv, nfixw, *_, nlog = map(int, ints)
+        nfixu, nfixv, nfixw, nfixp, nfixe, nfixk, *rest, nlog = map(int, ints)
+
+        parallel = bool(rest)
+        if parallel:
+            nwalle = rest[0]
 
         z0_var = read_many(lines, nlog, float, skip=False)
         ifixu, fixu = split_sparse(read_many(lines, 2*nfixu, float))
         ifixv, fixv = split_sparse(read_many(lines, 2*nfixv, float))
         ifixw, fixw = split_sparse(read_many(lines, 2*nfixw, float))
+        ifixp, fixp = split_sparse(read_many(lines, 2*nfixp, float))
+
+        next(lines)
+
+        if parallel:
+            walle = read_many(lines, nwalle, int)
+
+        t = read_many(lines, 2*nlog, int, skip=not parallel)
+        iwall, ilog = t[::2], t[1::2]
+
+        ifixk = read_many(lines, nfixk, int)
+        t = read_many(lines, 2*nfixk, float, skip=False)
+        fixk, fixd = t[::2], t[1::2]
+
         npts = prod(self.mesh.nodeshape)
+        if parallel:
+            read_many(lines, npts, float, skip=False)
+
+        ifixtemp = read_many(lines, nfixe, int)
+        fixtemp = read_many(lines, nfixe, float, skip=False)
 
         ndata = np.array([
             make_mask(npts, ifixu, fixu),
             make_mask(npts, ifixv, fixv),
             make_mask(npts, ifixw, fixw),
+            make_mask(npts, ifixp, fixp),
+            make_mask(npts, ifixk, fixk),
+            make_mask(npts, ifixk, fixd),
+            make_mask(npts, ifixtemp, fixtemp),
+
             make_mask(npts, ifixu),
             make_mask(npts, ifixv),
             make_mask(npts, ifixw),
+            make_mask(npts, ifixp),
+            make_mask(npts, iwall),
+            make_mask(npts, ilog),
+            make_mask(npts, ifixk),
+            make_mask(npts, ifixtemp),
         ]).T
         return ensure_native(transpose(ndata, self.mesh.nodeshape)), None
 
@@ -454,6 +501,28 @@ class SIMRAContinuationReader(SIMRADataReader):
 
     reader_name = "SIMRA-Cont"
 
+    extra_field: Optional[bool] = None
+
+    def __enter__(self):
+        super().__enter__()
+
+        # Check whether file contains strat
+        with save_excursion(self.result._fp):
+            size = self.result._read_size()
+            self.result._fp.seek(size, 1)
+            self.result._read_size()
+
+            try:
+                size = self.result._read_size()
+                if size == prod(self.mesh.nodeshape) * self.f4_type.itemsize:
+                    self.extra_field = 'strat'
+                elif size == prod(c-1 for c in self.mesh.nodeshape) * self.f4_type.itemsize:
+                    self.extra_field = '?'
+            except FortranFormattingError:
+                pass
+
+        return self
+
     @classmethod
     def applicable(cls, filename: Path) -> bool:
         _, u4_type = dtypes(config.input_endianness)
@@ -495,7 +564,10 @@ class SIMRAContinuationReader(SIMRADataReader):
         yield from super().fields(apply_scales=apply_scales)
 
         if self.result_fn.suffix == '.res':
-            yield SIMRAField('strat', 11, 1, self)
+            if self.extra_field == 'strat':
+                yield SIMRAField('strat', 11, 1, self)
+            elif self.extra_field == '?':
+                yield SIMRAField('pressure?', 0, 1, self, cells=True)
         else:
             yield SIMRAField('pressure', 0, 1, self, cells=True)
 
@@ -507,8 +579,12 @@ class SIMRAContinuationReader(SIMRADataReader):
 
         cdata = None
         if self.result_fn.suffix == '.res':
-            sdata = self.result.read_reals(dtype=self.f4_type)
-            ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
+            if self.extra_field == 'strat':
+                sdata = self.result.read_reals(dtype=self.f4_type)
+                ndata = np.hstack([ndata.reshape(-1, 11), sdata.reshape(-1, 1)])
+            elif self.extra_field == '?':
+                cdata = self.result.read_reals(dtype=self.f4_type)
+                cdata = ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
         else:
             cdata = self.result.read_reals(dtype=self.f4_type)
             cdata = ensure_native(transpose(cdata, tuple(s-1 for s in self.mesh.nodeshape)))
