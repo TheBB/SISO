@@ -105,7 +105,7 @@ def lonlat_to_utm_vf(x: Array, y: Array, vx: Array, vy: Array, zone: int, zone_l
         raise TypeError(f"An autodifferentiation package must be installed for UTM vector field conversion, try pip install 'siso[autodiff]'")
     lon, lat = jnp.array(x), jnp.array(y)
     x = lambda lon, lat: _lonlat_to_utm(lon, lat, zone, zone_letter)[0]
-    y = lambda lon, lat: _lonlat_to_utm(lon, lat, zone, zone_letter)[0]
+    y = lambda lon, lat: _lonlat_to_utm(lon, lat, zone, zone_letter)[1]
     dx_dlon, dx_dlat = jax.vmap(jax.grad(x, (0, 1)))(lon, lat)
     dy_dlon, dy_dlat = jax.vmap(jax.grad(y, (0, 1)))(lon, lat)
     dx_dlon, dx_dlat = normalize_pair(dx_dlon, dx_dlat)
