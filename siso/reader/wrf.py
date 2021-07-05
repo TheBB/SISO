@@ -70,9 +70,17 @@ class WRFVectorField(SimpleField):
         data = data.reshape((-1, reader.nlat, reader.nlon, 3))
 
         # Convert to rotated geocentric coordinates
-        lon = np.linspace(0, 360, reader.nlon, endpoint=False)[__, :]
-        lat = np.linspace(-90, 90, 2 * reader.nlat + 1)[1::2][:, __]
-        data = spherical_cartesian_vf(lon, lat, data)
+        lon = self.reader.variable_at('XLONG', stepid, include_poles=False)
+        lat = self.reader.variable_at('XLAT', stepid, include_poles=False)
+        pts = np.array([
+            (np.cos(np.deg2rad(lon)) * np.cos(np.deg2rad(lat))).flatten(),
+            (np.sin(np.deg2rad(lon)) * np.cos(np.deg2rad(lat))).flatten(),
+            np.sin(np.deg2rad(lat)).flatten(),
+        ]).T
+        pts = reader.rotation(with_intrinsic=True).inv().apply(pts)
+        lon = np.rad2deg(np.arctan2(pts[:,1], pts[:,0]))
+        lat = np.rad2deg(np.arctan(pts[:,2] / np.sqrt(pts[:,0]**2 + pts[:,1]**2)))
+        data = spherical_cartesian_vf(lon, lat, data.reshape(-1, reader.nplanar, 3)).reshape(data.shape)
 
         # Extract mean values at poles
         if config.periodic:
@@ -444,7 +452,7 @@ class WRFReader(NetCDFHelper):
         """Number of points in vertical direction."""
         return len(self.nc.dimensions['bottom_top'])
 
-    def rotation(self) -> Rotation:
+    def rotation(self, with_intrinsic: bool = True) -> Rotation:
         """Return a rotation that sends the north pole to the grid's
         north pole, the south pole to the grid's south pole and the
         prime meridian to the grid's prime meridian.
@@ -454,7 +462,7 @@ class WRFReader(NetCDFHelper):
         """
 
         # Note: the final rotation around Z is essentially guesswork.
-        intrinsic = 360 * np.ceil(self.nlon / 2) / self.nlon
+        intrinsic = 360 * np.ceil(self.nlon / 2) / self.nlon if with_intrinsic else 0.0
         return Rotation.from_euler('ZYZ', [-self.nc.STAND_LON, -self.nc.MOAD_CEN_LAT, intrinsic], degrees=True)
 
     def fields(self) -> Iterable[Field]:
