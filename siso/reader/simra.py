@@ -362,13 +362,14 @@ class SIMRABoundaryReader(SIMRAReader):
         yield SIMRAField('k', 4, 1, self)
         yield SIMRAField('eps', 5, 1, self)
         yield SIMRAField('pt', 6, 1, self)
+        yield SIMRAField('surface-roughness', 7, 1, self)
 
-        yield SIMRAField('u-mask', 7, 3, self)
-        yield SIMRAField('p-mask', 10, 1, self)
-        yield SIMRAField('wall-mask', 11, 1, self)
-        yield SIMRAField('log-mask', 12, 1, self)
-        yield SIMRAField('k,e-mask', 13, 1, self)
-        yield SIMRAField('pt-mask', 14, 1, self)
+        yield SIMRAField('u-mask', 8, 3, self)
+        yield SIMRAField('p-mask', 11, 1, self)
+        yield SIMRAField('wall-mask', 12, 1, self)
+        yield SIMRAField('log-mask', 13, 1, self)
+        yield SIMRAField('k,e-mask', 14, 1, self)
+        yield SIMRAField('pt-mask', 15, 1, self)
 
     @cache(1)
     def data(self, stepid: int) -> Tuple[Array2D, Array2D]:
@@ -384,6 +385,8 @@ class SIMRABoundaryReader(SIMRAReader):
             nwalle = rest[0]
 
         z0_var = read_many(lines, nlog, float, skip=False)
+        ifix_z0 = np.arange(1, prod(self.mesh.nodeshape), self.mesh.nodeshape[-1])
+
         ifixu, fixu = split_sparse(read_many(lines, 2*nfixu, float))
         ifixv, fixv = split_sparse(read_many(lines, 2*nfixv, float))
         ifixw, fixw = split_sparse(read_many(lines, 2*nfixw, float))
@@ -416,6 +419,7 @@ class SIMRABoundaryReader(SIMRAReader):
             make_mask(npts, ifixk, fixk),
             make_mask(npts, ifixk, fixd),
             make_mask(npts, ifixtemp, fixtemp),
+            make_mask(npts, ifix_z0, z0_var),
 
             make_mask(npts, ifixu),
             make_mask(npts, ifixv),
