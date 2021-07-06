@@ -203,7 +203,7 @@ class VTUWriter(VTKXMLWriter):
 
 
 class VTSWriter(VTKXMLWriter):
-    """Writer for VTS format (XML-based unstructured grid)."""
+    """Writer for VTS format (XML-based structured grid)."""
 
     writer_name = "VTS"
     allow_structured = True
