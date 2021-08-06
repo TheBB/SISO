@@ -9,7 +9,7 @@ with open(Path(__file__).parent / 'README.rst') as f:
 
 setup(
     name='SISO',
-    version='3.0.0',
+    version='3.0.1',
     description='Convert between different mesh data formats',
     long_description_content_type='text/x-rst',
     long_description=desc,
