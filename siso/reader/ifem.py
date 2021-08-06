@@ -298,7 +298,8 @@ class IFEMReader(Reader):
     def validate(self):
         super().validate()
         config.ensure_limited(
-            ConfigTarget.Reader, 'only_bases', 'strict_id',
+            ConfigTarget.Reader,
+            'only_bases', 'strict_id', 'lr_are_nurbs',
             reason="not supported by IFEM"
         )
 
