@@ -4,7 +4,7 @@ from pathlib import Path
 import lrspline
 from splipy.io import G2
 
-from typing import Iterable, Tuple, Optional
+from typing import Iterable, Tuple, Optional, List
 from ..typing import StepData, Array2D
 
 from .. import config, ConfigTarget
@@ -21,12 +21,15 @@ class PureGeometryReader(Reader, ABC):
     suffix: str
     filename: Path
 
+    allowed_settings: List[str]
+
     @classmethod
     def applicable(cls, filename: Path) -> bool:
         return filename.suffix == cls.suffix
 
     def __init__(self, filename: Path):
         self.filename = filename
+        self.allowed_settings = []
 
     def __enter__(self):
         self.f = open(self.filename).__enter__()
@@ -38,7 +41,10 @@ class PureGeometryReader(Reader, ABC):
     def validate(self):
         super().validate()
         config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
-        config.ensure_limited(ConfigTarget.Reader, reason=f"not supported by {self.reader_name}")
+        config.ensure_limited(
+            ConfigTarget.Reader, *self.allowed_settings,
+            reason=f"not supported by {self.reader_name}"
+        )
 
     def steps(self) -> Iterable[Tuple[int, StepData]]:
         yield (0, {'time': 0.0})
@@ -81,6 +87,10 @@ class LRReader(PureGeometryReader):
 
     reader_name = "LRSplines"
     suffix = '.lr'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.allowed_settings.append('lr_are_nurbs')
 
     def patches(self):
         with save_excursion(self.f):

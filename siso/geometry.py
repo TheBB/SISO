@@ -247,9 +247,11 @@ class StructuredTopology(UnstructuredTopology):
 class LRTopology(Topology):
 
     obj: lr.LRSplineObject
+    weights: Optional[np.ndarray]
 
-    def __init__(self, obj: lr.LRSplineObject):
+    def __init__(self, obj: lr.LRSplineObject, weights: Optional[np.ndarray]):
         self.obj = obj
+        self.weights = weights
 
     @classmethod
     def from_string(cls, data: Union[bytes, str]) -> Iterable[Tuple['LRTopology', Array2D]]:
@@ -258,8 +260,25 @@ class LRTopology(Topology):
         data = StringIO(data)
         for i, obj in enumerate(lr.LRSplineObject.read_many(data)):
             cps = obj.controlpoints.reshape(-1, obj.dimension)
-            obj.dimension = 0
-            yield cls(obj), cps
+
+            # Determine whether to do the NURBS treatment
+            if config.lr_are_nurbs in ('never', 'always'):
+                nurbs = config.lr_are_nurbs == 'always'
+            else:
+                nurbs = obj.dimension > obj.pardim
+                log.warning(
+                    f"Treating LR patch with parametric dimension {obj.pardim} and physical "
+                    f"dimension {obj.dimension} as NURBS."
+                )
+
+            if nurbs:
+                weights = obj.controlpoints[:, -1:]
+                cps = obj.controlpoints[:, :-1]
+            else:
+                weights = None
+                cps = obj.controlpoints
+
+            yield cls(obj, weights), cps
 
     @property
     def num_pardim(self) -> int:
@@ -275,7 +294,7 @@ class LRTopology(Topology):
 
     @cache(1)
     def tesselator(self) -> 'LRTesselator':
-        return LRTesselator(self)
+        return LRTesselator(self, self.weights)
 
     def tesselate(self) -> UnstructuredTopology:
         return self.tesselator().tesselate(self)
@@ -286,7 +305,9 @@ class LRTopology(Topology):
 
 class LRTesselator(Tesselator):
 
-    def __init__(self, topo: LRTopology):
+    weights: Optional[np.ndarray]
+
+    def __init__(self, topo: LRTopology, weights: Optional[np.ndarray]):
         super().__init__(topo)
         nodes: Dict[Tuple[float, ...], int] = dict()
         cells: List[List[int]] = []
@@ -295,6 +316,7 @@ class LRTesselator(Tesselator):
             subdivider(el, nodes, cells, config.nvis)
         self.nodes = np.array(list(nodes))
         self.cells = np.array(cells, dtype=int)
+        self.weights = weights
 
     @singledispatchmethod
     def tesselate(self, topo: Topology) -> UnstructuredTopology:
@@ -318,8 +340,18 @@ class LRTesselator(Tesselator):
             # Create a new patch with substituted control points, and
             # evaluate it at the predetermined knot values.
             newspline = spline.clone()
-            newspline.controlpoints = coeffs.reshape((len(spline), -1))
-            return np.array([newspline(*node) for node in self.nodes], dtype=float)
+
+            coeffs = coeffs.reshape(len(newspline), -1)
+            if self.weights is not None:
+                coeffs = np.hstack([coeffs, self.weights])
+
+            newspline.controlpoints = coeffs
+            evaluated = np.array([newspline(*node) for node in self.nodes], dtype=float)
+
+            if self.weights is not None:
+                evaluated = evaluated[:, :-1] / evaluated[:, -1:]
+
+            return evaluated
 
         # For every cell center, check which cell it belongs to in the
         # reference spline, then use that coefficient.

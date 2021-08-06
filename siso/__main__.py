@@ -69,6 +69,8 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @click.option('--strict-id', 'strict_id', is_flag=True, help='Strict patch identification.')
 @click.option('--unstructured', 'require_unstructured', is_flag=True, help='Ensure unstructured output format.')
 @click.option('--fix-orientation/--no-fix-orientation', 'fix_orientation', default=True)
+@click.option('--lr-are-nurbs', 'lr_are_nurbs', flag_value='always', help='Always treat LR patches as NURBS.')
+@click.option('--lr-are-not-nurbs', 'lr_are_nurbs', flag_value='never', help='Never treat LR patches as NURBS.')
 
 @click.option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @click.option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')

@@ -132,6 +132,10 @@ class Config(metaclass=ConfigMeta):
     # Strict patch identification. Used by the IFEM reader.
     strict_id = Setting(False, Reader, name='--strict-id')
 
+    # Strictly assume LR patches are NURBS. Used by the IFEM and LR readers.
+    # 'always', 'never' or None
+    lr_are_nurbs = Setting(None, Reader, name='--lr-are-nurbs')
+
     # Volumetric/surface field behaviour. Used by the WRF reader.
     # - volumetric: only include volumetric fields
     # - planar: only include surface fields
