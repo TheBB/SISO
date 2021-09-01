@@ -37,7 +37,13 @@ class GeoTiffGeometryField(SimpleField):
 
         out = np.array([trf.TransformPoint(x,y) for x,y in zip(trf_xs.flat, trf_ys.flat)])
         nodes = np.array([out[..., 0], out[..., 1], heights.flatten().astype(float)]).T
-        topo = StructuredTopology(tuple(h-1 for h in heights.shape), celltype=Quad())
+
+        # Assume typical image pixel ordering and 'fix' it.
+        # TODO: Detect automatically
+        nodes = nodes.reshape(*heights.shape, -1).transpose(1, 0, 2)[:, ::-1, :].reshape(-1, 3)
+
+        # Flip the shape because of the image ordering
+        topo = StructuredTopology(tuple(h-1 for h in heights.shape[::-1]), celltype=Quad())
 
         yield Patch(('geometry',), topo), nodes
 
