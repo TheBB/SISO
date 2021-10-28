@@ -60,7 +60,7 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 # Options that are forwarded to config
 @click.option('--periodic/--no-periodic', help='Hint that the data may be periodic.', default=False)
 @click.option('--basis', '-b', 'only_bases', multiple=True, help='Include fields in this basis.')
-@click.option('--nvis', '-n', 'nvis', default=1, help='Extra sampling points per element.')
+@click.option('--nvis', '-n', 'nvis', default=1, help='Sampling points per element (default 1).')
 @click.option('--last', 'only_final_timestep', is_flag=True, help='Read only the last step.')
 @click.option('--times', 'timestep_slice', default=None, help='Slice the timestep list (Python syntax).')
 @click.option('--time', 'timestep_index', type=int, default=None)
