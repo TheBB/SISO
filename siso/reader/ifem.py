@@ -264,6 +264,14 @@ class EigenField(IFEMField):
 # ----------------------------------------------------------------------
 
 
+def _legal_ifem_group(name: str):
+    try:
+        int(name)
+        return True
+    except ValueError:
+        return name.lower() in {'anasol', 'log'}
+
+
 class IFEMReader(Reader):
 
     reader_name = "IFEM"
@@ -280,10 +288,10 @@ class IFEMReader(Reader):
 
     @classmethod
     def applicable(cls, filename: Path) -> bool:
-        """Check if it's a valid HDF5 file and that it contains a group called '0'."""
+        """Check if it's a valid IFEM HDF5 file."""
         try:
             with h5py.File(filename, 'r') as f:
-                list(map(int, f))   # All groups must have integer names
+                assert all(_legal_ifem_group(name) for name in f)
             return True
         except:
             return False
