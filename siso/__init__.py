@@ -120,6 +120,9 @@ class Config(metaclass=ConfigMeta):
     # Input coordinate overrides.
     input_coords = Setting({}, Pipeline, name='--in-coords')
 
+    # Edges to remove.
+    remove_edges = Setting(0, Reader, name='--remove-edges')
+
     # Input endianness indicator. Used by the SIMRA reader.
     input_endianness = Setting('native', Reader, name='--in-endianness')
 
