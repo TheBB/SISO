@@ -24,7 +24,7 @@ setup(
         'h5py',
         'lrsplines>=1.5',
         'netcdf4',
-        'nptyping',
+        'nptyping>=2,<3',
         'numpy',
         'pyerfa',
         'singledispatchmethod',
