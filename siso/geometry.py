@@ -266,10 +266,11 @@ class LRTopology(Topology):
                 nurbs = config.lr_are_nurbs == 'always'
             else:
                 nurbs = obj.dimension > obj.pardim
-                log.warning(
-                    f"Treating LR patch with parametric dimension {obj.pardim} and physical "
-                    f"dimension {obj.dimension} as NURBS."
-                )
+                if nurbs:
+                    log.warning(
+                        f"Treating LR patch with parametric dimension {obj.pardim} and physical "
+                        f"dimension {obj.dimension} as NURBS."
+                    )
 
             if nurbs:
                 weights = obj.controlpoints[:, -1:]
