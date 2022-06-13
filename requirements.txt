@@ -11,6 +11,6 @@ pyerfa==1.7.1.1
 singledispatchmethod==1.0
 splipy==1.5.8
 treelog==1.0b7
-vtk==9.0.1
+vtk==9.1.0
 jax==0.2.17
 jaxlib==0.1.69
