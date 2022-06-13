@@ -17,7 +17,7 @@ jobs:
       matrix:
         # Once a vtk release wheels for Python 3.9 we can add it here
         # otherwise it's too much of a bother
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.7, 3.8, 3.9]
 
         # Some of the dependencies are icky to get working on other OSes
         os: [ubuntu-latest]
