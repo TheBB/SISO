@@ -468,6 +468,7 @@ class TensorTesselator(Tesselator):
             # evaluate it at the predetermined knot values.
             if topo.weights is not None:
                 coeffs = np.concatenate((coeffs, flatten_2d(topo.weights)), axis=-1)
+            print(coeffs)
             coeffs = splipy.utils.reshape(coeffs, topo.nodeshape, order='F')
             newspline = SplineObject(topo.bases, coeffs, topo.rational, raw=True)
             knots = self.knots
