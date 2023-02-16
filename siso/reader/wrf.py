@@ -154,7 +154,13 @@ class WRFLocalGeometryField(WRFGeometryField):
         x = np.arange(reader.nlon) * reader.nc.DX
         y = np.arange(reader.nlat) * reader.nc.DY
         x, y = np.meshgrid(x, y)
-        return self.height(stepid, x.flatten(), y.flatten())
+        x, y, z = self.height(stepid, x.flatten(), y.flatten())
+        if config.translate:
+            dx, dy, dz = config.translate
+            x += dx
+            y += dy
+            z += dz
+        return x, y, z
 
 
 class WRFGeodeticGeometryField(WRFGeometryField):
@@ -165,6 +171,7 @@ class WRFGeodeticGeometryField(WRFGeometryField):
         self.name = 'geodetic'
 
     def nodes(self, stepid: int) -> Array2D:
+        assert not config.translate, 'no --translate for geodetic coordinates'
         lon = self.reader.variable_at(self.reader.lon_name, stepid)
         lat = self.reader.variable_at(self.reader.lat_name, stepid)
         return self.height(stepid, lon, lat)
@@ -439,7 +446,7 @@ class WRFReader(NetCDFHelper):
             log.warning("Geocentric coordinates of WRF data is experimental, please do not use indiscriminately")
 
         config.ensure_limited(
-            ConfigTarget.Reader, 'volumetric', 'periodic',
+            ConfigTarget.Reader, 'volumetric', 'periodic', 'translate',
             reason="not supported by WRF"
         )
 
