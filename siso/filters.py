@@ -299,7 +299,13 @@ class CoordinateTransformGeometryField(SourcedField):
 
         conv = self.manager.converter
         for patch, data in self.src.patches(stepid, force=force, coords=coords):
-            yield patch, conv.points(self.src.coords, self.coords, data, patch.key)
+            points = conv.points(self.src.coords, self.coords, data, patch.key)
+            if config.translate:
+                dx, dy, dz = config.translate
+                points[:,0] += dx
+                points[:,1] += dy
+                points[:,2] += dz
+            yield patch, points
 
 
 class CoordinateTransformField(SourcedField):
