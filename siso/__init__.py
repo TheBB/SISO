@@ -149,7 +149,7 @@ class Config(metaclass=ConfigMeta):
     fix_orientation = Setting(True, Reader, Writer, name='--(no-)fix-orientation')
 
     # Translate on reader level
-    translate = Setting(None, Reader, name='--translate')
+    translate = Setting(None, Pipeline, name='--translate')
 
     def cname(self, key: str) -> str:
         """Get the canonical name of a setting."""
