@@ -12,7 +12,7 @@ F = TypeVar('F', bound=Field)
 T = TypeVar('T', bound=TimeStep)
 
 class Tesselate(Passthrough[F, T, Z]):
-    def validate_source(self):
+    def validate_source(self) -> None:
         assert not self.source.properties.tesselated
 
     @property

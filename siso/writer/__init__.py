@@ -22,9 +22,10 @@ MakeWriter = Callable[[Path], Writer]
 
 WRITERS: Dict[OutputFormat, MakeWriter] = {}
 
-def register_writer(fmt: OutputFormat):
-    def inner(constructor: MakeWriter):
+def register_writer(fmt: OutputFormat) -> Callable[[MakeWriter], MakeWriter]:
+    def inner(constructor: MakeWriter) -> MakeWriter:
         WRITERS[fmt] = constructor
+        return constructor
     return inner
 
 def find_writer(fmt: OutputFormat, path: Path) -> Optional[Writer]:
@@ -40,3 +41,15 @@ def find_writer(fmt: OutputFormat, path: Path) -> Optional[Writer]:
 def vtk(path: Path) -> Writer:
     from .vtk import VtkWriter
     return VtkWriter(path)
+
+
+@register_writer(OutputFormat.Vtu)
+def vtu(path: Path) -> Writer:
+    from .vtk import VtuWriter
+    return VtuWriter(path)
+
+
+@register_writer(OutputFormat.Vts)
+def vts(path: Path) -> Writer:
+    from .vtk import VtsWriter
+    return VtsWriter(path)

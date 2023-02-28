@@ -1,17 +1,139 @@
+from __future__ import annotations
+
+from contextlib import contextmanager
 from functools import reduce
 from itertools import chain, product, count
 from pathlib import Path
-import logging
 
+import lrspline as lr
 import numpy as np
+from scipy.io import FortranFile
 
+from typing_extensions import Self
 from typing import (
+    cast,
+    Callable,
+    Dict,
+    IO,
     Iterable,
     Iterator,
+    Generic,
+    Generator,
+    Hashable,
+    List,
     Optional,
     Tuple,
     TypeVar,
+    Union,
 )
+
+
+class NoSuchMarkError(Exception):
+    ...
+
+
+W = TypeVar('W')
+M = TypeVar('M', bound=Hashable)
+
+class RandomAccessFile(Generic[W,M]):
+    wrapper: Callable[[IO], W]
+
+    markers: Dict[M, int]
+    marker_generator: Optional[Iterator[Tuple[M, int]]] = None
+
+    fp_borrowed: bool = False
+
+    def __init__(
+        self,
+        fp: IO,
+        wrapper: Optional[Callable[[IO], W]] = None,
+        marker_generator: Optional[Callable[[RandomAccessTracker[W,M]], Iterator[Tuple[M, int]]]] = None,
+    ):
+        self.fp = fp
+        self.wrapper = wrapper or cast(Callable[[IO], W], (lambda fp: fp))
+        self.markers = {}
+
+        if marker_generator:
+            self.marker_generator = marker_generator(self.tracker())
+
+    def __enter__(self) -> Self:
+        self.fp = self.fp.__enter__()
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.fp.__exit__(*args)
+
+    @contextmanager
+    def borrow_fp(self) -> Generator[IO, None, None]:
+        assert not self.fp_borrowed
+        self.fp_borrowed = True
+        try:
+            yield self.fp
+        finally:
+            self.fp_borrowed = False
+
+    def mark(self, name: M, loc: Optional[int] = None) -> None:
+        if loc is None:
+            loc = self.fp.tell()
+        self.markers[name] = loc
+
+    def loc_at(self, name: M) -> int:
+        if name in self.markers:
+            return self.markers[name]
+        if self.marker_generator:
+            for mark, loc in self.marker_generator:
+                self.mark(mark, loc)
+                if mark == name:
+                    return loc
+        raise NoSuchMarkError(name)
+
+    @contextmanager
+    def leap(self, mark: M) -> Generator[W, None, None]:
+        loc = self.loc_at(mark)
+        with self.borrow_fp() as fp:
+            fp.seek(loc)
+            yield self.wrapper(fp)
+
+    def tracker(self, mark: Optional[M] = None) -> RandomAccessTracker[W,M]:
+        if mark is None:
+            return RandomAccessTracker(self, 0)
+        return RandomAccessTracker(self, self.loc_at(mark))
+
+class RandomAccessTracker(Generic[W,M]):
+    file: RandomAccessFile[W,M]
+    continue_from: int
+
+    def __init__(self, file: RandomAccessFile[W,M], loc: int):
+        self.file = file
+        self.continue_from = loc
+
+    @contextmanager
+    def excursion(self) -> Generator[W, None, None]:
+        with self.file.borrow_fp() as fp:
+            fp.seek(self.continue_from)
+            yield self.file.wrapper(fp)
+
+    @contextmanager
+    def journey(self) -> Generator[W, None, None]:
+        with self.file.borrow_fp() as fp:
+            fp.seek(self.continue_from)
+            try:
+                yield self.file.wrapper(fp)
+            finally:
+                self.continue_from = fp.tell()
+
+    def origin_marker(self, name: M) -> Tuple[M, int]:
+        return (name, self.continue_from)
+
+
+@contextmanager
+def save_excursion(fp: IO):
+    assert fp.seekable()
+    ptr = fp.tell()
+    try:
+        yield
+    finally:
+        fp.seek(ptr)
 
 
 def pluralize(num: int, singular: str, plural: str) -> str:
@@ -30,6 +152,41 @@ def transpose_butlast(array: np.ndarray) -> np.ndarray:
     return array.transpose(permutation)
 
 
+def _single_slice(ndims: int, axis: int, *args) -> Tuple[slice, ...]:
+    retval = [slice(None)] * ndims
+    retval[axis] = slice(*args)
+    return tuple(retval)
+
+
+def _expand_shape(shape: Tuple[int, ...], axis: int) -> Tuple[int, ...]:
+    retval = list(shape)
+    retval[axis] += 1
+    return tuple(retval)
+
+
+def unstagger(data: np.ndarray, axis: int) -> np.ndarray:
+    return (
+        data[_single_slice(data.ndim, axis, 1, None)] +
+        data[_single_slice(data.ndim, axis, 0, -1)]
+    ) / 2
+
+
+def stagger(data: np.ndarray, axis: int) -> np.ndarray:
+    retval = np.zeros_like(data, shape=_expand_shape(data.shape, axis))
+
+    first = _single_slice(data.ndim, axis, 0, 1)
+    second = _single_slice(data.ndim, axis, 1, 2)
+    penultimate = _single_slice(data.ndim, axis, -2, -1)
+    last = _single_slice(data.ndim, axis, -1, None)
+
+    retval[_single_slice(data.ndim, axis, 0, -1)] += data / 2
+    retval[_single_slice(data.ndim, axis, 1, None)] += data /2
+    retval[first] += data[first] - data[second] / 2
+    retval[last] += data[last] - data[penultimate] / 2
+
+    return retval
+
+
 T = TypeVar('T')
 
 def _pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
@@ -40,7 +197,7 @@ def _pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
         left = right
 
 
-def subdivide_linear(knots: np.ndarray, nvis: int) -> np.ndarray:
+def subdivide_linear(knots: Union[List[float], Tuple[float, ...]], nvis: int) -> np.ndarray:
     return np.fromiter(chain(
         chain.from_iterable(
             (((nvis - i) * a + i * b) / nvis for i in range(nvis))
@@ -48,6 +205,40 @@ def subdivide_linear(knots: np.ndarray, nvis: int) -> np.ndarray:
         ),
         (knots[-1],),
     ), float)
+
+
+def visit_face(element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int) -> None:
+    lft, btm = element.start()
+    rgt, top = element.end()
+    xs = subdivide_linear((lft, rgt), nvis)
+    ys = subdivide_linear((btm, top), nvis)
+
+    for l, r in _pairwise(xs):
+        for b, t in _pairwise(ys):
+            sw, se, nw, ne = (l, b), (r, b), (l, t), (r, t)
+            for pt in (sw, se, nw, ne):
+                nodes.setdefault(pt, len(nodes))
+            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
+
+
+def visit_volume(element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int) -> None:
+    umin, vmin, wmin = element.start()
+    umax, vmax, wmax = element.end()
+    us = subdivide_linear((umin, umax), nvis)
+    vs = subdivide_linear((vmin, vmax), nvis)
+    ws = subdivide_linear((wmin, wmax), nvis)
+
+    for ul, ur in _pairwise(us):
+        for vl, vr in _pairwise(vs):
+            for wl, wr in _pairwise(ws):
+                bsw, bse, bnw, bne = (ul, vl, wl), (ur, vl, wl), (ul, vr, wl), (ur, vr, wl)
+                tsw, tse, tnw, tne = (ul, vl, wr), (ur, vl, wr), (ul, vr, wr), (ur, vr, wr)
+                for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
+                    nodes.setdefault(pt, len(nodes))
+                elements.append([
+                    nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
+                    nodes[tsw], nodes[tse], nodes[tne], nodes[tnw],
+                ])
 
 
 def prod(values: Iterable[int]) -> int:
@@ -62,6 +253,10 @@ def first_and_has_more(values: Iterable[T]) -> Tuple[T, bool]:
         return first, True
     except StopIteration:
         return first, False
+
+
+def only(values: Iterable[T]) -> T:
+    return next(iter(values))
 
 
 def structured_cells(cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[np.ndarray]=None):

@@ -24,18 +24,17 @@ from typing import (
 )
 
 
-Z = TypeVar('Z', bound=Zone)
 F = TypeVar('F', bound=Field)
 T = TypeVar('T', bound=TimeStep)
 
-class KeyZones(Passthrough[F, T, Z]):
+class KeyZones(Passthrough[F, T, Zone]):
     manager: ZoneManager
 
-    def __init__(self, source: Source[F, T, Z]):
+    def __init__(self, source: Source):
         super().__init__(source)
         self.manager = ZoneManager()
 
-    def validate_source(self):
+    def validate_source(self) -> None:
         assert not self.source.properties.globally_keyed
 
     @property
@@ -49,10 +48,10 @@ class KeyZones(Passthrough[F, T, Z]):
             yield self.manager.lookup(zone)
 
     def topology(self, timestep: T, field: F, zone: Zone) -> Topology:
-        return self.source.topology(timestep, field, cast(Z, zone))
+        return self.source.topology(timestep, field, zone)
 
     def field_data(self, timestep: T, field: F, zone: Zone) -> FieldData:
-        return self.source.field_data(timestep, field, cast(Z, zone))
+        return self.source.field_data(timestep, field, zone)
 
 
 class ZoneManager:
@@ -83,7 +82,7 @@ class ZoneManager:
             self.shapes[key] = zone.shape
             for pt in zone.coords:
                 self.lut.setdefault(pt, set()).add(key)
-            logging.debug(f'Local zone {zone.local_key} associated with new global zone {key}')
+            logging.debug(f"Local zone '{zone.local_key}' associated with new global zone {key}")
 
         return Zone(
             shape=zone.shape,
@@ -104,14 +103,14 @@ class VertexDict(MutableMapping[Point, Q]):
 
     lut: Dict[int, List[Tuple[int, float]]]
 
-    def __init__(self, rtol=1e-5, atol=1e-8):
+    def __init__(self, rtol: float = 1e-5, atol: float = 1e-8):
         self.rtol = rtol
         self.atol = atol
         self._keys = []
         self._values = []
         self.lut = dict()
 
-    def _bounds(self, key):
+    def _bounds(self, key: float):
         if key >= self.atol:
             return (
                 (key - self.atol) / (1 + self.rtol),
@@ -147,7 +146,7 @@ class VertexDict(MutableMapping[Point, Q]):
                 return c
         raise KeyError(key)
 
-    def _insert(self, key: Point, value: Q):
+    def _insert(self, key: Point, value: Q) -> None:
         newindex = len(self._values)
         for coord, v in enumerate(key):
             lut = self.lut.setdefault(coord, [])
@@ -155,7 +154,7 @@ class VertexDict(MutableMapping[Point, Q]):
         self._keys.append(key)
         self._values.append(value)
 
-    def __setitem__(self, key: Point, value: Q):
+    def __setitem__(self, key: Point, value: Q) -> None:
         try:
             c = self._candidate(key)
             self._values[c] = value
@@ -166,7 +165,7 @@ class VertexDict(MutableMapping[Point, Q]):
         c = self._candidate(key)
         return cast(Q, self._values[c])
 
-    def __delitem__(self, key: Point):
+    def __delitem__(self, key: Point) -> None:
         try:
             i = self._candidate(key)
         except KeyError:
@@ -179,5 +178,5 @@ class VertexDict(MutableMapping[Point, Q]):
             if key is not None:
                 yield key
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._values)

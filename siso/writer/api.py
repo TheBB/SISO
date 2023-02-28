@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from ..api import Source, TimeStep
-from ..field import Field
+from ..api import Source, TimeStep, Field
 from ..zone import Zone
 
 from typing import Protocol, Sequence, TypeVar, Optional
@@ -30,11 +29,11 @@ F = TypeVar('F', bound=Field)
 T = TypeVar('T', bound=TimeStep)
 Z = TypeVar('Z', bound=Zone)
 
-class Writer(Protocol):
+class Writer(Protocol[F, T, Z]):
     def __enter__(self) -> Self:
         ...
 
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> None:
         ...
 
     @property

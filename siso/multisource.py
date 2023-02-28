@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 
-from .api import Source, TimeStep, Field, SourceProperties
+from .api import ReaderSettings, Source, TimeStep, Field, SourceProperties
 from .field import FieldData
 from .topology import Topology
 from .util import bisect
 from .zone import Zone
 
+from typing_extensions import Self
 from typing import (
     Iterator,
     List,
@@ -32,11 +33,12 @@ class MultiSource(Source):
         self.sources = sources
         self.maxindex = []
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         for src in self.sources:
             src.__enter__()
+        return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> None:
         for src in self.sources:
             src.__exit__(*args)
 
@@ -46,9 +48,17 @@ class MultiSource(Source):
             instantaneous=False,
         )
 
+    def configure(self, settings: ReaderSettings) -> None:
+        for source in self.sources:
+            source.configure(settings)
+
     def source_at(self, index: int) -> Source:
         i = bisect.bisect_left(self.maxindex, index)
         return self.sources[i]
+
+    def use_geometry(self, geometry: Field) -> None:
+        for source in self.sources:
+            source.use_geometry(geometry)
 
     def fields(self) -> Iterator[Field]:
         yield from self.sources[0].fields()

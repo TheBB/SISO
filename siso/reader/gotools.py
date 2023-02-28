@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..api import Source, SourceProperties
+from ..api import ReaderSettings, Source, SourceProperties
 from ..field import Field, FieldType, FieldData
 from ..timestep import TimeStep
 from ..topology import SplineTopology
 from ..zone import Zone, Shape, Coords
-from .. import util
 
-from typing import IO, Iterator, List
+from typing import Iterator, List
 
 
 class GoTools(Source):
@@ -27,24 +26,29 @@ class GoTools(Source):
     def __enter__(self) -> GoTools:
         with open(self.filename, 'r') as f:
             data = f.read()
-        for corners, topology, data in SplineTopology.from_string(data):
+        for corners, topology, field_data in SplineTopology.from_string(data):
             self.corners.append(corners)
             self.topologies.append(topology)
-            self.controlpoints.append(data)
+            self.controlpoints.append(field_data)
         return self
 
-    def __exit__(self, *args):
-        pass
+    def __exit__(self, *args) -> None:
+        return
 
     @property
     def properties(self) -> SourceProperties:
         return SourceProperties(
             instantaneous=True,
-            globally_keyed=False,
         )
 
+    def configure(self, settings: ReaderSettings) -> None:
+        return
+
+    def use_geometry(self, geometry: Field) -> None:
+        return
+
     def fields(self) -> Iterator[Field]:
-        yield Field('Geometry', type=FieldType.Geometry, ncomps=2)
+        yield Field('Geometry', type=FieldType.Geometry, ncomps=self.controlpoints[0].ncomps)
 
     def timesteps(self) -> Iterator[TimeStep]:
         yield TimeStep(index=0)

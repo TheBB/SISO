@@ -33,9 +33,25 @@ build-backend = "poetry.core.masonry.api"
 plugins = ["numpy.typing.mypy_plugin"]
 
 [[tool.mypy.overrides]]
-module = "splipy.*"
+module = "f90nml"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "h5py.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module="lrspline.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module="netCDF4.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "scipy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "splipy.*"
 ignore_missing_imports = true

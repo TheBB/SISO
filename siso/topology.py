@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from io import StringIO
+from io import BytesIO, StringIO
+import logging
 
+import lrspline as lr
 from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
 import splipy.utils
@@ -16,6 +18,7 @@ from . import util
 
 from typing_extensions import Self
 from typing import (
+    Dict,
     IO,
     Iterator,
     List,
@@ -33,6 +36,36 @@ class UnstructuredTopology:
         self.num_nodes = num_nodes
         self.cells = cells
         self.celltype = celltype
+
+    @staticmethod
+    def from_ifem(data: bytes) -> Tuple[Coords, UnstructuredTopology, FieldData]:
+        io = BytesIO(data)
+
+        first_line = next(io)
+        assert first_line.startswith(b'# LAGRANGIAN')
+        _, _, nodespec, elemspec, typespec = first_line.split()
+
+        assert nodespec.startswith(b'nodes=')
+        assert elemspec.startswith(b'elements=')
+        assert typespec.startswith(b'type=')
+        num_nodes = int(nodespec.split(b'=', 1)[1])
+        num_cells = int(elemspec.split(b'=', 1)[1])
+        celltype = typespec.split(b'=', 1)[1]
+        assert celltype == b'hexahedron'
+
+        nodes = np.zeros((num_nodes, 3), dtype=float)
+        for i in range(num_nodes):
+            nodes[i] = list(map(float, next(io).split()))
+
+        cells = np.zeros((num_cells, 8), dtype=int)
+        for i in range(num_cells):
+            cells[i] = list(map(int, next(io).split()))
+            cells[i,6], cells[i,7] = cells[i,7], cells[i,6]
+            cells[i,2], cells[i,3] = cells[i,3], cells[i,2]
+
+        corners = (tuple(nodes[0]),)
+        topology = UnstructuredTopology(num_nodes, cells, CellType.Hexahedron)
+        return corners, topology, FieldData(nodes)
 
     @staticmethod
     def join(left: DiscreteTopology, right: DiscreteTopology) -> UnstructuredTopology:
@@ -63,16 +96,13 @@ class StructuredTopology:
     cellshape: Tuple[int, ...]
     celltype: CellType
 
-    def __init__(self, shape: Tuple[int, ...], celltype: CellType):
-        self.cellshape = shape
+    def __init__(self, cellshape: Tuple[int, ...], celltype: CellType):
+        self.cellshape = cellshape
         self.celltype = celltype
 
     @property
     def pardim(self) -> int:
         return len(self.cellshape)
-
-    def tesselator(self) -> Tesselator[Self]:
-        raise NotImplementedError
 
     @property
     def num_cells(self) -> int:
@@ -85,6 +115,9 @@ class StructuredTopology:
     @property
     def cells(self) -> np.ndarray:
         return util.structured_cells(self.cellshape, self.pardim)
+
+    def tesselator(self) -> Tesselator[Self]:
+        return NoopTesselator()
 
 
 class NoopTesselator(Tesselator[DiscreteTopology]):
@@ -122,7 +155,7 @@ class SplineTopology(Topology):
         return (
             corners,
             SplineTopology(bases=obj.bases, weights=weights),
-            FieldData(data=util.flatten_2d(util.transpose_butlast(cps))),
+            FieldData(util.flatten_2d(util.transpose_butlast(cps))),
         )
 
     @staticmethod
@@ -138,6 +171,14 @@ class SplineTopology(Topology):
     @property
     def pardim(self) -> int:
         return len(self.bases)
+
+    @property
+    def num_nodes(self) -> int:
+        return util.prod(basis.num_functions() for basis in self.bases)
+
+    @property
+    def num_cells(self) -> int:
+        return util.prod(len(basis.knot_spans()) - 1 for basis in self.bases)
 
     def tesselator(self) -> Tesselator[Self]:
         return SplineTesselator(self, nvis=1)
@@ -181,4 +222,94 @@ class SplineTesselator(Tesselator[SplineTopology]):
 
         coeffs = splipy.utils.reshape(coeffs, shape, order='F')
         new_spline = SplineObject(bases, coeffs, rational=rational, raw=True)
-        return FieldData(data=util.flatten_2d(new_spline(*knots)))
+        return FieldData(util.flatten_2d(new_spline(*knots)))
+
+
+@dataclass
+class LrTopology(Topology):
+    obj: lr.LRSplineObject
+    weights: Optional[np.ndarray]
+
+    @staticmethod
+    def from_lrobject(obj: lr.LRSplineObject) -> Tuple[Coords, LrTopology, FieldData]:
+        corners = tuple(tuple(point) for point in obj.corners())
+        rational = obj.dimension > obj.pardim
+        if rational:
+            logging.warning(
+                f"Treating LR spline with parametric dimension {obj.pardim} "
+                f"and physical dimension {obj.dimension} as rational"
+            )
+
+        if rational:
+            weights = obj.controlpoints[:, -1]
+            cps = obj.controlpoints[:, :-1]
+        else:
+            weights = None
+            cps = obj.controlpoints
+
+        return (
+            corners,
+            LrTopology(obj=obj, weights=weights),
+            FieldData(cps),
+        )
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Iterator[Tuple[Coords, LrTopology, FieldData]]:
+        yield from LrTopology.from_string(data.decode())
+
+    @staticmethod
+    def from_string(data: str) -> Iterator[Tuple[Coords, LrTopology, FieldData]]:
+        for obj in lr.LRSplineObject.read_many(StringIO(data)):
+            yield LrTopology.from_lrobject(obj)
+
+    @property
+    def pardim(self) -> int:
+        return self.obj.pardim
+
+    @property
+    def num_nodes(self) -> int:
+        return len(self.obj)
+
+    @property
+    def num_cells(self) -> int:
+        return len(self.obj.elements)
+
+    def tesselator(self) -> Tesselator[Self]:
+        return LrTesselator(self.obj, self.weights, nvis=1)
+
+
+class LrTesselator(Tesselator[LrTopology]):
+    nodes: np.ndarray
+    cells: np.ndarray
+    weights: Optional[np.ndarray]
+    nvis: int
+
+    def __init__(self, obj: lr.LRSplineObject, weights: Optional[np.ndarray], nvis: int):
+        nodes: Dict[Tuple[float, ...], int] = {}
+        cells: List[List[int]] = []
+        visitor = util.visit_face if obj.pardim == 2 else util.visit_volume
+        for element in obj.elements:
+            visitor(element, nodes, cells, nvis=1)
+        self.nodes = FieldData.from_iter(nodes).numpy()
+        self.cells = np.array(cells, dtype=int)
+        self.weights = weights
+        self.nvis = nvis
+
+    def tesselate_topology(self, topology: LrTopology) -> DiscreteTopology:
+        celltype = CellType.Hexahedron if topology.pardim == 3 else CellType.Quadrilateral
+        return UnstructuredTopology(len(self.nodes), self.cells, celltype)
+
+    def tesselate_field(self, topology: LrTopology, field: Field, field_data: FieldData) -> FieldData:
+        if field.cellwise:
+            cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells)
+            return FieldData.from_iter(field_data[topology.obj.element_at(*c).id] for c in cell_centers)
+        else:
+            obj = topology.obj.clone()
+            coeffs = field_data.data
+            if self.weights is not None:
+                coeffs = np.hstack((coeffs, self.weights))
+            obj.controlpoints = coeffs
+            evaluated = FieldData.from_iter(obj(*node) for node in self.nodes)
+            if self.weights is not None:
+                evaluated = evaluated.collapse_weights()
+            return evaluated

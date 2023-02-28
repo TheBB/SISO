@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from enum import Enum, auto
+from functools import partial
 import logging
 from pathlib import Path
 
 import numpy as np
 
-from .api import Writer, WriterProperties, WriterSettings, OutputMode
+from .api import Writer, WriterProperties, WriterSettings, OutputMode, Field
 from ..api import Source, TimeStep
-from ..field import Field
+from ..field import FieldType, FieldData
 from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
 from ..zone import Zone
 from .. import util
@@ -15,33 +17,55 @@ from .. import util
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import (
     vtkCellArray,
-    vtkDataSet,
+    vtkPointSet,
     vtkUnstructuredGrid,
     vtkStructuredGrid,
     VTK_LINE,
     VTK_QUAD,
     VTK_HEXAHEDRON,
 )
-from vtkmodules.vtkIOLegacy import vtkUnstructuredGridWriter, vtkStructuredGridWriter
-from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridWriter, vtkXMLStructuredGridWriter
+from vtkmodules.vtkIOLegacy import vtkUnstructuredGridWriter, vtkStructuredGridWriter, vtkDataWriter
+from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridWriter, vtkXMLStructuredGridWriter, vtkXMLWriter
 from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
 
-from typing import cast, Sequence, TypeVar
+from typing_extensions import Self
+from typing import cast, Sequence, TypeVar, Tuple, Union, Callable
 
 
-def get_grid(legacy: bool, topology: DiscreteTopology):
-    if isinstance(topology, StructuredTopology):
+class Behavior(Enum):
+    OnlyStructured = auto()
+    OnlyUnstructured = auto()
+    Whatever = auto()
+
+
+def transpose(data: FieldData, grid: vtkPointSet, cellwise: bool = False):
+    if not isinstance(grid, vtkStructuredGrid):
+        return data
+    shape = grid.GetDimensions()
+    if cellwise:
+        i, j, k = shape
+        shape = (max(i-1, 1), max(j-1, 1), max(k-1, 1))
+    return data.transpose(shape, (2, 1, 0))
+
+
+def get_grid(
+    topology: DiscreteTopology,
+    legacy: bool,
+    behavior: Behavior
+) -> Tuple[vtkPointSet, Union[vtkXMLWriter, vtkDataWriter]]:
+    if isinstance(topology, StructuredTopology) and behavior != Behavior.OnlyUnstructured:
         sgrid = vtkStructuredGrid()
         shape = topology.cellshape
-        while len(shape) < 1:
+        while len(shape) < 3:
             shape = (*shape, 0)
+        # shape = shape[::-1]
         sgrid.SetDimensions(*(s + 1 for s in shape))
         if legacy:
             return sgrid, vtkStructuredGridWriter()
         else:
             return sgrid, vtkXMLStructuredGridWriter()
 
-    assert isinstance(topology, UnstructuredTopology)
+    assert behavior != Behavior.OnlyStructured
     assert topology.celltype in (CellType.Line, CellType.Quadrilateral, CellType.Hexahedron)
 
     ugrid = vtkUnstructuredGrid()
@@ -65,22 +89,39 @@ def get_grid(legacy: bool, topology: DiscreteTopology):
         return ugrid, vtkXMLUnstructuredGridWriter()
 
 
+def apply_output_mode(writer: Union[vtkXMLWriter, vtkDataWriter], mode: OutputMode) -> None:
+    if isinstance(writer, vtkDataWriter):
+        if mode == OutputMode.Binary:
+            writer.SetFileTypeToBinary()
+        elif mode == OutputMode.Ascii:
+            writer.SetFileTypeToASCII()
+    elif isinstance(writer, vtkXMLWriter):
+        if mode == OutputMode.Binary:
+            writer.SetDataModeToBinary()
+        elif mode == OutputMode.Ascii:
+            writer.SetDataModeToAscii()
+        elif mode == OutputMode.Appended:
+            writer.SetDataModeToAppended()
+
+
 F = TypeVar('F', bound=Field)
 T = TypeVar('T', bound=TimeStep)
 Z = TypeVar('Z', bound=Zone)
 
-class VtkWriter(Writer):
+class VtkWriterBase(Writer):
     filename: Path
     output_mode: OutputMode = OutputMode.Binary
+    grid_getter: Callable[[DiscreteTopology], Tuple[vtkPointSet, Union[vtkXMLWriter, vtkDataWriter]]]
+    allow_nan_in_ascii: bool
 
     def __init__(self, filename: Path):
         self.filename = filename
 
-    def __enter__(self) -> VtkWriter:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args):
-        ...
+    def __exit__(self, *args) -> None:
+        return
 
     @property
     def properties(self) -> WriterProperties:
@@ -100,24 +141,26 @@ class VtkWriter(Writer):
             zone = next(source.zones())
             topology = cast(DiscreteTopology, source.topology(timestep, geometry, zone))
 
-            grid, writer = get_grid(legacy=True, topology=topology)
-
-            if self.output_mode == OutputMode.Binary:
-                writer.SetFileTypeToBinary()
-            elif self.output_mode == OutputMode.Ascii:
-                writer.SetFileTypeToASCII()
+            grid, writer = self.grid_getter(topology)
+            apply_output_mode(writer, self.output_mode)
 
             data = source.field_data(timestep, geometry, zone)
+            data = transpose(data, grid, geometry.cellwise)
 
             points = vtkPoints()
             p = data.ensure_ncomps(3, allow_scalar=False)
-            print(p.data.shape)
             points.SetData(p.vtk())
             grid.SetPoints(points)
 
             for field in fields:
                 target = grid.GetCellData() if field.cellwise else grid.GetPointData()
-                array = source.field_data(timestep, field, zone).vtk()
+                allow_scalar = field.type != FieldType.Displacement
+                data = source.field_data(timestep, field, zone)
+                data = data.ensure_ncomps(3, allow_scalar)
+                data = transpose(data, grid, field.cellwise)
+                if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
+                    data = data.nan_filter()
+                array = data.vtk()
                 array.SetName(field.name)
                 target.AddArray(array)
 
@@ -126,3 +169,27 @@ class VtkWriter(Writer):
             writer.Write()
 
             logging.info(filename)
+
+
+class VtkWriter(VtkWriterBase):
+    allow_nan_in_ascii = False
+
+    def __init__(self, filename: Path):
+        super().__init__(filename)
+        self.grid_getter = partial(get_grid, legacy=True, behavior=Behavior.Whatever)
+
+
+class VtuWriter(VtkWriterBase):
+    allow_nan_in_ascii = True
+
+    def __init__(self, filename: Path):
+        super().__init__(filename)
+        self.grid_getter = partial(get_grid, legacy=False, behavior=Behavior.OnlyUnstructured)
+
+
+class VtsWriter(VtkWriterBase):
+    allow_nan_in_ascii = True
+
+    def __init__(self, filename: Path):
+        super().__init__(filename)
+        self.grid_getter = partial(get_grid, legacy=False, behavior=Behavior.OnlyStructured)
