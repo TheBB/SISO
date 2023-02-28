@@ -21,6 +21,7 @@ netCDF4 = "^1.6.2"
 pytest = "^7.2.1"
 mypy = "^1.0.0"
 typing-protocol-intersection = "^0.2.3"
+poethepoet = "^0.18.1"
 
 [tool.poetry.scripts]
 siso = "siso.__main__:main"
@@ -28,6 +29,11 @@ siso = "siso.__main__:main"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poe.tasks]
+test = "pytest tests/test_vtk.py tests/test_vtu.py tests/test_vts.py"
+mypy = "mypy siso"
+check = ["mypy", "test"]
 
 [tool.mypy]
 plugins = ["numpy.typing.mypy_plugin"]
