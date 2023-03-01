@@ -1,15 +1,16 @@
-from .passthrough import Passthrough
-from ..api import TimeStep, Field, SourceProperties
-from ..field import FieldData
-from ..zone import Zone
-from ..topology import Topology
-
 from typing import TypeVar
 
+from ..api import Field, SourceProperties, TimeStep
+from ..topology import Topology
+from ..util import FieldData
+from ..zone import Zone
+from .passthrough import Passthrough
 
-Z = TypeVar('Z', bound=Zone)
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
+
+Z = TypeVar("Z", bound=Zone)
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
+
 
 class Tesselate(Passthrough[F, T, Z]):
     def validate_source(self) -> None:

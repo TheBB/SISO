@@ -1,47 +1,40 @@
 from __future__ import annotations
 
+from abc import ABC, abstractproperty
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Iterator, List, Optional, Protocol, TypeVar, Union
 
 import numpy as np
-
-from .field import FieldType, FieldData
-from .zone import Zone
-
-from typing import (
-    Iterator,
-    List,
-    Optional,
-    Protocol,
-    TypeVar,
-)
-
 from typing_extensions import Self
+
+from .util import FieldData
+from .zone import Zone
 
 
 class Endianness(Enum):
-    Native = 'native'
-    Little = 'little'
-    Big = 'big'
+    Native = "native"
+    Little = "little"
+    Big = "big"
 
     def make_dtype(self, root: str) -> np.dtype:
         if self == Endianness.Native:
-            return np.dtype(f'={root}')
+            return np.dtype(f"={root}")
         elif self == Endianness.Little:
-            return np.dtype(f'<{root}')
-        return np.dtype(f'>{root}')
+            return np.dtype(f"<{root}")
+        return np.dtype(f">{root}")
 
     def u4_type(self) -> np.dtype:
-        return self.make_dtype('u4')
+        return self.make_dtype("u4")
 
     def f4_type(self) -> np.dtype:
-        return self.make_dtype('f4')
+        return self.make_dtype("f4")
 
 
 class Dimensionality(Enum):
-    Volumetric = 'volumetric'
-    Planar = 'planer'
-    Extrude = 'extrude'
+    Volumetric = "volumetric"
+    Planar = "planer"
+    Extrude = "extrude"
 
     def out_is_volumetric(self) -> bool:
         return self != Dimensionality.Planar
@@ -51,8 +44,8 @@ class Dimensionality(Enum):
 
 
 class Staggering(Enum):
-    Outer = 'outer'
-    Inner = 'inner'
+    Outer = "outer"
+    Inner = "inner"
 
 
 @dataclass
@@ -85,26 +78,109 @@ class SourceProperties:
         return SourceProperties(**kwargs)
 
 
-class Field(Protocol):
-    @property
-    def cellwise(self) -> bool:
-        ...
+class ScalarInterpretation(Enum):
+    Generic = auto()
+    Eigenmode = auto()
+
+    def to_vector(self) -> VectorInterpretation:
+        if self == ScalarInterpretation.Eigenmode:
+            return VectorInterpretation.Eigenmode
+        return VectorInterpretation.Generic
+
+
+class VectorInterpretation(Enum):
+    Generic = auto()
+    Displacement = auto()
+    Eigenmode = auto()
+    Flow = auto()
+    Geometry = auto()
+
+    def join(self, other: VectorInterpretation) -> VectorInterpretation:
+        if VectorInterpretation.Generic in (self, other):
+            return VectorInterpretation.Generic
+        assert self == other
+        return self
+
+    def to_scalar(self) -> ScalarInterpretation:
+        if self == VectorInterpretation.Eigenmode:
+            return ScalarInterpretation.Eigenmode
+        return ScalarInterpretation.Generic
+
+
+@dataclass
+class Scalar:
+    interpretation: ScalarInterpretation = ScalarInterpretation.Generic
+
+    def slice(self) -> FieldType:
+        return self
+
+    def concat(self, other: FieldType) -> FieldType:
+        if isinstance(other, Scalar):
+            interpretation = self.interpretation.to_vector().join(other.interpretation.to_vector())
+            return Vector(ncomps=2, interpretation=interpretation)
+        interpretation = self.interpretation.to_vector().join(other.interpretation)
+        return Vector(ncomps=other.ncomps + 1, interpretation=interpretation)
+
+
+@dataclass
+class Vector:
+    ncomps: int
+    interpretation: VectorInterpretation = VectorInterpretation.Generic
+
+    def slice(self) -> FieldType:
+        return Scalar(self.interpretation.to_scalar())
+
+    def concat(self, other: FieldType) -> FieldType:
+        if isinstance(other, Scalar):
+            interpretation = self.interpretation.join(other.interpretation.to_vector())
+            return Vector(ncomps=self.ncomps + 1, interpretation=interpretation)
+        interpretation = self.interpretation.join(other.interpretation)
+        return Vector(ncomps=self.ncomps + other.ncomps, interpretation=interpretation)
+
+    def update(self, **kwargs) -> Vector:
+        kwargs = {**self.__dict__, **kwargs}
+        return Vector(**kwargs)
+
+
+def Geometry(ncomps: int) -> Vector:
+    return Vector(ncomps=ncomps, interpretation=VectorInterpretation.Geometry)
+
+
+FieldType = Union[Scalar, Vector]
+
+
+class Field:
+    cellwise: bool
+    splittable: bool
+    name: str
+    type: FieldType
 
     @property
-    def name(self) -> str:
-        ...
+    def is_scalar(self) -> bool:
+        return isinstance(self.type, Scalar)
 
     @property
-    def type(self) -> FieldType:
-        ...
+    def is_vector(self) -> bool:
+        return isinstance(self.type, Vector)
 
     @property
-    def splittable(self) -> bool:
-        ...
+    def is_geometry(self) -> bool:
+        return isinstance(self.type, Vector) and self.type.interpretation == VectorInterpretation.Geometry
+
+    @property
+    def is_eigenmode(self) -> bool:
+        return (
+            isinstance(self.type, Scalar)
+            and self.type.interpretation == ScalarInterpretation.Eigenmode
+            or isinstance(self.type, Vector)
+            and self.type.interpretation == VectorInterpretation.Eigenmode
+        )
 
     @property
     def ncomps(self) -> int:
-        ...
+        if isinstance(self.type, Scalar):
+            return 1
+        return self.type.ncomps
 
 
 class TimeStep(Protocol):
@@ -124,9 +200,10 @@ class ReaderSettings:
     staggering: Staggering
 
 
-Z = TypeVar('Z', bound=Zone)
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
+Z = TypeVar("Z", bound=Zone)
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
+
 
 class Source(Protocol[F, T, Z]):
     @property
@@ -194,7 +271,8 @@ class DiscreteTopology(Topology, Protocol):
         ...
 
 
-S = TypeVar('S', bound=Topology, contravariant=True)
+S = TypeVar("S", bound=Topology, contravariant=True)
+
 
 class Tesselator(Protocol[S]):
     def tesselate_topology(self, topology: S) -> DiscreteTopology:
@@ -202,4 +280,3 @@ class Tesselator(Protocol[S]):
 
     def tesselate_field(self, topology: S, field: Field, field_data: FieldData) -> FieldData:
         ...
-

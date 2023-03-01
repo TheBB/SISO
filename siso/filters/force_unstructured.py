@@ -1,14 +1,15 @@
-from .passthrough import Passthrough
-from ..api import TimeStep, Field
+from typing import TypeVar, cast
+
+from ..api import Field, TimeStep
 from ..topology import DiscreteTopology, UnstructuredTopology
 from ..zone import Zone
+from .passthrough import Passthrough
 
-from typing import cast, TypeVar
 
+Z = TypeVar("Z", bound=Zone)
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
 
-Z = TypeVar('Z', bound=Zone)
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
 
 class ForceUnstructured(Passthrough[F, T, Z]):
     def validate_source(self) -> None:

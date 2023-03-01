@@ -2,13 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-
-from typing import (
-    Generic,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing import Generic, Optional, Tuple, TypeVar
 
 
 Point = Tuple[float, ...]

@@ -1,35 +1,34 @@
 from __future__ import annotations
 
+import logging
 from enum import Enum, auto
 from functools import partial
-import logging
 from pathlib import Path
+from typing import Callable, Sequence, Tuple, TypeVar, Union, cast
 
 import numpy as np
+from typing_extensions import Self
 
-from .api import Writer, WriterProperties, WriterSettings, OutputMode, Field
-from ..api import Source, TimeStep
-from ..field import FieldType, FieldData
-from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
-from ..zone import Zone
-from .. import util
-
+from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import (
-    vtkCellArray,
-    vtkPointSet,
-    vtkUnstructuredGrid,
-    vtkStructuredGrid,
+    VTK_HEXAHEDRON,
     VTK_LINE,
     VTK_QUAD,
-    VTK_HEXAHEDRON,
+    vtkCellArray,
+    vtkPointSet,
+    vtkStructuredGrid,
+    vtkUnstructuredGrid,
 )
-from vtkmodules.vtkIOLegacy import vtkUnstructuredGridWriter, vtkStructuredGridWriter, vtkDataWriter
-from vtkmodules.vtkIOXML import vtkXMLUnstructuredGridWriter, vtkXMLStructuredGridWriter, vtkXMLWriter
-from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
+from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUnstructuredGridWriter
+from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
-from typing_extensions import Self
-from typing import cast, Sequence, TypeVar, Tuple, Union, Callable
+from .. import util
+from ..api import FieldType, Source, TimeStep
+from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
+from ..util import FieldData
+from ..zone import Zone
+from .api import Field, OutputMode, Writer, WriterProperties, WriterSettings
 
 
 class Behavior(Enum):
@@ -44,14 +43,12 @@ def transpose(data: FieldData, grid: vtkPointSet, cellwise: bool = False):
     shape = grid.GetDimensions()
     if cellwise:
         i, j, k = shape
-        shape = (max(i-1, 1), max(j-1, 1), max(k-1, 1))
+        shape = (max(i - 1, 1), max(j - 1, 1), max(k - 1, 1))
     return data.transpose(shape, (2, 1, 0))
 
 
 def get_grid(
-    topology: DiscreteTopology,
-    legacy: bool,
-    behavior: Behavior
+    topology: DiscreteTopology, legacy: bool, behavior: Behavior
 ) -> Tuple[vtkPointSet, Union[vtkXMLWriter, vtkDataWriter]]:
     if isinstance(topology, StructuredTopology) and behavior != Behavior.OnlyUnstructured:
         sgrid = vtkStructuredGrid()
@@ -70,10 +67,7 @@ def get_grid(
 
     ugrid = vtkUnstructuredGrid()
     cells = topology.cells
-    cells = np.hstack((
-        cells.shape[-1] * np.ones((len(cells), 1), dtype=int),
-        cells
-    )).ravel().astype('i8')
+    cells = np.hstack((cells.shape[-1] * np.ones((len(cells), 1), dtype=int), cells)).ravel().astype("i8")
     cellarray = vtkCellArray()
     cellarray.SetCells(len(cells), numpy_to_vtkIdTypeArray(cells))
     celltype = {
@@ -104,9 +98,10 @@ def apply_output_mode(writer: Union[vtkXMLWriter, vtkDataWriter], mode: OutputMo
             writer.SetDataModeToAppended()
 
 
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
-Z = TypeVar('Z', bound=Zone)
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
+Z = TypeVar("Z", bound=Zone)
+
 
 class VtkWriterBase(Writer):
     filename: Path
@@ -154,9 +149,8 @@ class VtkWriterBase(Writer):
 
             for field in fields:
                 target = grid.GetCellData() if field.cellwise else grid.GetPointData()
-                allow_scalar = field.type != FieldType.Displacement
                 data = source.field_data(timestep, field, zone)
-                data = data.ensure_ncomps(3, allow_scalar)
+                data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
                 data = transpose(data, grid, field.cellwise)
                 if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
                     data = data.nan_filter()

@@ -1,23 +1,19 @@
 from __future__ import annotations
 
 from functools import reduce
+from typing import Iterator, TypeVar, cast
 
-from .passthrough import Passthrough
-from ..api import Field, TimeStep, SourceProperties
-from ..field import FieldData
-from ..topology import DiscreteTopology, UnstructuredTopology
-from ..zone import Zone, Shape
 from .. import util
+from ..api import Field, SourceProperties, TimeStep
+from ..topology import DiscreteTopology, UnstructuredTopology
+from ..util import FieldData
+from ..zone import Shape, Zone
+from .passthrough import Passthrough
 
-from typing import (
-    cast,
-    Iterator,
-    TypeVar,
-)
 
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
 
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
 
 class ZoneMerge(Passthrough[F, T, Zone]):
     def validate_source(self) -> None:
@@ -36,24 +32,21 @@ class ZoneMerge(Passthrough[F, T, Zone]):
             yield Zone(
                 shape=Shape.Shapeless,
                 coords=(),
-                local_key='superzone',
+                local_key="superzone",
                 global_key=0,
             )
         else:
             yield Zone(
                 shape=zone.shape,
                 coords=zone.coords,
-                local_key='superzone',
+                local_key="superzone",
                 global_key=0,
             )
 
     def topology(self, timestep: T, field: F, zone: Zone) -> DiscreteTopology:
         return reduce(
             UnstructuredTopology.join,
-            (
-                cast(DiscreteTopology, self.source.topology(timestep, field, z))
-                for z in self.source.zones()
-            ),
+            (cast(DiscreteTopology, self.source.topology(timestep, field, z)) for z in self.source.zones()),
         )
 
     def field_data(self, timestep: T, field: F, zone: Zone) -> FieldData:

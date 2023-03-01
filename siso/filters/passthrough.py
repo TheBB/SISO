@@ -1,26 +1,24 @@
 from __future__ import annotations
 
-from ..api import ReaderSettings, Source, SourceProperties, TimeStep, Field
-from ..field import FieldData
-from ..topology import Topology
-from ..zone import Zone
+from typing import Generic, Iterator, TypeVar
 
 from typing_extensions import Self
-from typing import (
-    Generic,
-    Iterator,
-    TypeVar,
-)
+
+from .. import api
+from ..topology import Topology
+from ..util import FieldData
+from ..zone import Zone
 
 
-Z = TypeVar('Z', bound=Zone)
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
+Z = TypeVar("Z", bound=Zone)
+F = TypeVar("F", bound=api.Field)
+T = TypeVar("T", bound=api.TimeStep)
+
 
 class Passthrough(Generic[F, T, Z]):
-    source: Source
+    source: api.Source
 
-    def __init__(self, source: Source):
+    def __init__(self, source: api.Source):
         self.source = source
         self.validate_source()
 
@@ -35,10 +33,10 @@ class Passthrough(Generic[F, T, Z]):
         self.source.__exit__(*args)
 
     @property
-    def properties(self) -> SourceProperties:
+    def properties(self) -> api.SourceProperties:
         return self.source.properties
 
-    def configure(self, settings: ReaderSettings) -> None:
+    def configure(self, settings: api.ReaderSettings) -> None:
         self.source.configure(settings)
 
     def fields(self) -> Iterator[F]:

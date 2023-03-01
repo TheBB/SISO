@@ -2,40 +2,41 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from functools import reduce
-from itertools import chain, product, count
+from itertools import chain, count, product
 from pathlib import Path
-
-import lrspline as lr
-import numpy as np
-from scipy.io import FortranFile
-
-from typing_extensions import Self
 from typing import (
-    cast,
+    IO,
     Callable,
     Dict,
-    IO,
+    Generator,
+    Generic,
+    Hashable,
     Iterable,
     Iterator,
-    Generic,
-    Generator,
-    Hashable,
     List,
     Optional,
     Tuple,
     TypeVar,
     Union,
+    cast,
 )
+
+import lrspline as lr
+import numpy as np
+from typing_extensions import Self
+
+from .field_data import FieldData
 
 
 class NoSuchMarkError(Exception):
     ...
 
 
-W = TypeVar('W')
-M = TypeVar('M', bound=Hashable)
+W = TypeVar("W")
+M = TypeVar("M", bound=Hashable)
 
-class RandomAccessFile(Generic[W,M]):
+
+class RandomAccessFile(Generic[W, M]):
     wrapper: Callable[[IO], W]
 
     markers: Dict[M, int]
@@ -47,7 +48,7 @@ class RandomAccessFile(Generic[W,M]):
         self,
         fp: IO,
         wrapper: Optional[Callable[[IO], W]] = None,
-        marker_generator: Optional[Callable[[RandomAccessTracker[W,M]], Iterator[Tuple[M, int]]]] = None,
+        marker_generator: Optional[Callable[[RandomAccessTracker[W, M]], Iterator[Tuple[M, int]]]] = None,
     ):
         self.fp = fp
         self.wrapper = wrapper or cast(Callable[[IO], W], (lambda fp: fp))
@@ -94,16 +95,17 @@ class RandomAccessFile(Generic[W,M]):
             fp.seek(loc)
             yield self.wrapper(fp)
 
-    def tracker(self, mark: Optional[M] = None) -> RandomAccessTracker[W,M]:
+    def tracker(self, mark: Optional[M] = None) -> RandomAccessTracker[W, M]:
         if mark is None:
             return RandomAccessTracker(self, 0)
         return RandomAccessTracker(self, self.loc_at(mark))
 
-class RandomAccessTracker(Generic[W,M]):
-    file: RandomAccessFile[W,M]
+
+class RandomAccessTracker(Generic[W, M]):
+    file: RandomAccessFile[W, M]
     continue_from: int
 
-    def __init__(self, file: RandomAccessFile[W,M], loc: int):
+    def __init__(self, file: RandomAccessFile[W, M], loc: int):
         self.file = file
         self.continue_from = loc
 
@@ -137,7 +139,7 @@ def save_excursion(fp: IO):
 
 
 def pluralize(num: int, singular: str, plural: str) -> str:
-    return f'{num} {singular if num == 1 else plural}'
+    return f"{num} {singular if num == 1 else plural}"
 
 
 def flatten_2d(array: np.ndarray) -> np.ndarray:
@@ -165,10 +167,7 @@ def _expand_shape(shape: Tuple[int, ...], axis: int) -> Tuple[int, ...]:
 
 
 def unstagger(data: np.ndarray, axis: int) -> np.ndarray:
-    return (
-        data[_single_slice(data.ndim, axis, 1, None)] +
-        data[_single_slice(data.ndim, axis, 0, -1)]
-    ) / 2
+    return (data[_single_slice(data.ndim, axis, 1, None)] + data[_single_slice(data.ndim, axis, 0, -1)]) / 2
 
 
 def stagger(data: np.ndarray, axis: int) -> np.ndarray:
@@ -180,14 +179,15 @@ def stagger(data: np.ndarray, axis: int) -> np.ndarray:
     last = _single_slice(data.ndim, axis, -1, None)
 
     retval[_single_slice(data.ndim, axis, 0, -1)] += data / 2
-    retval[_single_slice(data.ndim, axis, 1, None)] += data /2
+    retval[_single_slice(data.ndim, axis, 1, None)] += data / 2
     retval[first] += data[first] - data[second] / 2
     retval[last] += data[last] - data[penultimate] / 2
 
     return retval
 
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 def _pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
     it = iter(iterable)
@@ -198,16 +198,20 @@ def _pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
 
 
 def subdivide_linear(knots: Union[List[float], Tuple[float, ...]], nvis: int) -> np.ndarray:
-    return np.fromiter(chain(
-        chain.from_iterable(
-            (((nvis - i) * a + i * b) / nvis for i in range(nvis))
-            for a, b in _pairwise(knots)
+    return np.fromiter(
+        chain(
+            chain.from_iterable(
+                (((nvis - i) * a + i * b) / nvis for i in range(nvis)) for a, b in _pairwise(knots)
+            ),
+            (knots[-1],),
         ),
-        (knots[-1],),
-    ), float)
+        float,
+    )
 
 
-def visit_face(element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int) -> None:
+def visit_face(
+    element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int
+) -> None:
     lft, btm = element.start()
     rgt, top = element.end()
     xs = subdivide_linear((lft, rgt), nvis)
@@ -221,7 +225,9 @@ def visit_face(element: lr.Element, nodes: Dict[Tuple[float, ...], int], element
             elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
 
 
-def visit_volume(element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int) -> None:
+def visit_volume(
+    element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int
+) -> None:
     umin, vmin, wmin = element.start()
     umax, vmax, wmax = element.end()
     us = subdivide_linear((umin, umax), nvis)
@@ -235,10 +241,18 @@ def visit_volume(element: lr.Element, nodes: Dict[Tuple[float, ...], int], eleme
                 tsw, tse, tnw, tne = (ul, vl, wr), (ur, vl, wr), (ul, vr, wr), (ur, vr, wr)
                 for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):
                     nodes.setdefault(pt, len(nodes))
-                elements.append([
-                    nodes[bsw], nodes[bse], nodes[bne], nodes[bnw],
-                    nodes[tsw], nodes[tse], nodes[tne], nodes[tnw],
-                ])
+                elements.append(
+                    [
+                        nodes[bsw],
+                        nodes[bse],
+                        nodes[bne],
+                        nodes[bnw],
+                        nodes[tsw],
+                        nodes[tse],
+                        nodes[tne],
+                        nodes[tnw],
+                    ]
+                )
 
 
 def prod(values: Iterable[int]) -> int:
@@ -259,30 +273,30 @@ def only(values: Iterable[T]) -> T:
     return next(iter(values))
 
 
-def structured_cells(cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[np.ndarray]=None):
+def structured_cells(cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[np.ndarray] = None):
     nodeshape = tuple(s + 1 for s in cellshape)
     ranges = [range(k) for k in cellshape]
     nidxs = [np.array(q) for q in zip(*product(*ranges))]
-    eidxs = np.zeros((len(nidxs[0]), 2**len(nidxs)), dtype=int)
+    eidxs = np.zeros((len(nidxs[0]), 2 ** len(nidxs)), dtype=int)
     if pardim == 1:
-        eidxs[:,0] = nidxs[0]
-        eidxs[:,1] = nidxs[0] + 1
+        eidxs[:, 0] = nidxs[0]
+        eidxs[:, 1] = nidxs[0] + 1
     elif pardim == 2:
         i, j = nidxs
-        eidxs[:,0] = np.ravel_multi_index((i, j), nodeshape)
-        eidxs[:,1] = np.ravel_multi_index((i+1, j), nodeshape)
-        eidxs[:,2] = np.ravel_multi_index((i+1, j+1), nodeshape)
-        eidxs[:,3] = np.ravel_multi_index((i, j+1), nodeshape)
+        eidxs[:, 0] = np.ravel_multi_index((i, j), nodeshape)
+        eidxs[:, 1] = np.ravel_multi_index((i + 1, j), nodeshape)
+        eidxs[:, 2] = np.ravel_multi_index((i + 1, j + 1), nodeshape)
+        eidxs[:, 3] = np.ravel_multi_index((i, j + 1), nodeshape)
     elif pardim == 3:
         i, j, k = nidxs
-        eidxs[:,0] = np.ravel_multi_index((i, j, k), nodeshape)
-        eidxs[:,1] = np.ravel_multi_index((i+1, j, k), nodeshape)
-        eidxs[:,2] = np.ravel_multi_index((i+1, j+1, k), nodeshape)
-        eidxs[:,3] = np.ravel_multi_index((i, j+1, k), nodeshape)
-        eidxs[:,4] = np.ravel_multi_index((i, j, k+1), nodeshape)
-        eidxs[:,5] = np.ravel_multi_index((i+1, j, k+1), nodeshape)
-        eidxs[:,6] = np.ravel_multi_index((i+1, j+1, k+1), nodeshape)
-        eidxs[:,7] = np.ravel_multi_index((i, j+1, k+1), nodeshape)
+        eidxs[:, 0] = np.ravel_multi_index((i, j, k), nodeshape)
+        eidxs[:, 1] = np.ravel_multi_index((i + 1, j, k), nodeshape)
+        eidxs[:, 2] = np.ravel_multi_index((i + 1, j + 1, k), nodeshape)
+        eidxs[:, 3] = np.ravel_multi_index((i, j + 1, k), nodeshape)
+        eidxs[:, 4] = np.ravel_multi_index((i, j, k + 1), nodeshape)
+        eidxs[:, 5] = np.ravel_multi_index((i + 1, j, k + 1), nodeshape)
+        eidxs[:, 6] = np.ravel_multi_index((i + 1, j + 1, k + 1), nodeshape)
+        eidxs[:, 7] = np.ravel_multi_index((i, j + 1, k + 1), nodeshape)
 
     if nodemap is not None:
         eidxs = nodemap.flat[eidxs]
@@ -297,4 +311,4 @@ def filename_generator(basename: Path, instantaneous: bool) -> Iterator[Path]:
     stem = basename.stem
     suffix = basename.suffix
     for i in count(1):
-        yield basename.with_name(f'{stem}-{i}').with_suffix(suffix)
+        yield basename.with_name(f"{stem}-{i}").with_suffix(suffix)

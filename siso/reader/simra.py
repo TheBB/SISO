@@ -1,28 +1,14 @@
 from __future__ import annotations
 
+import logging
+import re
 from abc import abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum, auto
 from functools import lru_cache, partial
 from itertools import count
-import logging
 from pathlib import Path
-import re
-
-import f90nml
-import numpy as np
-import scipy.io
-
-from . import FindReaderSettings
-from ..api import ReaderSettings, SourceProperties, SplitFieldSpec
-from ..field import Field, FieldType, FieldData
-from ..timestep import TimeStep
-from ..topology import Topology, StructuredTopology, CellType
-from ..zone import Zone, Shape, Coords
-from .. import util
-
-from typing_extensions import Self
 from typing import (
     Any,
     Callable,
@@ -37,6 +23,19 @@ from typing import (
     TypeVar,
     Union,
 )
+
+import f90nml
+import numpy as np
+import scipy.io
+from typing_extensions import Self
+
+from .. import api, util
+from ..field import Field
+from ..timestep import TimeStep
+from ..topology import CellType, StructuredTopology, Topology
+from ..util import FieldData
+from ..zone import Coords, Shape, Zone
+from . import FindReaderSettings
 
 
 class FortranFile(scipy.io.FortranFile):
@@ -58,7 +57,7 @@ class FortranFile(scipy.io.FortranFile):
     def read_but_first(self, dtype: np.dtype) -> np.ndarray:
         size = self._read_size(eof_ok=True)
         self._fp.seek(dtype.itemsize, 1)
-        retval = np.fromfile(self._fp, dtype=dtype, count=size//dtype.itemsize-1)
+        retval = np.fromfile(self._fp, dtype=dtype, count=size // dtype.itemsize - 1)
         assert self._read_size() == size
         return retval
 
@@ -67,6 +66,7 @@ class FortranFile(scipy.io.FortranFile):
 
 
 RandomAccessFortranTracker = util.RandomAccessTracker[FortranFile, int]
+
 
 def fortran_marker_generator(tracker: RandomAccessFortranTracker) -> Iterator[Tuple[int, int]]:
     for i in count():
@@ -80,10 +80,11 @@ def fortran_marker_generator(tracker: RandomAccessFortranTracker) -> Iterator[Tu
             assert f._read_size() == size
         yield marker
 
+
 class RandomAccessFortranFile(util.RandomAccessFile[FortranFile, int]):
     def __init__(self, filename: Path, header_dtype: np.dtype):
         super().__init__(
-            fp=open(filename, 'rb'),
+            fp=open(filename, "rb"),
             wrapper=partial(FortranFile, header_dtype=header_dtype),
             marker_generator=fortran_marker_generator,
         )
@@ -94,17 +95,19 @@ def transpose(array: np.ndarray, shape: Tuple[int, ...]):
 
 
 def mesh_offset(root: Path, dim: Union[Literal[2], Literal[3]]) -> np.ndarray:
-    filename = root.parent / 'info.txt'
+    filename = root.parent / "info.txt"
     if not filename.exists():
         logging.warning("Unable to find mesh origin info (info.txt) - coordinates may be unreliable")
         return np.zeros((dim,), dtype=float)
     else:
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             dx, dy = map(float, next(f).split())
         return np.array((dx, dy)) if dim == 2 else np.array((dx, dy, 0.0))
 
 
-T = TypeVar('T', int, float)
+T = TypeVar("T", int, float)
+
+
 def read_many(lines: Iterator[str], n: int, tp: Callable[[str], T], skip: bool = True) -> np.ndarray:
     if skip:
         next(lines)
@@ -117,13 +120,13 @@ def read_many(lines: Iterator[str], n: int, tp: Callable[[str], T], skip: bool =
 def split_sparse(values: np.ndarray, ncomps: int = 1) -> Tuple[np.ndarray, ...]:
     jump = ncomps + 1
     indexes = values[::jump].astype(int)
-    comps = [values[i::jump] for i in range(1, ncomps+1)]
+    comps = [values[i::jump] for i in range(1, ncomps + 1)]
     return (indexes, *comps)
 
 
 def make_mask(n: int, indices: np.ndarray, values: Union[float, np.ndarray] = 1.0) -> np.ndarray:
     retval = np.zeros((n,), dtype=float)
-    retval[indices-1] = values
+    retval[indices - 1] = values
     return retval
 
 
@@ -134,18 +137,18 @@ class SimraScales:
 
     @staticmethod
     def from_path(root: Path) -> SimraScales:
-        filename = root.with_name('simra.in')
+        filename = root.with_name("simra.in")
 
         params: Dict[str, float]
         if filename.exists():
-            params = f90nml.read(filename)['param_data']
+            params = f90nml.read(filename)["param_data"]
         else:
             logging.warning("Unable to find SIMRA input file (simra.in) - field scales may be unreliable")
             params = {}
 
         return SimraScales(
-            speed=params.get('uref', 1.0),
-            length=params.get('lenref', 1.0),
+            speed=params.get("uref", 1.0),
+            length=params.get("lenref", 1.0),
         )
 
 
@@ -164,7 +167,7 @@ class SimraMeshBase:
 
     @property
     def simra_cellshape(self) -> Tuple[int, ...]:
-        return tuple(i-1 for i in self.simra_nodeshape)
+        return tuple(i - 1 for i in self.simra_nodeshape)
 
     @property
     def out_nodeshape(self) -> Tuple[int, ...]:
@@ -173,11 +176,11 @@ class SimraMeshBase:
 
     @property
     def out_cellshape(self) -> Tuple[int, ...]:
-        return tuple(i-1 for i in self.out_nodeshape)
+        return tuple(i - 1 for i in self.out_nodeshape)
 
     @property
-    def properties(self) -> SourceProperties:
-        return SourceProperties(
+    def properties(self) -> api.SourceProperties:
+        return api.SourceProperties(
             instantaneous=True,
         )
 
@@ -188,14 +191,14 @@ class SimraMeshBase:
     def corners(self) -> Coords:
         return self.nodes().corners(self.simra_nodeshape)
 
-    def configure(self, settings: ReaderSettings) -> None:
+    def configure(self, settings: api.ReaderSettings) -> None:
         return
 
     def use_geometry(self, geometry: Field) -> None:
         return
 
     def fields(self) -> Iterator[Field]:
-        yield Field('Geometry', type=FieldType.Geometry, ncomps=self.dim)
+        yield Field("Geometry", type=api.Geometry(self.dim))
 
     def timesteps(self) -> Iterator[TimeStep]:
         yield TimeStep(index=0)
@@ -205,7 +208,7 @@ class SimraMeshBase:
         yield Zone(
             shape=shape,
             coords=self.corners(),
-            local_key='0',
+            local_key="0",
         )
 
     def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> StructuredTopology:
@@ -224,18 +227,18 @@ class SimraMap(SimraMeshBase):
     @staticmethod
     def applicable(path: Path) -> bool:
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 line = next(f)
             assert len(line) == 17
-            assert re.match(r'[ ]*[0-9]*', line[:8])
-            assert re.match(r'[ ]*[0-9]*', line[8:16])
-            assert line[-1] == '\n'
+            assert re.match(r"[ ]*[0-9]*", line[:8])
+            assert re.match(r"[ ]*[0-9]*", line[8:16])
+            assert line[-1] == "\n"
             return True
         except (AssertionError, UnicodeDecodeError):
             return False
 
     def __enter__(self) -> Self:
-        self.mesh = open(self.filename, 'r').__enter__()
+        self.mesh = open(self.filename, "r").__enter__()
         with self.save_excursion():
             i, j = map(int, next(self.mesh).split())
         self.simra_nodeshape = (i, j)
@@ -279,14 +282,14 @@ class Simra2dMesh(SimraMeshBase):
     @staticmethod
     def applicable(path: Path) -> bool:
         try:
-            with open(path, 'r') as f:
-                assert next(f) == 'text\n'
+            with open(path, "r") as f:
+                assert next(f) == "text\n"
             return True
         except (AssertionError, UnicodeDecodeError):
             return False
 
     def __enter__(self) -> Self:
-        self.mesh = open(self.filename, 'r').__enter__()
+        self.mesh = open(self.filename, "r").__enter__()
         next(self.mesh)
         i, j = map(int, next(self.mesh).split()[2:])
         self.simra_nodeshape = (i, j)
@@ -303,15 +306,12 @@ class Simra2dMesh(SimraMeshBase):
     @property
     def out_cellshape(self) -> Tuple[int, int]:
         i, j = self.out_nodeshape
-        return (i-1, j-1)
+        return (i - 1, j - 1)
 
     @lru_cache(maxsize=1)
     def nodes(self) -> FieldData:
         num_nodes = util.prod(self.simra_nodeshape)
-        nodes = FieldData.from_iter(
-            map(float, next(self.mesh).split()[1:])
-            for _ in range(num_nodes)
-        )
+        nodes = FieldData.from_iter(map(float, next(self.mesh).split()[1:]) for _ in range(num_nodes))
         return nodes.translate(mesh_offset(self.filename, dim=2))
 
 
@@ -326,13 +326,13 @@ class Simra3dMesh(SimraMeshBase):
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
         u4_type = settings.endianness.u4_type()
         try:
-            with FortranFile(path, 'r', header_dtype=u4_type) as f:
+            with FortranFile(path, "r", header_dtype=u4_type) as f:
                 assert f._read_size() == 6 * 4
             return True
         except AssertionError:
             return False
 
-    def configure(self, settings: ReaderSettings) -> None:
+    def configure(self, settings: api.ReaderSettings) -> None:
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
@@ -352,8 +352,8 @@ class Simra3dMesh(SimraMeshBase):
             nodes = f.read_reals(self.f4_type)
         return (
             FieldData(transpose(nodes, self.simra_nodeshape))
-                .ensure_native()
-                .translate(mesh_offset(self.filename, dim=3))
+            .ensure_native()
+            .translate(mesh_offset(self.filename, dim=3))
         )
 
 
@@ -364,19 +364,19 @@ class SimraBoundary:
     @staticmethod
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
         try:
-            with open(path, 'r') as f:
-                assert next(f).startswith('Boundary conditions')
-            assert Simra3dMesh.applicable(path.with_name('mesh.dat'), settings)
+            with open(path, "r") as f:
+                assert next(f).startswith("Boundary conditions")
+            assert Simra3dMesh.applicable(path.with_name("mesh.dat"), settings)
             return True
         except (AssertionError, UnicodeDecodeError):
             return False
 
     def __init__(self, path: Path):
         self.filename = path
-        self.mesh = Simra3dMesh(path.with_name('mesh.dat'))
+        self.mesh = Simra3dMesh(path.with_name("mesh.dat"))
 
     def __enter__(self) -> Self:
-        self.boundary = open(self.filename, 'r').__enter__()
+        self.boundary = open(self.filename, "r").__enter__()
         self.mesh.__enter__()
         return self
 
@@ -389,28 +389,28 @@ class SimraBoundary:
         with util.save_excursion(self.boundary):
             yield
 
-    def configure(self, settings: ReaderSettings) -> None:
+    def configure(self, settings: api.ReaderSettings) -> None:
         self.mesh.configure(settings)
 
     @property
-    def properties(self) -> SourceProperties:
+    def properties(self) -> api.SourceProperties:
         fields = [
-            ('u', [0, 1, 2]),
-            ('p', [3]),
-            ('k', [4]),
-            ('eps', [5]),
-            ('pt', [6]),
-            ('surface-roughness', [7]),
-            ('u-mask', [8, 9, 10]),
-            ('p-mask', [11]),
-            ('wall-mask', [12]),
-            ('log-mask', [13]),
-            ('k,e-mask', [14]),
-            ('pt-mask', [15]),
+            ("u", [0, 1, 2]),
+            ("p", [3]),
+            ("k", [4]),
+            ("eps", [5]),
+            ("pt", [6]),
+            ("surface-roughness", [7]),
+            ("u-mask", [8, 9, 10]),
+            ("p-mask", [11]),
+            ("wall-mask", [12]),
+            ("log-mask", [13]),
+            ("k,e-mask", [14]),
+            ("pt-mask", [15]),
         ]
         splits = [
-            SplitFieldSpec(
-                source_name='nodal',
+            api.SplitFieldSpec(
+                source_name="nodal",
                 new_name=name,
                 components=components,
                 splittable=True,
@@ -418,7 +418,7 @@ class SimraBoundary:
             )
             for name, components in fields
         ]
-        return SourceProperties(
+        return api.SourceProperties(
             instantaneous=True,
             split_fields=splits,
         )
@@ -434,7 +434,7 @@ class SimraBoundary:
 
     def fields(self) -> Iterator[Field]:
         yield from self.mesh.fields()
-        yield Field('nodal', type=FieldType.Generic, ncomps=15, splittable=False)
+        yield Field("nodal", type=api.Vector(15), splittable=False)
 
     def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> Topology:
         return self.mesh.topology(timestep, field, zone)
@@ -455,10 +455,10 @@ class SimraBoundary:
             z0_var = read_many(self.boundary, nlog, float, skip=False)
             ifix_z0 = np.arange(1, util.prod(self.mesh.simra_nodeshape), self.mesh.simra_nodeshape[-1])
 
-            ifixu, fixu = split_sparse(read_many(self.boundary, 2*nfixu, float))
-            ifixv, fixv = split_sparse(read_many(self.boundary, 2*nfixv, float))
-            ifixw, fixw = split_sparse(read_many(self.boundary, 2*nfixw, float))
-            ifixp, fixp = split_sparse(read_many(self.boundary, 2*nfixp, float))
+            ifixu, fixu = split_sparse(read_many(self.boundary, 2 * nfixu, float))
+            ifixv, fixv = split_sparse(read_many(self.boundary, 2 * nfixv, float))
+            ifixw, fixw = split_sparse(read_many(self.boundary, 2 * nfixw, float))
+            ifixp, fixp = split_sparse(read_many(self.boundary, 2 * nfixp, float))
 
             next(self.boundary)
 
@@ -466,11 +466,11 @@ class SimraBoundary:
                 assert nwalle is not None
                 read_many(self.boundary, nwalle, int)
 
-            t = read_many(self.boundary, 2*nlog, int, skip=not is_parallel)
+            t = read_many(self.boundary, 2 * nlog, int, skip=not is_parallel)
             iwall, ilog = t[::2], t[1::2]
 
             ifixk = read_many(self.boundary, nfixk, int)
-            t = read_many(self.boundary, 2*nfixk, float, skip=False)
+            t = read_many(self.boundary, 2 * nfixk, float, skip=False)
             fixk, fixd = t[::2], t[1::2]
 
             npts = util.prod(self.mesh.simra_nodeshape)
@@ -480,30 +480,31 @@ class SimraBoundary:
             ifixtemp = read_many(self.boundary, nfixe, int)
             fixtemp = read_many(self.boundary, nfixe, float, skip=False)
 
-        data = np.array([
-            make_mask(npts, ifixu, fixu),
-            make_mask(npts, ifixv, fixv),
-            make_mask(npts, ifixw, fixw),
-            make_mask(npts, ifixp, fixp),
-            make_mask(npts, ifixk, fixk),
-            make_mask(npts, ifixk, fixd),
-            make_mask(npts, ifixtemp, fixtemp),
-            make_mask(npts, ifix_z0, z0_var),
-
-            make_mask(npts, ifixu),
-            make_mask(npts, ifixv),
-            make_mask(npts, ifixw),
-            make_mask(npts, ifixp),
-            make_mask(npts, iwall),
-            make_mask(npts, ilog),
-            make_mask(npts, ifixk),
-            make_mask(npts, ifixtemp),
-        ]).T
+        data = np.array(
+            [
+                make_mask(npts, ifixu, fixu),
+                make_mask(npts, ifixv, fixv),
+                make_mask(npts, ifixw, fixw),
+                make_mask(npts, ifixp, fixp),
+                make_mask(npts, ifixk, fixk),
+                make_mask(npts, ifixk, fixd),
+                make_mask(npts, ifixtemp, fixtemp),
+                make_mask(npts, ifix_z0, z0_var),
+                make_mask(npts, ifixu),
+                make_mask(npts, ifixv),
+                make_mask(npts, ifixw),
+                make_mask(npts, ifixp),
+                make_mask(npts, iwall),
+                make_mask(npts, ilog),
+                make_mask(npts, ifixk),
+                make_mask(npts, ifixtemp),
+            ]
+        ).T
 
         return FieldData(transpose(data, self.mesh.simra_nodeshape)).ensure_native()
 
     def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
-        if field.type == FieldType.Geometry:
+        if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         return self.data()
 
@@ -528,51 +529,51 @@ class SimraContinuation:
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
         u4_type = settings.endianness.u4_type()
         try:
-            assert path.suffix.lower() in ('.res', '.dat')
-            with FortranFile(path, 'r', header_dtype=u4_type) as f:
+            assert path.suffix.lower() in (".res", ".dat")
+            with FortranFile(path, "r", header_dtype=u4_type) as f:
                 size = f._read_size()
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
-                if path.suffix.lower() == '.res':
+                if path.suffix.lower() == ".res":
                     assert (size // u4_type.itemsize - 1) % 11 == 0
-                elif path.suffix.lower() == '.dat':
+                elif path.suffix.lower() == ".dat":
                     assert (size // u4_type.itemsize) % 11 == 0
-            assert Simra3dMesh.applicable(path.with_name('mesh.dat'), settings)
+            assert Simra3dMesh.applicable(path.with_name("mesh.dat"), settings)
             return True
         except AssertionError:
             return False
 
     def __init__(self, path: Path):
         self.filename = path
-        self.mesh = Simra3dMesh(path.with_name('mesh.dat'))
+        self.mesh = Simra3dMesh(path.with_name("mesh.dat"))
 
     @property
     def is_init(self) -> bool:
-        return self.filename.suffix.lower() == '.dat'
+        return self.filename.suffix.lower() == ".dat"
 
-    def configure(self, settings: ReaderSettings) -> None:
+    def configure(self, settings: api.ReaderSettings) -> None:
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
         self.mesh.configure(settings)
 
     @property
-    def properties(self) -> SourceProperties:
+    def properties(self) -> api.SourceProperties:
         fields = [
-            ('u', [0, 1, 2]),
-            ('ps', [3]),
-            ('tk', [4]),
-            ('td', [5]),
-            ('vtef', [6]),
-            ('pt', [7]),
-            ('pts', [8]),
-            ('rho', [9]),
-            ('rhos', [10]),
+            ("u", [0, 1, 2]),
+            ("ps", [3]),
+            ("tk", [4]),
+            ("td", [5]),
+            ("vtef", [6]),
+            ("pt", [7]),
+            ("pts", [8]),
+            ("rho", [9]),
+            ("rhos", [10]),
         ]
         if self.extra_field == ExtraField.Stratification:
-            fields.append(('strat', [11]))
+            fields.append(("strat", [11]))
         splits = [
-            SplitFieldSpec(
-                source_name='nodal',
+            api.SplitFieldSpec(
+                source_name="nodal",
                 new_name=name,
                 components=components,
                 splittable=True,
@@ -580,7 +581,7 @@ class SimraContinuation:
             )
             for name, components in fields
         ]
-        return SourceProperties(
+        return api.SourceProperties(
             instantaneous=True,
             split_fields=splits,
         )
@@ -613,12 +614,12 @@ class SimraContinuation:
         num_nodal = 11
         if self.extra_field == ExtraField.Stratification:
             num_nodal += 1
-        yield Field('nodal', type=FieldType.Generic, ncomps=num_nodal, splittable=False)
+        yield Field("nodal", type=api.Vector(num_nodal), splittable=False)
 
         if self.is_init:
-            yield Field('pressure', type=FieldType.Generic, ncomps=1, cellwise=True)
+            yield Field("pressure", type=api.Scalar(), cellwise=True)
         elif self.extra_field == ExtraField.Unknown:
-            yield Field('pressure?', type=FieldType.Generic, ncomps=1, cellwise=True)
+            yield Field("pressure?", type=api.Scalar(), cellwise=True)
 
     def timesteps(self) -> Iterator[TimeStep]:
         with self.source.leap(0) as f:
@@ -649,10 +650,10 @@ class SimraContinuation:
         if not self.is_init:
             scales = SimraScales.from_path(self.filename)
             nodals[..., :3] *= scales.speed
-            nodals[...,  3] *= scales.speed**2
-            nodals[...,  4] *= scales.speed**2
-            nodals[...,  5] *= scales.speed**3 / scales.length
-            nodals[...,  6] *= scales.speed * scales.length
+            nodals[..., 3] *= scales.speed**2
+            nodals[..., 4] *= scales.speed**2
+            nodals[..., 5] *= scales.speed**3 / scales.length
+            nodals[..., 6] *= scales.speed * scales.length
 
         ndata = FieldData(transpose(nodals, self.mesh.simra_nodeshape)).ensure_native()
         if cells is not None:
@@ -662,7 +663,7 @@ class SimraContinuation:
         return ndata, cdata
 
     def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
-        if field.type == FieldType.Geometry:
+        if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data()
         if field.cellwise:
@@ -683,8 +684,8 @@ class SimraHistory:
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
         u4_type = settings.endianness.u4_type()
         try:
-            assert path.suffix.lower() == '.res'
-            with FortranFile(path, 'r', header_dtype=u4_type) as f:
+            assert path.suffix.lower() == ".res"
+            with FortranFile(path, "r", header_dtype=u4_type) as f:
                 with util.save_excursion(f._fp):
                     size = f._read_size()
                     assert size == u4_type.itemsize
@@ -693,36 +694,36 @@ class SimraHistory:
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
                 assert (size // u4_type.itemsize - 1) % 12 == 0
-            assert Simra3dMesh.applicable(path.with_name('mesh.dat'), settings)
+            assert Simra3dMesh.applicable(path.with_name("mesh.dat"), settings)
             return True
         except AssertionError:
             return False
 
     def __init__(self, path: Path):
         self.filename = path
-        self.mesh = Simra3dMesh(path.with_name('mesh.dat'))
+        self.mesh = Simra3dMesh(path.with_name("mesh.dat"))
 
-    def configure(self, settings: ReaderSettings) -> None:
+    def configure(self, settings: api.ReaderSettings) -> None:
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
         self.mesh.configure(settings)
 
     @property
-    def properties(self) -> SourceProperties:
+    def properties(self) -> api.SourceProperties:
         fields = [
-            ('u', [0, 1, 2]),
-            ('ps', [3]),
-            ('tk', [4]),
-            ('td', [5]),
-            ('vtef', [6]),
-            ('pt', [7]),
-            ('pts', [8]),
-            ('rho', [9]),
-            ('rhos', [10]),
+            ("u", [0, 1, 2]),
+            ("ps", [3]),
+            ("tk", [4]),
+            ("td", [5]),
+            ("vtef", [6]),
+            ("pt", [7]),
+            ("pts", [8]),
+            ("rho", [9]),
+            ("rhos", [10]),
         ]
         splits = [
-            SplitFieldSpec(
-                source_name='nodal',
+            api.SplitFieldSpec(
+                source_name="nodal",
                 new_name=name,
                 components=components,
                 splittable=True,
@@ -730,7 +731,7 @@ class SimraHistory:
             )
             for name, components in fields
         ]
-        return SourceProperties(
+        return api.SourceProperties(
             split_fields=splits,
             instantaneous=False,
         )
@@ -749,8 +750,8 @@ class SimraHistory:
 
     def fields(self) -> Iterator[Field]:
         yield from self.mesh.fields()
-        yield Field('nodal', type=FieldType.Generic, ncomps=12, splittable=False)
-        yield Field('pressure', type=FieldType.Generic, ncomps=1, cellwise=True)
+        yield Field("nodal", type=api.Vector(12), splittable=False)
+        yield Field("pressure", type=api.Scalar(), cellwise=True)
 
     def timesteps(self) -> Iterator[TimeStep]:
         for ts_index, rec_index in enumerate(count(start=1, step=2)):
@@ -768,7 +769,7 @@ class SimraHistory:
         return self.mesh.topology(timestep, field, zone)
 
     def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
-        if field.type == FieldType.Geometry:
+        if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data(timestep.index)
         if field.cellwise:
@@ -778,17 +779,17 @@ class SimraHistory:
 
     @lru_cache(maxsize=1)
     def data(self, index: int) -> Tuple[FieldData, FieldData]:
-        with self.source.leap(2*index + 1) as f:
+        with self.source.leap(2 * index + 1) as f:
             ndata = f.read_but_first(self.f4_type)
             cdata = f.read_reals(self.f4_type)
 
         ndata = ndata.reshape(-1, 12)
         scales = SimraScales.from_path(self.filename)
         ndata[..., :3] *= scales.speed
-        ndata[...,  3] *= scales.speed**2
-        ndata[...,  4] *= scales.speed**2
-        ndata[...,  5] *= scales.speed**3 / scales.length
-        ndata[...,  6] *= scales.speed * scales.length
+        ndata[..., 3] *= scales.speed**2
+        ndata[..., 4] *= scales.speed**2
+        ndata[..., 5] *= scales.speed**3 / scales.length
+        ndata[..., 6] *= scales.speed * scales.length
 
         return (
             FieldData(transpose(ndata, self.mesh.simra_nodeshape)).ensure_native(),

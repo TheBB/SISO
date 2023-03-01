@@ -1,17 +1,17 @@
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Optional, Protocol, Sequence, TypeVar
 
-from ..api import Source, TimeStep, Field
-from ..zone import Zone
-
-from typing import Protocol, Sequence, TypeVar, Optional
 from typing_extensions import Self
+
+from ..api import Field, Source, TimeStep
+from ..zone import Zone
 
 
 class OutputMode(Enum):
-    Binary = 'binary'
-    Ascii = 'ascii'
-    Appended = 'appended'
+    Binary = "binary"
+    Ascii = "ascii"
+    Appended = "appended"
 
 
 @dataclass
@@ -25,9 +25,10 @@ class WriterProperties:
     require_tesselated: bool = False
 
 
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
-Z = TypeVar('Z', bound=Zone)
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
+Z = TypeVar("Z", bound=Zone)
+
 
 class Writer(Protocol[F, T, Z]):
     def __enter__(self) -> Self:

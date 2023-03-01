@@ -1,31 +1,20 @@
 from __future__ import annotations
 
-from functools import reduce
 import logging
+from functools import reduce
 from operator import itemgetter
+from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, TypeVar, cast
 
-from .passthrough import Passthrough
 from ..api import Field, Source, SourceProperties, TimeStep
-from ..field import FieldData
 from ..topology import Topology
+from ..util import FieldData, bisect
 from ..zone import Point, Shape, Zone
-from ..util import bisect
-
-from typing import (
-    cast,
-    Dict,
-    Iterator,
-    List,
-    MutableMapping,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-)
+from .passthrough import Passthrough
 
 
-F = TypeVar('F', bound=Field)
-T = TypeVar('T', bound=TimeStep)
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
+
 
 class KeyZones(Passthrough[F, T, Zone]):
     manager: ZoneManager
@@ -67,10 +56,7 @@ class ZoneManager:
             assert self.shapes[zone.global_key] == zone.shape
             return cast(Zone, zone)
 
-        keys = reduce(
-            lambda x, y: x & y,
-            (self.lut.get(pt, set()) for pt in zone.coords)
-        )
+        keys = reduce(lambda x, y: x & y, (self.lut.get(pt, set()) for pt in zone.coords))
         assert len(keys) < 2
 
         if keys:
@@ -92,7 +78,8 @@ class ZoneManager:
         )
 
 
-Q = TypeVar('Q')
+Q = TypeVar("Q")
+
 
 class VertexDict(MutableMapping[Point, Q]):
     rtol: float

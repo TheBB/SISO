@@ -1,30 +1,21 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from io import BytesIO, StringIO
-import logging
+from typing import IO, Dict, Iterator, List, Optional, Tuple
 
 import lrspline as lr
+import numpy as np
+import splipy.utils
 from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
-import splipy.utils
-
-import numpy as np
-
-from .api import Field, Topology, DiscreteTopology, Tesselator, CellType
-from .field import FieldData
-from .zone import Coords
-from . import util
-
 from typing_extensions import Self
-from typing import (
-    Dict,
-    IO,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-)
+
+from . import util
+from .api import CellType, DiscreteTopology, Field, Tesselator, Topology
+from .util import FieldData
+from .zone import Coords
 
 
 class UnstructuredTopology:
@@ -42,16 +33,16 @@ class UnstructuredTopology:
         io = BytesIO(data)
 
         first_line = next(io)
-        assert first_line.startswith(b'# LAGRANGIAN')
+        assert first_line.startswith(b"# LAGRANGIAN")
         _, _, nodespec, elemspec, typespec = first_line.split()
 
-        assert nodespec.startswith(b'nodes=')
-        assert elemspec.startswith(b'elements=')
-        assert typespec.startswith(b'type=')
-        num_nodes = int(nodespec.split(b'=', 1)[1])
-        num_cells = int(elemspec.split(b'=', 1)[1])
-        celltype = typespec.split(b'=', 1)[1]
-        assert celltype == b'hexahedron'
+        assert nodespec.startswith(b"nodes=")
+        assert elemspec.startswith(b"elements=")
+        assert typespec.startswith(b"type=")
+        num_nodes = int(nodespec.split(b"=", 1)[1])
+        num_cells = int(elemspec.split(b"=", 1)[1])
+        celltype = typespec.split(b"=", 1)[1]
+        assert celltype == b"hexahedron"
 
         nodes = np.zeros((num_nodes, 3), dtype=float)
         for i in range(num_nodes):
@@ -60,8 +51,8 @@ class UnstructuredTopology:
         cells = np.zeros((num_cells, 8), dtype=int)
         for i in range(num_cells):
             cells[i] = list(map(int, next(io).split()))
-            cells[i,6], cells[i,7] = cells[i,7], cells[i,6]
-            cells[i,2], cells[i,3] = cells[i,3], cells[i,2]
+            cells[i, 6], cells[i, 7] = cells[i, 7], cells[i, 6]
+            cells[i, 2], cells[i, 3] = cells[i, 3], cells[i, 2]
 
         corners = (tuple(nodes[0]),)
         topology = UnstructuredTopology(num_nodes, cells, CellType.Hexahedron)
@@ -78,11 +69,7 @@ class UnstructuredTopology:
 
     @property
     def pardim(self):
-        return {
-            CellType.Line: 1,
-            CellType.Quadrilateral: 2,
-            CellType.Hexahedron: 3
-        }[self.celltype]
+        return {CellType.Line: 1, CellType.Quadrilateral: 2, CellType.Hexahedron: 3}[self.celltype]
 
     @property
     def num_cells(self) -> int:
@@ -131,8 +118,8 @@ class NoopTesselator(Tesselator[DiscreteTopology]):
 class G2Object(G2):
     def __init__(self, fstream: IO, mode: str):
         self.fstream = fstream
-        self.onlywrite = mode == 'w'
-        super().__init__('')
+        self.onlywrite = mode == "w"
+        super().__init__("")
 
     def __enter__(self) -> G2Object:
         return self
@@ -164,7 +151,7 @@ class SplineTopology(Topology):
 
     @staticmethod
     def from_string(data: str) -> Iterator[Tuple[Coords, SplineTopology, FieldData]]:
-        with G2Object(StringIO(data), 'r') as g2:
+        with G2Object(StringIO(data), "r") as g2:
             for obj in g2.read():
                 yield SplineTopology.from_splineobject(obj)
 
@@ -189,14 +176,10 @@ class SplineTesselator(Tesselator[SplineTopology]):
     cellwise_knots: List[np.ndarray]
 
     def __init__(self, topology: SplineTopology, nvis: int = 1):
-        self.nodal_knots = [
-            util.subdivide_linear(basis.knot_spans(), nvis)
-            for basis in topology.bases
-        ]
+        self.nodal_knots = [util.subdivide_linear(basis.knot_spans(), nvis) for basis in topology.bases]
 
         self.cellwise_knots = [
-            ((knots := np.array(basis.knot_spans()))[:-1] + knots[1:]) / 2
-            for basis in topology.bases
+            ((knots := np.array(basis.knot_spans()))[:-1] + knots[1:]) / 2 for basis in topology.bases
         ]
 
     def tesselate_topology(self, topology: SplineTopology) -> StructuredTopology:
@@ -220,7 +203,7 @@ class SplineTesselator(Tesselator[SplineTopology]):
                 coeffs = np.hstack((coeffs, util.flatten_2d(topology.weights)))
             rational = topology.weights is not None
 
-        coeffs = splipy.utils.reshape(coeffs, shape, order='F')
+        coeffs = splipy.utils.reshape(coeffs, shape, order="F")
         new_spline = SplineObject(bases, coeffs, rational=rational, raw=True)
         return FieldData(util.flatten_2d(new_spline(*knots)))
 

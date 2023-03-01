@@ -1,38 +1,21 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from itertools import chain, count, repeat
-import logging
 from pathlib import Path
+from typing import ClassVar, Dict, Iterator, List, Optional, Protocol, Tuple
 
 import h5py
 import numpy as np
-
-from ..api import (
-    ReaderSettings,
-    RecombineFieldSpec,
-    Source,
-    SourceProperties,
-    SplitFieldSpec,
-    Topology,
-)
-from ..field import Field, FieldType, FieldData
-from ..timestep import TimeStep
-from ..topology import SplineTopology, LrTopology, UnstructuredTopology
-from ..zone import Zone, Shape
-from .. import util
-
 from typing_extensions import Self
-from typing import (
-    ClassVar,
-    Dict,
-    Iterator,
-    Optional,
-    Protocol,
-    List,
-    Set,
-    Tuple,
-)
+
+from .. import api, util
+from ..field import Field
+from ..timestep import TimeStep
+from ..topology import LrTopology, SplineTopology, UnstructuredTopology
+from ..util import FieldData
+from ..zone import Shape, Zone
 
 
 class Locator(Protocol):
@@ -45,19 +28,19 @@ class Locator(Protocol):
 
 class StandardLocator:
     def patch_path(self, name: str, step: int, patch: int) -> str:
-        return f'{step}/{name}/basis//{patch+1}'
+        return f"{step}/{name}/basis//{patch+1}"
 
     def coeff_path(self, basis_name: str, field_name: str, step: int, patch: int, cellwise: bool) -> str:
-        subdir = 'knotspan' if cellwise else 'fields'
-        return f'{int(step)}/{basis_name}/{subdir}/{field_name}/{patch+1}'
+        subdir = "knotspan" if cellwise else "fields"
+        return f"{int(step)}/{basis_name}/{subdir}/{field_name}/{patch+1}"
 
 
 class EigenLocator:
     def patch_path(self, name: str, step: int, patch: int) -> str:
-        return f'0/{name}/basis/{patch+1}'
+        return f"0/{name}/basis/{patch+1}"
 
     def coeff_path(self, basis_name: str, field_name: str, step: int, patch: int, cellwise: bool) -> str:
-        return f'0/{basis_name}/Eigenmode/{step+1}/{patch+1}'
+        return f"0/{basis_name}/Eigenmode/{step+1}/{patch+1}"
 
 
 def is_legal_group_name(name: str) -> bool:
@@ -65,7 +48,7 @@ def is_legal_group_name(name: str) -> bool:
         int(name)
         return True
     except ValueError:
-        return name.lower() in ('anasol', 'log')
+        return name.lower() in ("anasol", "log")
 
 
 class IfemBasis:
@@ -86,7 +69,7 @@ class IfemBasis:
         self.num_patches = i
 
     def __repr__(self) -> str:
-        return f'Basis({self.name}, num_patches={self.num_patches})'
+        return f"Basis({self.name}, num_patches={self.num_patches})"
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -100,23 +83,23 @@ class IfemBasis:
         return self.locator.patch_path(self.name, step, patch)
 
     @lru_cache(maxsize=128)
-    def patch_at(self, step: int, patch: int, source: Ifem) -> Tuple[Zone, Topology, FieldData]:
+    def patch_at(self, step: int, patch: int, source: Ifem) -> Tuple[Zone, api.Topology, FieldData]:
         while self.patch_path(step, patch) not in source.h5:
             step -= 1
 
-        topology: Topology
+        topology: api.Topology
         patchdata = source.h5[self.patch_path(step, patch)][:]
         initial = patchdata[:20].tobytes()
         raw_data = memoryview(patchdata).tobytes()
-        if initial.startswith(b'# LAGRANGIAN'):
+        if initial.startswith(b"# LAGRANGIAN"):
             corners, topology, cps = UnstructuredTopology.from_ifem(raw_data)
-        elif initial.startswith(b'# LRSPLINE'):
+        elif initial.startswith(b"# LRSPLINE"):
             corners, topology, cps = next(LrTopology.from_bytes(raw_data))
         else:
             corners, topology, cps = next(SplineTopology.from_bytes(raw_data))
         shape = [Shape.Line, Shape.Quatrilateral, Shape.Hexahedron][topology.pardim - 1]
 
-        zone = Zone(shape=shape, coords=corners, local_key=f'{self.name}/{step}/{patch}')
+        zone = Zone(shape=shape, coords=corners, local_key=f"{self.name}/{step}/{patch}")
         return zone, topology, cps
 
     @lru_cache(maxsize=1)
@@ -141,17 +124,17 @@ class IfemField:
     def __repr__(self) -> str:
         return f"Field({self.name}, {'cellwise' if self.cellwise else 'nodal'}, {self.basis.name})"
 
-    def splits(self) -> Iterator[SplitFieldSpec]:
-        if '&&' not in self.name:
+    def splits(self) -> Iterator[api.SplitFieldSpec]:
+        if "&&" not in self.name:
             return
 
-        component_names = [comp.strip() for comp in self.name.split('&&')]
-        if ' ' in component_names[0]:
-            prefix, component_names[0] = component_names[0].split(' ', maxsplit=1)
-            component_names = [f'{prefix} {comp}' for comp in component_names]
+        component_names = [comp.strip() for comp in self.name.split("&&")]
+        if " " in component_names[0]:
+            prefix, component_names[0] = component_names[0].split(" ", maxsplit=1)
+            component_names = [f"{prefix} {comp}" for comp in component_names]
 
         for i, comp in enumerate(component_names):
-            yield SplitFieldSpec(
+            yield api.SplitFieldSpec(
                 source_name=self.name,
                 new_name=comp,
                 components=[i],
@@ -186,7 +169,7 @@ class IfemField:
         return FieldData(data=cps.reshape(-1, ncomps))
 
 
-class Ifem(Source):
+class Ifem:
     filename: Path
     h5: h5py.File
 
@@ -196,12 +179,13 @@ class Ifem(Source):
     _fields: Dict[str, IfemField]
 
     locator: ClassVar[Locator] = StandardLocator()
-    default_field_type: ClassVar[FieldType] = FieldType.Generic
+    default_scalar: ClassVar[api.ScalarInterpretation] = api.ScalarInterpretation.Generic
+    default_vector: ClassVar[api.VectorInterpretation] = api.VectorInterpretation.Generic
 
     @staticmethod
     def applicable(path: Path) -> bool:
         try:
-            with h5py.File(path, 'r') as f:
+            with h5py.File(path, "r") as f:
                 assert all(is_legal_group_name(name) for name in f)
             return True
         except (AssertionError, OSError):
@@ -212,13 +196,12 @@ class Ifem(Source):
         self._fields = {}
 
     def __enter__(self) -> Self:
-        self.h5 = h5py.File(self.filename, 'r').__enter__()
+        self.h5 = h5py.File(self.filename, "r").__enter__()
 
         self.discover_bases()
         for basis in self._bases.values():
             logging.debug(
-                f"Basis {basis.name} with "
-                f"{util.pluralize(basis.num_patches, 'patch', 'patches')}"
+                f"Basis {basis.name} with " f"{util.pluralize(basis.num_patches, 'patch', 'patches')}"
             )
 
         self.discover_fields()
@@ -228,15 +211,15 @@ class Ifem(Source):
         self.h5.__exit__(*args)
 
     @property
-    def properties(self) -> SourceProperties:
+    def properties(self) -> api.SourceProperties:
         splits, recombineations = self.propose_recombinations()
-        return SourceProperties(
+        return api.SourceProperties(
             instantaneous=False,
             split_fields=splits,
             recombine_fields=recombineations,
         )
 
-    def configure(self, settings: ReaderSettings) -> None:
+    def configure(self, settings: api.ReaderSettings) -> None:
         return
 
     @property
@@ -251,13 +234,9 @@ class Ifem(Source):
         return IfemBasis(name, self.locator, self)
 
     def discover_bases(self) -> None:
-        basis_names = set(chain.from_iterable(self.h5.values())) - {'timeinfo'}
+        basis_names = set(chain.from_iterable(self.h5.values())) - {"timeinfo"}
         bases = (self.make_basis(name) for name in basis_names)
-        self._bases = {
-            basis.name: basis
-            for basis in bases
-            if basis.num_patches > 0
-        }
+        self._bases = {basis.name: basis for basis in bases if basis.num_patches > 0}
 
     def discover_fields(self) -> None:
         for step_grp in self.timestep_groups():
@@ -266,8 +245,8 @@ class Ifem(Source):
                     continue
 
                 fields: Iterator[Tuple[str, bool]] = chain(
-                    zip(basis_grp.get('fields', ()), repeat(False)),
-                    zip(basis_grp.get('knotspan', ()), repeat(True)),
+                    zip(basis_grp.get("fields", ()), repeat(False)),
+                    zip(basis_grp.get("knotspan", ()), repeat(True)),
                 )
                 for field_name, cellwise in fields:
                     self._fields[field_name] = IfemField(
@@ -277,21 +256,21 @@ class Ifem(Source):
                     )
 
     @lru_cache(maxsize=1)
-    def propose_recombinations(self) -> Tuple[List[SplitFieldSpec], List[RecombineFieldSpec]]:
+    def propose_recombinations(self) -> Tuple[List[api.SplitFieldSpec], List[api.RecombineFieldSpec]]:
         splits = list(chain.from_iterable(field.splits() for field in self._fields.values()))
 
         candidates: Dict[str, List[str]] = {}
         field_names = chain(self._fields, (split.new_name for split in splits))
         for field_name in field_names:
-            if len(field_name) <= 2 or field_name[-2] != '_':
+            if len(field_name) <= 2 or field_name[-2] != "_":
                 continue
             prefix, suffix = field_name[:-2], field_name[-1]
-            if suffix not in 'xyz':
+            if suffix not in "xyz":
                 continue
             candidates.setdefault(prefix, []).append(field_name)
 
         recombinations = [
-            RecombineFieldSpec(source_names, new_name)
+            api.RecombineFieldSpec(source_names, new_name)
             for new_name, source_names in candidates.items()
             if new_name not in self._fields and len(source_names) > 1
         ]
@@ -303,8 +282,8 @@ class Ifem(Source):
 
     def timesteps(self) -> Iterator[TimeStep]:
         for i, group in enumerate(self.timestep_groups()):
-            if 'timeinfo/level' in group:
-                time = group['timeinfo/level']
+            if "timeinfo/level" in group:
+                time = group["timeinfo/level"]
             else:
                 time = float(i)
             yield TimeStep(index=i, time=time)
@@ -314,88 +293,85 @@ class Ifem(Source):
             zone, _, _ = self.geometry.patch_at(0, patch, self)
             yield zone
 
-    def fields(self) -> Iterator[Field]:
+    def fields(self) -> Iterator[api.Field]:
         for basis in self._bases.values():
-            yield Field(
-                name=basis.name,
-                type=FieldType.Geometry,
-                ncomps=basis.ncomps(self),
-                cellwise=False,
-            )
+            yield Field(name=basis.name, type=api.Geometry(ncomps=basis.ncomps(self)))
 
         for field in self._fields.values():
+            ncomps = field.ncomps(self)
+            tp: api.FieldType
+            if ncomps > 1:
+                tp = api.Vector(ncomps=ncomps, interpretation=self.default_vector)
+            else:
+                tp = api.Scalar(interpretation=self.default_scalar)
             yield Field(
                 name=field.name,
-                type=self.default_field_type,
-                ncomps=field.ncomps(self),
+                type=tp,
                 cellwise=field.cellwise,
             )
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> Topology:
-        if field.type == FieldType.Geometry:
+    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> api.Topology:
+        if field.is_geometry:
             basis = self._bases[field.name]
         else:
             basis = self._fields[field.name].basis
-        patch = int(zone.local_key.split('/')[-1])
+        patch = int(zone.local_key.split("/")[-1])
         _, topology, _ = basis.patch_at(timestep.index, patch, self)
         return topology
 
     def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
-        patch = int(zone.local_key.split('/')[-1])
-        if field.type == FieldType.Geometry:
+        patch = int(zone.local_key.split("/")[-1])
+        if field.is_geometry:
             basis = self._bases[field.name]
             _, _, coeffs = basis.patch_at(timestep.index, patch, self)
             return coeffs
         ifield = self._fields[field.name]
         coeffs = ifield.cps_at(timestep.index, patch, self)
-        if field.type == FieldType.Eigenmode:
+        if field.is_eigenmode:
             coeffs = coeffs.ensure_ncomps(3, allow_scalar=False, pad_right=False)
         return coeffs
 
 
 class IfemModes(Ifem):
-
     locator = EigenLocator()
-    default_field_type = FieldType.Eigenmode
+
+    default_scalar = api.ScalarInterpretation.Eigenmode
+    default_vector = api.VectorInterpretation.Eigenmode
 
     @staticmethod
     def applicable(path: Path) -> bool:
         try:
-            with h5py.File(path, 'r') as f:
-                assert '0' in f
-                basis_name = next(iter(f['0']))
-                assert 'Eigenmode' in f[f'0/{basis_name}']
+            with h5py.File(path, "r") as f:
+                assert "0" in f
+                basis_name = next(iter(f["0"]))
+                assert "Eigenmode" in f[f"0/{basis_name}"]
             return True
         except (AssertionError, OSError):
             return False
 
     def discover_bases(self) -> None:
-        group = self.h5['0']
+        group = self.h5["0"]
         basis_name = util.only(group)
-        self._bases = {
-            basis_name: self.make_basis(basis_name)
-        }
+        self._bases = {basis_name: self.make_basis(basis_name)}
 
     def discover_fields(self) -> None:
         basis = util.only(self._bases.values())
-        self._fields = {
-            'Mode Shape': IfemField('Mode Shape', cellwise=False, basis=basis)
-        }
+        self._fields = {"Mode Shape": IfemField("Mode Shape", cellwise=False, basis=basis)}
 
     @property
     def nsteps(self) -> int:
         basis = util.only(self._bases.values())
-        return len(self.h5[f'0/{basis.name}/Eigenmode'])
+        return len(self.h5[f"0/{basis.name}/Eigenmode"])
 
     def timestep_groups(self) -> Iterator[h5py.Group]:
         basis = util.only(self._bases.values())
         for index in range(self.nsteps):
-            yield self.h5[f'0/{basis.name}/Eigenmode/{index+1}']
+            yield self.h5[f"0/{basis.name}/Eigenmode/{index+1}"]
 
     def timesteps(self) -> Iterator[TimeStep]:
         for i, group in enumerate(self.timestep_groups()):
-            if 'Value' in group:
-                time = group['Value'][0]
+            if "Value" in group:
+                time = group["Value"][0]
             else:
-                time = group['Frequency'][0]
+                time = group["Frequency"][0]
             yield TimeStep(index=i, time=time)

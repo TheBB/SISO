@@ -1,18 +1,12 @@
 from dataclasses import dataclass
-
-from .api import ReaderSettings, Source, TimeStep, Field, SourceProperties
-from .field import FieldData
-from .topology import Topology
-from .util import bisect
-from .zone import Zone
+from typing import Iterator, List, Optional, Sequence
 
 from typing_extensions import Self
-from typing import (
-    Iterator,
-    List,
-    Optional,
-    Sequence,
-)
+
+from .api import Field, ReaderSettings, Source, SourceProperties, TimeStep
+from .topology import Topology
+from .util import FieldData, bisect
+from .zone import Zone
 
 
 @dataclass
