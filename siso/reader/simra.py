@@ -434,7 +434,7 @@ class SimraBoundary(api.Source[Field, TimeStep, Zone]):
 
     def fields(self) -> Iterator[Field]:
         yield from self.mesh.fields()
-        yield Field("nodal", type=api.Vector(15), splittable=False)
+        yield Field("nodal", type=api.Vector(16), splittable=False)
 
     def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> Topology:
         return self.mesh.topology(timestep, field, zone)

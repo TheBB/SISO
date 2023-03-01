@@ -11,8 +11,6 @@ from rich.logging import RichHandler
 
 from . import filters, util
 from .api import Dimensionality, Endianness, Field, ReaderSettings, Source, Staggering
-
-# from .field import Field, FieldType
 from .multisource import MultiSource
 from .reader import FindReaderSettings, find_reader
 from .writer import OutputFormat, find_writer
@@ -52,6 +50,9 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 # Pipeline options
 @click.option("--unstructured", "require_unstructured", is_flag=True)
 @click.option("--decompose/--no-decompose", default=True)
+@click.option(
+    "--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", flag_value=True, default=False
+)
 
 # Writer options
 @click.option("--mode", "-m", "output_mode", type=Enum(OutputMode))
@@ -69,7 +70,8 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @click.option("--extrude", "dimensionality", flag_value=Dimensionality.Extrude, type=click.UNPROCESSED)
 @click.option("--staggering", type=Enum(Staggering), default="inner")
 
-# Logging and verbosity
+# Logging, verbosity and testing
+@click.option("--verify-strict/--no-verify-strict", default=False)
 @click.option("--debug", "verbosity", flag_value="debug")
 @click.option("--info", "verbosity", flag_value="info", default=True)
 @click.option("--warning", "verbosity", flag_value="warning")
@@ -89,13 +91,15 @@ def main(
     # Pipeline options
     require_unstructured: bool,
     decompose: bool,
+    eigenmodes_are_displacement: bool,
     # Writer options
     output_mode: Optional[OutputMode],
     # Reader options
     in_endianness: Endianness,
     dimensionality: Dimensionality,
     staggering: Staggering,
-    # Logging and verbosity
+    # Logging, verbosity and testing
+    verify_strict: bool,
     verbosity: str,
     rich: bool,
     # Input and output
@@ -163,6 +167,9 @@ def main(
         in_props = source.properties
         out_props = sink.properties
 
+        if verify_strict:
+            source = filters.Strict(source)
+
         if not in_props.globally_keyed:
             source = filters.KeyZones(source)
 
@@ -185,6 +192,12 @@ def main(
 
         if require_unstructured:
             source = filters.ForceUnstructured(source)
+
+        if eigenmodes_are_displacement:
+            source = filters.EigenDisp(source)
+
+        if verify_strict:
+            source = filters.Strict(source)
 
         geometries: List[Field] = []
         fields: List[Field] = []

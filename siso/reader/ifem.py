@@ -283,7 +283,7 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
     def timesteps(self) -> Iterator[TimeStep]:
         for i, group in enumerate(self.timestep_groups()):
             if "timeinfo/level" in group:
-                time = group["timeinfo/level"]
+                time = group["timeinfo/level"][:]
             else:
                 time = float(i)
             yield TimeStep(index=i, time=time)
@@ -327,8 +327,6 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
             return coeffs
         ifield = self._fields[field.name]
         coeffs = ifield.cps_at(timestep.index, patch, self)
-        if field.is_eigenmode:
-            coeffs = coeffs.ensure_ncomps(3, allow_scalar=False, pad_right=False)
         return coeffs
 
 

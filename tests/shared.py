@@ -64,7 +64,15 @@ class PreparedTestCase:
 
     @contextmanager
     def invoke(self, fmt: str, mode: str = 'ascii') -> Path:
-        args = ['--debug', '--mode', mode, '-f', fmt, *self.extra_args, str(self.sourcefile), '-o', str(self.outfile)]
+        args = [
+            '--debug',
+            '--verify-strict',
+            '--mode', mode,
+            '-f', fmt,
+            *self.extra_args,
+            str(self.sourcefile),
+            '-o', str(self.outfile)
+        ]
         print(args)
         with cd_temp() as tempdir:
             res = CliRunner().invoke(main, args)
@@ -152,8 +160,8 @@ testcase('hdf5/Square.hdf5', 1, formats, **kwargs)
 testcase('hdf5/Square-ad.hdf5', 11, formats, **kwargs)
 testcase('hdf5/Square-compatible-abd1-B-I-stat.hdf5', 1, formats, **kwargs)
 testcase('hdf5/Square-mixed-abd1-B-I-stat.hdf5', 1, formats, **kwargs)
-testcase('hdf5/Square-modes.hdf5', 10, formats, **kwargs)
-testcase('hdf5/Square-modes-freq.hdf5', 10, formats, **kwargs)
+testcase('hdf5/Square-modes.hdf5', 10, formats, '--ead', **kwargs)
+testcase('hdf5/Square-modes-freq.hdf5', 10, formats, '--ead', **kwargs)
 testcase('hdf5/Waterfall3D.hdf5', 1, formats, **kwargs)
 testcase('g2/annulus3D.g2', None, formats, **kwargs)
 

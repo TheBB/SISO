@@ -150,7 +150,10 @@ class VtkWriterBase(Writer):
             for field in fields:
                 target = grid.GetCellData() if field.cellwise else grid.GetPointData()
                 data = source.field_data(timestep, field, zone)
-                data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
+                if field.is_displacement:
+                    data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
+                else:
+                    data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
                 data = transpose(data, grid, field.cellwise)
                 if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
                     data = data.nan_filter()

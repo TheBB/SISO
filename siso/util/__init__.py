@@ -189,7 +189,7 @@ def stagger(data: np.ndarray, axis: int) -> np.ndarray:
 T = TypeVar("T")
 
 
-def _pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
+def pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
     it = iter(iterable)
     left = next(it)
     for right in it:
@@ -201,7 +201,7 @@ def subdivide_linear(knots: Union[List[float], Tuple[float, ...]], nvis: int) ->
     return np.fromiter(
         chain(
             chain.from_iterable(
-                (((nvis - i) * a + i * b) / nvis for i in range(nvis)) for a, b in _pairwise(knots)
+                (((nvis - i) * a + i * b) / nvis for i in range(nvis)) for a, b in pairwise(knots)
             ),
             (knots[-1],),
         ),
@@ -217,8 +217,8 @@ def visit_face(
     xs = subdivide_linear((lft, rgt), nvis)
     ys = subdivide_linear((btm, top), nvis)
 
-    for l, r in _pairwise(xs):
-        for b, t in _pairwise(ys):
+    for l, r in pairwise(xs):
+        for b, t in pairwise(ys):
             sw, se, nw, ne = (l, b), (r, b), (l, t), (r, t)
             for pt in (sw, se, nw, ne):
                 nodes.setdefault(pt, len(nodes))
@@ -234,9 +234,9 @@ def visit_volume(
     vs = subdivide_linear((vmin, vmax), nvis)
     ws = subdivide_linear((wmin, wmax), nvis)
 
-    for ul, ur in _pairwise(us):
-        for vl, vr in _pairwise(vs):
-            for wl, wr in _pairwise(ws):
+    for ul, ur in pairwise(us):
+        for vl, vr in pairwise(vs):
+            for wl, wr in pairwise(ws):
                 bsw, bse, bnw, bne = (ul, vl, wl), (ur, vl, wl), (ul, vr, wl), (ur, vr, wl)
                 tsw, tse, tnw, tne = (ul, vl, wr), (ur, vl, wr), (ul, vr, wr), (ur, vr, wr)
                 for pt in (bsw, bse, bnw, bne, tsw, tse, tnw, tne):

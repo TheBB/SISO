@@ -177,6 +177,10 @@ class Field:
         )
 
     @property
+    def is_displacement(self) -> bool:
+        return isinstance(self.type, Vector) and self.type.interpretation == VectorInterpretation.Displacement
+
+    @property
     def ncomps(self) -> int:
         if isinstance(self.type, Scalar):
             return 1
