@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, TypeVar
+from typing import Generic, Iterator, List, Optional, TypeVar
 
 from .. import api
 from ..topology import Topology
@@ -7,13 +7,14 @@ from ..util import FieldData
 from .passthrough import Passthrough
 
 
+F = TypeVar("F", bound=api.Field)
 Z = TypeVar("Z", bound=api.Zone)
 T = TypeVar("T", bound=api.TimeStep)
 
 
 @dataclass
-class DecomposedField(api.Field):
-    original_field: api.Field
+class DecomposedField(api.Field, Generic[F]):
+    original_field: F
     components: Optional[List[int]]
     splittable: bool
     name: str
@@ -38,7 +39,7 @@ class DecomposedField(api.Field):
         return self.original_field.ncomps
 
 
-class DecomposeBase(Passthrough[DecomposedField, T, Z]):
+class DecomposeBase(Passthrough[F, T, Z, DecomposedField[F], T, Z]):
     def topology(self, timestep: T, field: DecomposedField, zone: Z) -> Topology:
         return self.source.topology(timestep, field.original_field, zone)
 
@@ -49,8 +50,8 @@ class DecomposeBase(Passthrough[DecomposedField, T, Z]):
         return data
 
 
-class Decompose(DecomposeBase):
-    def fields(self) -> Iterator[DecomposedField]:
+class Decompose(DecomposeBase[F, T, Z]):
+    def fields(self) -> Iterator[DecomposedField[F]]:
         for field in self.source.fields():
             yield DecomposedField(name=field.name, original_field=field, components=None, splittable=False)
             if field.is_geometry or field.is_scalar or not field.splittable:
@@ -60,14 +61,14 @@ class Decompose(DecomposeBase):
                 yield DecomposedField(name=name, original_field=field, components=[i], splittable=False)
 
 
-class Split(DecomposeBase):
+class Split(DecomposeBase[F, T, Z]):
     splits: List[api.SplitFieldSpec]
 
     def __init__(self, source: api.Source, splits: List[api.SplitFieldSpec]):
         super().__init__(source)
         self.splits = splits
 
-    def fields(self) -> Iterator[DecomposedField]:
+    def fields(self) -> Iterator[DecomposedField[F]]:
         to_destroy = {split.source_name for split in self.splits if split.destroy}
         fields = {field.name: field for field in self.source.fields()}
         for field in fields.values():

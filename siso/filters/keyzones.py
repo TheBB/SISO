@@ -14,9 +14,10 @@ from .passthrough import Passthrough
 
 F = TypeVar("F", bound=Field)
 T = TypeVar("T", bound=TimeStep)
+Z = TypeVar("Z", bound=Zone)
 
 
-class KeyZones(Passthrough[F, T, Zone]):
+class KeyZones(Passthrough[F, T, Z, F, T, Zone]):
     manager: ZoneManager
 
     def __init__(self, source: Source):
@@ -37,10 +38,10 @@ class KeyZones(Passthrough[F, T, Zone]):
             yield self.manager.lookup(zone)
 
     def topology(self, timestep: T, field: F, zone: Zone) -> Topology:
-        return self.source.topology(timestep, field, zone)
+        return self.source.topology(timestep, field, cast(Z, zone))
 
     def field_data(self, timestep: T, field: F, zone: Zone) -> FieldData:
-        return self.source.field_data(timestep, field, zone)
+        return self.source.field_data(timestep, field, cast(Z, zone))
 
 
 class ZoneManager:

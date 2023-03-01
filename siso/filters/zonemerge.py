@@ -11,11 +11,12 @@ from ..zone import Shape, Zone
 from .passthrough import Passthrough
 
 
+Z = TypeVar("Z", bound=Zone)
 F = TypeVar("F", bound=Field)
 T = TypeVar("T", bound=TimeStep)
 
 
-class ZoneMerge(Passthrough[F, T, Zone]):
+class ZoneMerge(Passthrough[F, T, Z, F, T, Zone]):
     def validate_source(self) -> None:
         assert not self.source.properties.single_zoned
         assert self.source.properties.tesselated

@@ -11,7 +11,7 @@ F = TypeVar("F", bound=Field)
 T = TypeVar("T", bound=TimeStep)
 
 
-class ForceUnstructured(Passthrough[F, T, Z]):
+class ForceUnstructured(Passthrough[F, T, Z, F, T, Z]):
     def validate_source(self) -> None:
         assert self.source.properties.tesselated
 

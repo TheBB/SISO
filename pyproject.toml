@@ -22,6 +22,8 @@ pytest = "^7.2.1"
 mypy = "^1.0.0"
 typing-protocol-intersection = "^0.2.3"
 poethepoet = "^0.18.1"
+black = "^23.1.0"
+isort = "^5.12.0"
 
 [tool.poetry.scripts]
 siso = "siso.__main__:main"

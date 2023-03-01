@@ -143,7 +143,10 @@ class NetCdf:
         return FieldData(data.reshape(-1, 1))
 
 
-class Wrf(NetCdf):
+class Wrf(NetCdf, api.Source[Field, TimeStep, Zone]):
+    def __enter__(self) -> Self:
+        return NetCdf.__enter__(self)
+
     @staticmethod
     def applicable(path: Path) -> bool:
         try:

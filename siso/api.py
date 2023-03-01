@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from abc import ABC, abstractproperty
+from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Iterator, List, Optional, Protocol, TypeVar, Union
+from typing import Generic, Iterator, List, Optional, Protocol, TypeVar, Union
 
 import numpy as np
 from typing_extensions import Self
@@ -205,36 +205,41 @@ F = TypeVar("F", bound=Field)
 T = TypeVar("T", bound=TimeStep)
 
 
-class Source(Protocol[F, T, Z]):
-    @property
+class Source(ABC, Generic[F, T, Z]):
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args) -> None:
+        return
+
+    @abstractproperty
     def properties(self) -> SourceProperties:
         ...
 
     def configure(self, settings: ReaderSettings) -> None:
-        ...
+        return
 
+    def use_geometry(self, geometry: F) -> None:
+        return
+
+    @abstractmethod
     def fields(self) -> Iterator[F]:
         ...
 
+    @abstractmethod
     def timesteps(self) -> Iterator[T]:
         ...
 
+    @abstractmethod
     def zones(self) -> Iterator[Z]:
         ...
 
+    @abstractmethod
     def topology(self, timestep: T, field: F, zone: Z) -> Topology:
         ...
 
+    @abstractmethod
     def field_data(self, timestep: T, field: F, zone: Z) -> FieldData:
-        ...
-
-    def use_geometry(self, geometry: F) -> None:
-        ...
-
-    def __enter__(self) -> Self:
-        ...
-
-    def __exit__(self, *args) -> None:
         ...
 
 

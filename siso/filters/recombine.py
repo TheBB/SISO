@@ -1,19 +1,20 @@
 from dataclasses import dataclass
 from functools import reduce
-from typing import Iterator, List, TypeVar
+from typing import Generic, Iterator, List, TypeVar
 
 from .. import api
 from ..util import FieldData
 from .passthrough import Passthrough
 
 
+F = TypeVar("F", bound=api.Field)
 Z = TypeVar("Z", bound=api.Zone)
 T = TypeVar("T", bound=api.TimeStep)
 
 
 @dataclass
-class RecombinedField(api.Field):
-    sources: List[api.Field]
+class RecombinedField(api.Field, Generic[F]):
+    sources: List[F]
     name: str
 
     def __post_init__(self):
@@ -39,7 +40,7 @@ class RecombinedField(api.Field):
         return False
 
 
-class Recombine(Passthrough[RecombinedField, T, Z]):
+class Recombine(Passthrough[F, T, Z, RecombinedField[F], T, Z]):
     recombinations: List[api.RecombineFieldSpec]
 
     def __init__(self, source: api.Source, recombinations: List[api.RecombineFieldSpec]):

@@ -152,7 +152,7 @@ class SimraScales:
         )
 
 
-class SimraMeshBase:
+class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
     filename: Path
     simra_nodeshape: Tuple[int, ...]
 
@@ -357,7 +357,7 @@ class Simra3dMesh(SimraMeshBase):
         )
 
 
-class SimraBoundary:
+class SimraBoundary(api.Source[Field, TimeStep, Zone]):
     filename: Path
     boundary: TextIO
 
@@ -515,7 +515,7 @@ class ExtraField(Enum):
     Unknown = auto()
 
 
-class SimraContinuation:
+class SimraContinuation(api.Source[Field, TimeStep, Zone]):
     filename: Path
     source: RandomAccessFortranFile
     mesh: Simra3dMesh
@@ -672,7 +672,7 @@ class SimraContinuation:
         return ndata
 
 
-class SimraHistory:
+class SimraHistory(api.Source[Field, TimeStep, Zone]):
     filename: Path
     source: RandomAccessFortranFile
     mesh: Simra3dMesh

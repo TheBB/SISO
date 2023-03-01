@@ -169,7 +169,7 @@ class IfemField:
         return FieldData(data=cps.reshape(-1, ncomps))
 
 
-class Ifem:
+class Ifem(api.Source[Field, TimeStep, Zone]):
     filename: Path
     h5: h5py.File
 
@@ -293,7 +293,7 @@ class Ifem:
             zone, _, _ = self.geometry.patch_at(0, patch, self)
             yield zone
 
-    def fields(self) -> Iterator[api.Field]:
+    def fields(self) -> Iterator[Field]:
         for basis in self._bases.values():
             yield Field(name=basis.name, type=api.Geometry(ncomps=basis.ncomps(self)))
 

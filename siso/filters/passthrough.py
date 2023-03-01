@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generic, Iterator, TypeVar
+from typing import Generic, Iterator, TypeVar, cast
 
 from typing_extensions import Self
 
@@ -10,20 +10,23 @@ from ..util import FieldData
 from ..zone import Zone
 
 
-Z = TypeVar("Z", bound=Zone)
-F = TypeVar("F", bound=api.Field)
-T = TypeVar("T", bound=api.TimeStep)
+InZ = TypeVar("InZ", bound=Zone)
+InF = TypeVar("InF", bound=api.Field)
+InT = TypeVar("InT", bound=api.TimeStep)
+OutZ = TypeVar("OutZ", bound=Zone)
+OutF = TypeVar("OutF", bound=api.Field)
+OutT = TypeVar("OutT", bound=api.TimeStep)
 
 
-class Passthrough(Generic[F, T, Z]):
-    source: api.Source
+class Passthrough(api.Source[OutF, OutT, OutZ], Generic[InF, InT, InZ, OutF, OutT, OutZ]):
+    source: api.Source[InF, InT, InZ]
 
-    def __init__(self, source: api.Source):
+    def __init__(self, source: api.Source[InF, InT, InZ]):
         self.source = source
         self.validate_source()
 
     def validate_source(self) -> None:
-        ...
+        return
 
     def __enter__(self) -> Self:
         self.source.__enter__()
@@ -39,20 +42,28 @@ class Passthrough(Generic[F, T, Z]):
     def configure(self, settings: api.ReaderSettings) -> None:
         self.source.configure(settings)
 
-    def fields(self) -> Iterator[F]:
-        yield from self.source.fields()
+    def use_geometry(self, geometry: OutF) -> None:
+        self.source.use_geometry(cast(InF, geometry))
 
-    def timesteps(self) -> Iterator[T]:
-        yield from self.source.timesteps()
+    def fields(self) -> Iterator[OutF]:
+        return cast(Iterator[OutF], self.source.fields())
 
-    def zones(self) -> Iterator[Z]:
-        yield from self.source.zones()
+    def timesteps(self) -> Iterator[OutT]:
+        return cast(Iterator[OutT], self.source.timesteps())
 
-    def topology(self, timestep: T, field: F, zone: Z) -> Topology:
-        return self.source.topology(timestep, field, zone)
+    def zones(self) -> Iterator[OutZ]:
+        return cast(Iterator[OutZ], self.source.zones())
 
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData:
-        return self.source.field_data(timestep, field, zone)
+    def topology(self, timestep: OutT, field: OutF, zone: OutZ) -> Topology:
+        return self.source.topology(
+            cast(InT, timestep),
+            cast(InF, field),
+            cast(InZ, zone),
+        )
 
-    def use_geometry(self, geometry: F) -> None:
-        self.source.use_geometry(geometry)
+    def field_data(self, timestep: OutT, field: OutF, zone: OutZ) -> FieldData:
+        return self.source.field_data(
+            cast(InT, timestep),
+            cast(InF, field),
+            cast(InZ, zone),
+        )

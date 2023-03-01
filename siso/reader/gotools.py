@@ -11,7 +11,7 @@ from ..util import FieldData
 from ..zone import Coords, Shape, Zone
 
 
-class GoTools(api.Source):
+class GoTools(api.Source[Field, TimeStep, Zone]):
     filename: Path
     corners: List[Coords]
     topologies: List[SplineTopology]
