@@ -1,7 +1,7 @@
-from dataclasses import dataclass
-from enum import Enum, auto
+from enum import Enum
 from typing import Optional, Protocol, Sequence, TypeVar
 
+from attrs import define
 from typing_extensions import Self
 
 from ..api import Field, Source, TimeStep
@@ -14,12 +14,12 @@ class OutputMode(Enum):
     Appended = "appended"
 
 
-@dataclass
+@define
 class WriterSettings:
     output_mode: Optional[OutputMode] = None
 
 
-@dataclass
+@define
 class WriterProperties:
     require_single_zone: bool = False
     require_tesselated: bool = False

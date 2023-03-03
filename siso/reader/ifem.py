@@ -11,6 +11,7 @@ import numpy as np
 from typing_extensions import Self
 
 from .. import api, util
+from ..coords import Named
 from ..field import Field
 from ..timestep import TimeStep
 from ..topology import LrTopology, SplineTopology, UnstructuredTopology
@@ -48,7 +49,7 @@ def is_legal_group_name(name: str) -> bool:
         int(name)
         return True
     except ValueError:
-        return name.lower() in ("anasol", "log")
+        return name.casefold() in ("anasol", "log")
 
 
 class IfemBasis:
@@ -295,7 +296,9 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
 
     def fields(self) -> Iterator[Field]:
         for basis in self._bases.values():
-            yield Field(name=basis.name, type=api.Geometry(ncomps=basis.ncomps(self)))
+            yield Field(
+                name=basis.name, type=api.Geometry(ncomps=basis.ncomps(self), coords=Named(basis.name))
+            )
 
         for field in self._fields.values():
             ncomps = field.ncomps(self)

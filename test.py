@@ -1,35 +1,33 @@
-from __future__ import annotations
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from attrs import define
 
-from typing_extensions import Protocol, TypeGuard, reveal_type
 
-
-class A(Protocol):
-    def is_b(self) -> TypeGuard[B]:
+class Test(ABC):
+    @property
+    @abstractmethod
+    def dong() -> int:
         ...
-    def is_c(self) -> TypeGuard[C]:
-        ...
 
 
-class B(A):
-    def is_b(self) -> TypeGuard[B]:
-        return True
-    def is_c(self) -> TypeGuard[C]:
-        return False
+@dataclass
+class YourTest(Test):
+    dong: int
 
 
-class C(A):
-    def is_b(self) -> TypeGuard[B]:
-        return False
-    def is_c(self) -> TypeGuard[C]:
-        return True
+@define
+class MyTest(Test):
+    dong: int
 
 
-def b_or_c(x: int) -> A:
-    if x < 0:
-        return B()
-    return C()
+print(YourTest.__dict__)
+print(MyTest.__dict__)
 
 
-b = b_or_c(-1)
-if A.is_b(b):
-    reveal_type(b)
+q = MyTest(dong=3)
+print(q)
+print(q.dong)
+
+p = YourTest(dong=3)
+print(p)
+print(p.dong)

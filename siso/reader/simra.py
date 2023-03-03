@@ -4,7 +4,6 @@ import logging
 import re
 from abc import abstractmethod
 from contextlib import contextmanager
-from dataclasses import dataclass
 from enum import Enum, auto
 from functools import lru_cache, partial
 from itertools import count
@@ -27,9 +26,11 @@ from typing import (
 import f90nml
 import numpy as np
 import scipy.io
+from attrs import define
 from typing_extensions import Self
 
 from .. import api, util
+from ..coords import Generic
 from ..field import Field
 from ..timestep import TimeStep
 from ..topology import CellType, StructuredTopology, Topology
@@ -130,7 +131,7 @@ def make_mask(n: int, indices: np.ndarray, values: Union[float, np.ndarray] = 1.
     return retval
 
 
-@dataclass
+@define
 class SimraScales:
     speed: float
     length: float
@@ -198,7 +199,7 @@ class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
         return
 
     def fields(self) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(self.dim))
+        yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()))
 
     def timesteps(self) -> Iterator[TimeStep]:
         yield TimeStep(index=0)
@@ -529,14 +530,14 @@ class SimraContinuation(api.Source[Field, TimeStep, Zone]):
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
         u4_type = settings.endianness.u4_type()
         try:
-            assert path.suffix.lower() in (".res", ".dat")
+            assert path.suffix.casefold() in (".res", ".dat")
             with FortranFile(path, "r", header_dtype=u4_type) as f:
                 size = f._read_size()
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
-                if path.suffix.lower() == ".res":
+                if path.suffix.casefold() == ".res":
                     assert (size // u4_type.itemsize - 1) % 11 == 0
-                elif path.suffix.lower() == ".dat":
+                elif path.suffix.casefold() == ".dat":
                     assert (size // u4_type.itemsize) % 11 == 0
             assert Simra3dMesh.applicable(path.with_name("mesh.dat"), settings)
             return True
@@ -549,7 +550,7 @@ class SimraContinuation(api.Source[Field, TimeStep, Zone]):
 
     @property
     def is_init(self) -> bool:
-        return self.filename.suffix.lower() == ".dat"
+        return self.filename.suffix.casefold() == ".dat"
 
     def configure(self, settings: api.ReaderSettings) -> None:
         self.f4_type = settings.endianness.f4_type()
@@ -684,7 +685,7 @@ class SimraHistory(api.Source[Field, TimeStep, Zone]):
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
         u4_type = settings.endianness.u4_type()
         try:
-            assert path.suffix.lower() == ".res"
+            assert path.suffix.casefold() == ".res"
             with FortranFile(path, "r", header_dtype=u4_type) as f:
                 with util.save_excursion(f._fp):
                     size = f._read_size()

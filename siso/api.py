@@ -1,11 +1,23 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod, abstractproperty
-from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import Generic, Iterator, List, Optional, Protocol, TypeVar, Union
+from typing import (
+    ClassVar,
+    Generic,
+    Iterator,
+    List,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import numpy as np
+from attrs import Factory, define
 from typing_extensions import Self
 
 from .util import FieldData
@@ -48,7 +60,7 @@ class Staggering(Enum):
     Inner = "inner"
 
 
-@dataclass
+@define
 class SplitFieldSpec:
     source_name: str
     new_name: str
@@ -57,21 +69,21 @@ class SplitFieldSpec:
     splittable: bool = False
 
 
-@dataclass
+@define
 class RecombineFieldSpec:
     source_names: List[str]
     new_name: str
 
 
-@dataclass
+@define(slots=False)
 class SourceProperties:
     instantaneous: bool
     globally_keyed: bool = False
     tesselated: bool = False
     single_zoned: bool = False
 
-    split_fields: List[SplitFieldSpec] = field(default_factory=list)
-    recombine_fields: List[RecombineFieldSpec] = field(default_factory=list)
+    split_fields: List[SplitFieldSpec] = Factory(list)
+    recombine_fields: List[RecombineFieldSpec] = Factory(list)
 
     def update(self, **kwargs) -> SourceProperties:
         kwargs = {**self.__dict__, **kwargs}
@@ -93,7 +105,6 @@ class VectorInterpretation(Enum):
     Displacement = auto()
     Eigenmode = auto()
     Flow = auto()
-    Geometry = auto()
 
     def join(self, other: VectorInterpretation) -> VectorInterpretation:
         if VectorInterpretation.Generic in (self, other):
@@ -107,7 +118,7 @@ class VectorInterpretation(Enum):
         return ScalarInterpretation.Generic
 
 
-@dataclass
+@define
 class Scalar:
     interpretation: ScalarInterpretation = ScalarInterpretation.Generic
 
@@ -118,11 +129,12 @@ class Scalar:
         if isinstance(other, Scalar):
             interpretation = self.interpretation.to_vector().join(other.interpretation.to_vector())
             return Vector(ncomps=2, interpretation=interpretation)
+        assert isinstance(other, Vector)
         interpretation = self.interpretation.to_vector().join(other.interpretation)
         return Vector(ncomps=other.ncomps + 1, interpretation=interpretation)
 
 
-@dataclass
+@define(slots=False)
 class Vector:
     ncomps: int
     interpretation: VectorInterpretation = VectorInterpretation.Generic
@@ -134,6 +146,7 @@ class Vector:
         if isinstance(other, Scalar):
             interpretation = self.interpretation.join(other.interpretation.to_vector())
             return Vector(ncomps=self.ncomps + 1, interpretation=interpretation)
+        assert isinstance(other, Vector)
         interpretation = self.interpretation.join(other.interpretation)
         return Vector(ncomps=self.ncomps + other.ncomps, interpretation=interpretation)
 
@@ -142,18 +155,72 @@ class Vector:
         return Vector(**kwargs)
 
 
-def Geometry(ncomps: int) -> Vector:
-    return Vector(ncomps=ncomps, interpretation=VectorInterpretation.Geometry)
+@define
+class Geometry:
+    ncomps: int
+    coords: CoordinateSystem
+
+    def slice(self) -> FieldType:
+        assert False
+
+    def concat(self, other: FieldType) -> FieldType:
+        assert False
+
+    def fits_system_name(self, name: Optional[str]) -> bool:
+        if name is None:
+            return True
+        return self.coords.fits_system_name(name)
 
 
-FieldType = Union[Scalar, Vector]
+class CoordinateSystem(ABC):
+    name: ClassVar[str]
+
+    @classmethod
+    @abstractmethod
+    def make(cls, params: Sequence[str]) -> Self:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def default(cls) -> Self:
+        ...
+
+    @property
+    @abstractmethod
+    def parameters(self) -> Tuple[str, ...]:
+        ...
+
+    def fits_system_name(self, code: str) -> bool:
+        return code.casefold() == self.name.casefold()
+
+    def __str__(self) -> str:
+        params = ", ".join(p for p in self.parameters)
+        return f"{self.name}({params})"
 
 
-class Field:
-    cellwise: bool
-    splittable: bool
-    name: str
-    type: FieldType
+FieldType = Union[Scalar, Vector, Geometry]
+
+
+class Field(ABC):
+    @property
+    @abstractmethod
+    def cellwise(self) -> bool:
+        ...
+
+    @property
+    @abstractmethod
+    def splittable(self) -> bool:
+        ...
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        ...
+
+    @property
+    @abstractmethod
+    def type(self) -> FieldType:
+        ...
 
     @property
     def is_scalar(self) -> bool:
@@ -165,7 +232,7 @@ class Field:
 
     @property
     def is_geometry(self) -> bool:
-        return isinstance(self.type, Vector) and self.type.interpretation == VectorInterpretation.Geometry
+        return isinstance(self.type, Geometry)
 
     @property
     def is_eigenmode(self) -> bool:
@@ -179,6 +246,13 @@ class Field:
     @property
     def is_displacement(self) -> bool:
         return isinstance(self.type, Vector) and self.type.interpretation == VectorInterpretation.Displacement
+
+    @property
+    def coords(self) -> CoordinateSystem:
+        return cast(Geometry, self.type).coords
+
+    def fits_system_name(self, code: str) -> bool:
+        return isinstance(self.type, Geometry) and self.type.fits_system_name(code)
 
     @property
     def ncomps(self) -> int:
@@ -197,11 +271,12 @@ class TimeStep(Protocol):
         ...
 
 
-@dataclass
+@define
 class ReaderSettings:
     endianness: Endianness
     dimensionality: Dimensionality
     staggering: Staggering
+    periodic: bool
 
 
 Z = TypeVar("Z", bound=Zone)
@@ -216,7 +291,8 @@ class Source(ABC, Generic[F, T, Z]):
     def __exit__(self, *args) -> None:
         return
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def properties(self) -> SourceProperties:
         ...
 

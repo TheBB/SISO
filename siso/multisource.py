@@ -1,6 +1,6 @@
-from dataclasses import dataclass
 from typing import Iterator, List, Optional, Sequence
 
+from attrs import define
 from typing_extensions import Self
 
 from .api import Field, ReaderSettings, Source, SourceProperties, TimeStep
@@ -9,7 +9,7 @@ from .util import FieldData, bisect
 from .zone import Zone
 
 
-@dataclass
+@define
 class MultiSourceTimeStep:
     index: int
     original: TimeStep

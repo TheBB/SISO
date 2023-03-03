@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Generic, Optional, Tuple, TypeVar
+from typing import Optional, Tuple
+
+from attrs import define
 
 
 Point = Tuple[float, ...]
@@ -25,7 +26,7 @@ class Shape(Enum):
     Shapeless = auto()
 
 
-@dataclass
+@define
 class Zone:
     shape: Shape
     coords: Coords

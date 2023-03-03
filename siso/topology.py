@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from io import BytesIO, StringIO
 from typing import IO, Dict, Iterator, List, Optional, Tuple
 
 import lrspline as lr
 import numpy as np
 import splipy.utils
+from attrs import define
 from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
 from typing_extensions import Self
@@ -125,7 +125,7 @@ class G2Object(G2):
         return self
 
 
-@dataclass
+@define
 class SplineTopology(Topology):
     bases: List[BSplineBasis]
     weights: Optional[np.ndarray]
@@ -208,7 +208,7 @@ class SplineTesselator(Tesselator[SplineTopology]):
         return FieldData(util.flatten_2d(new_spline(*knots)))
 
 
-@dataclass
+@define
 class LrTopology(Topology):
     obj: lr.LRSplineObject
     weights: Optional[np.ndarray]
@@ -285,7 +285,7 @@ class LrTesselator(Tesselator[LrTopology]):
     def tesselate_field(self, topology: LrTopology, field: Field, field_data: FieldData) -> FieldData:
         if field.cellwise:
             cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells)
-            return FieldData.from_iter(field_data[topology.obj.element_at(*c).id] for c in cell_centers)
+            return FieldData.from_iter(field_data.numpy()[topology.obj.element_at(*c).id] for c in cell_centers)
         else:
             obj = topology.obj.clone()
             coeffs = field_data.data

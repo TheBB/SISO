@@ -3,14 +3,14 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import List, Literal, Optional, Sequence, Tuple
+from typing import List, Literal, Optional, Sequence, Tuple, cast
 
 import click
 from rich.console import Console
 from rich.logging import RichHandler
 
-from . import filters, util
-from .api import Dimensionality, Endianness, Field, ReaderSettings, Source, Staggering
+from . import coords, filters, util
+from .api import CoordinateSystem, Dimensionality, Endianness, Field, ReaderSettings, Source, Staggering
 from .multisource import MultiSource
 from .reader import FindReaderSettings, find_reader
 from .writer import OutputFormat, find_writer
@@ -25,6 +25,17 @@ class Enum(click.Choice):
     def convert(self, value, param, ctx):
         name = super().convert(value, param, ctx)
         return self._enum(name)
+
+
+class Coords(click.ParamType):
+    name = "coords"
+
+    def convert(self, value, param, ctx):
+        if value is None or value is False:
+            return None
+        if isinstance(value, CoordinateSystem):
+            return value
+        return coords.find_system(value)
 
 
 def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
@@ -50,9 +61,11 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 # Pipeline options
 @click.option("--unstructured", "require_unstructured", is_flag=True)
 @click.option("--decompose/--no-decompose", default=True)
-@click.option(
-    "--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", flag_value=True, default=False
-)
+@click.option("--periodic", is_flag=True)
+@click.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
+@click.option("--out-coords", default=coords.Generic(), type=Coords())
+@click.option("--coords", "out_coords", default=coords.Generic(), type=Coords())
+@click.option("--in-coords", default=None)
 
 # Writer options
 @click.option("--mode", "-m", "output_mode", type=Enum(OutputMode))
@@ -91,7 +104,10 @@ def main(
     # Pipeline options
     require_unstructured: bool,
     decompose: bool,
+    periodic: bool,
     eigenmodes_are_displacement: bool,
+    out_coords: CoordinateSystem,
+    in_coords: Optional[str],
     # Writer options
     output_mode: Optional[OutputMode],
     # Reader options
@@ -130,7 +146,7 @@ def main(
 
     # Resolve potential mismatches between output and format
     if outpath and not fmt:
-        fmt = OutputFormat(outpath.suffix[1:].lower())
+        fmt = OutputFormat(outpath.suffix[1:].casefold())
     elif not outpath:
         fmt = fmt or OutputFormat.Pvd
         outpath = Path(inpath[0].name).with_suffix(fmt.default_suffix())
@@ -151,6 +167,7 @@ def main(
             endianness=in_endianness,
             dimensionality=dimensionality,
             staggering=staggering,
+            periodic=periodic,
         )
     )
 
@@ -212,9 +229,33 @@ def main(
                 f"Discovered field '{field.name}' with "
                 f"{util.pluralize(field.ncomps, 'component', 'components')}"
             )
-        logging.debug(f"Using '{geometries[0].name}' as geometry")
 
-        source.use_geometry(geometries[0])
+        for geometry in geometries:
+            logging.debug(f"Discovered geometry '{geometry.name}' with coordinate system {geometry.coords}")
+
+        if in_coords:
+            geometries = [geometry for geometry in geometries if geometry.fits_system_name(in_coords)]
+            names = ", ".join(f"'{geometry.name}'" for geometry in geometries)
+            logging.debug(f"Retaining {names}")
+
+        result = coords.optimal_system([geometry.coords for geometry in geometries], out_coords)
+        if result is None:
+            logging.critical(f"Unable to determine a coordinate system conversion path to {out_coords}")
+            logging.critical("These source coordinate systems were considered:")
+            for geometry in geometries:
+                logging.critical(f"- {geometry.coords} (field '{geometry.name}')")
+            sys.exit(3)
+
+        i, path = result
+        geometry = geometries[i]
+        logging.info(f"Using '{geometry.name}' as geometry")
+        source.use_geometry(geometry)
+
+        if path:
+            logging.debug("Coordinate conversion path:")
+            str_path = " -> ".join(str(system) for system in path)
+            logging.debug(str_path)
+            source = filters.CoordTransform(source, path)
 
         with sink:
-            sink.consume(source, geometries[0], fields)
+            sink.consume(source, geometry, fields)

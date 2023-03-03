@@ -1,5 +1,6 @@
-from dataclasses import dataclass
 from typing import Generic, Iterator, TypeVar
+
+from attrs import define
 
 from .. import api
 from ..util import FieldData
@@ -11,29 +12,30 @@ F = TypeVar("F", bound=api.Field)
 T = TypeVar("T", bound=api.TimeStep)
 
 
-@dataclass
+@define
 class Field(api.Field, Generic[F]):
     original_field: F
 
     @property
-    def name(self) -> str:  # type: ignore[override]
+    def name(self) -> str:
         return self.original_field.name
 
     @property
-    def cellwise(self) -> bool:  # type: ignore[override]
+    def cellwise(self) -> bool:
         return self.original_field.cellwise
 
     @property
-    def splittable(self) -> bool:  # type: ignore[override]
+    def splittable(self) -> bool:
         return self.original_field.splittable
 
     @property
-    def type(self) -> api.FieldType:  # type: ignore[override]
+    def type(self) -> api.FieldType:
         orig_type = self.original_field.type
         if not self.original_field.is_eigenmode:
             return orig_type
         return api.Vector(
-            ncomps=self.original_field.ncomps, interpretation=api.VectorInterpretation.Displacement
+            ncomps=self.original_field.ncomps,
+            interpretation=api.VectorInterpretation.Displacement,
         )
 
 

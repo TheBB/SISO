@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Iterator, List
 
 from .. import api
+from ..coords import Generic
 from ..field import Field
 from ..timestep import TimeStep
 from ..topology import LrTopology
@@ -48,7 +49,7 @@ class LrSpline(api.Source[Field, TimeStep, Zone]):
         return
 
     def fields(self) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(ncomps=self.controlpoints[0].ncomps))
+        yield Field("Geometry", type=api.Geometry(ncomps=self.controlpoints[0].ncomps, coords=Generic()))
 
     def timesteps(self) -> Iterator[TimeStep]:
         yield TimeStep(index=0)

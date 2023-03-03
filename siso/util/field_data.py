@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import dataclass
 from numbers import Number
-from typing import Iterable, List, Tuple, Union
+from typing import Iterable, List, Tuple, Union, overload
 
 import numpy as np
+from numpy.typing import NDArray
+from attrs import define
 from numpy.typing import DTypeLike
+from scipy.spatial.transform import Rotation
 
 from ..zone import Coords
 
@@ -21,16 +23,35 @@ except ImportError:
     HAS_VTK = False
 
 
-@dataclass
+def ensure_2d(array: np.ndarray) -> np.ndarray:
+    if array.ndim < 2:
+        return array.reshape(-1, 1)
+    return array
+
+
+@define
 class FieldData:
     data: np.ndarray
 
     def __post_init__(self) -> None:
         assert self.data.ndim == 2
 
+    @overload
     @staticmethod
-    def concat(other: Iterable[FieldData]) -> FieldData:
-        data = np.hstack([data.numpy() for data in other])
+    def concat(other: Iterable[Union[FieldData, np.ndarray]], /) -> FieldData:
+        ...
+
+    @overload
+    @staticmethod
+    def concat(*other: Union[FieldData, np.ndarray]) -> FieldData:
+        ...
+
+    @staticmethod
+    def concat(*other) -> FieldData:
+        if isinstance(other[0], (FieldData, np.ndarray)):
+            data = np.hstack([ensure_2d(x.numpy() if isinstance(x, FieldData) else x) for x in other])
+        else:
+            data = np.hstack([ensure_2d(x.numpy() if isinstance(x, FieldData) else x) for x in other[0]])
         return FieldData(data)
 
     @staticmethod
@@ -54,8 +75,19 @@ class FieldData:
     def ndofs(self) -> int:
         return self.data.shape[0]
 
-    def __getitem__(self, index: int) -> np.ndarray:
-        return self.data[index, :]
+    @property
+    def components(self) -> Iterable[np.ndarray]:
+        return self.data.T
+
+    @property
+    def vectors(self) -> Iterable[np.ndarray]:
+        return self.data
+
+    def __getitem__(self, indices: Tuple[Union[int, slice, None, np.ndarray], ...]) -> FieldData:
+        return FieldData(self.data[indices])
+
+    def mean(self) -> np.ndarray:
+        return np.mean(self.data, axis=0)
 
     def join(self, other: FieldData) -> FieldData:
         return FieldData(np.vstack((self.data, other.data)))
@@ -108,8 +140,68 @@ class FieldData:
             .reshape(self.data.shape)
         )
 
-    def numpy(self) -> np.ndarray:
-        return self.data
+    def trigonometric(self) -> FieldData:
+        retval = np.zeros_like(self.data, shape=(self.ndofs, 4))
+        lon, lat, *_ = self.components
+        retval[:, 0] = np.cos(np.deg2rad(lon))
+        retval[:, 1] = np.cos(np.deg2rad(lat))
+        retval[:, 2] = np.sin(np.deg2rad(lon))
+        retval[:, 3] = np.sin(np.deg2rad(lat))
+        return FieldData(retval)
+
+    def spherical_to_cartesian(self) -> FieldData:
+        clon, clat, slon, slat = self.trigonometric().components
+        retval = FieldData.concat(clon * clat, slon * clat, slat)
+        if self.ncomps > 2:
+            retval.data *= self.data[:,2]
+        return retval
+
+    def cartesian_to_spherical(self, with_radius: bool = True) -> FieldData:
+        x, y, z = self.components
+        lon = np.rad2deg(np.arctan2(y, x))
+        lat = np.rad2deg(np.arctan(z / np.sqrt(x**2 + y**2)))
+
+        if not with_radius:
+            return FieldData.concat(lon, lat)
+
+        radius = np.sqrt(x**2 + y**2 + z**2)
+        return FieldData.concat(lon, lat, radius)
+
+    def spherical_to_cartesian_vector_field(self, coords: FieldData) -> FieldData:
+        clon, clat, slon, slat = coords.trigonometric().components
+        u, v, w = self.components
+        retval = np.zeros_like(self.data)
+        retval[..., 0] -= slon * u
+        retval[..., 1] -= slat * slon * v
+        retval[..., 2] += slat * w
+        retval[..., 0] -= slat * clon * v
+        retval[..., 0] += clat * clon * w
+        retval[..., 1] += clon * u
+        retval[..., 1] += clat * slon * w
+        retval[..., 2] += clat * v
+        return FieldData(retval)
+
+    def cartesian_to_spherical_vector_field(self, coords: FieldData) -> FieldData:
+        clon, clat, slon, slat = coords.trigonometric().components
+        u, v, w = self.components
+        retval = np.zeros_like(self.data)
+        retval[..., 0] -= slon * u
+        retval[..., 1] -= slat * slon * v
+        retval[..., 2] += slat * w
+        retval[..., 1] -= slat * clon * u
+        retval[..., 2] += clat * clon * u
+        retval[..., 0] += clon * v
+        retval[..., 2] += clat * slon * v
+        retval[..., 1] += clat * w
+        return FieldData(retval)
+
+    def rotate(self, rotation: Rotation) -> FieldData:
+        return FieldData(rotation.apply(self.data))
+
+    def numpy(self, *shape: int) -> np.ndarray:
+        if not shape:
+            return self.data
+        return self.data.reshape(shape)
 
     def vtk(self) -> vtkDataArray:
         assert HAS_VTK
@@ -118,11 +210,9 @@ class FieldData:
     def __add__(self, other) -> FieldData:
         if isinstance(other, FieldData):
             return FieldData(self.data + other.data)
-        return NotImplemented
+        return FieldData(self.data + other)
 
     def __truediv__(self, other) -> FieldData:
-        if isinstance(other, Number):
-            return FieldData(self.data / other)
         if isinstance(other, FieldData):
             return FieldData(self.data / other.data)
-        return NotImplemented
+        return FieldData(self.data / other)

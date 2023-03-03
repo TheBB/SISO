@@ -194,7 +194,7 @@ testcase('hdf5/TestCell1D.hdf5', 1, formats)
 pr = '--periodic'
 pl = '--planar'
 ex = '--extrude'
-gl = ['--coords', 'geocentric:sphere']
+gl = ['--coords', 'geocentric']
 for n in ['eastward', 'northward', 'outward']:
     formats = ['vtu', 'vts', 'pvd']
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, suffix='-volumetric')
@@ -203,14 +203,14 @@ for n in ['eastward', 'northward', 'outward']:
 
     # The geocentric reference cases were generated with a slightly different
     # coordinate transformation algorithm.  Instead of regenerating them, we
-    # use an elevated absolute tolerance.
+    # use elevated tolerances.
     formats = ['vtu', 'pvd']
-    # testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, suffix='-volumetric-global', abs_tol=2e-6)
-    # testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, suffix='-planar-global', abs_tol=2e-6)
-    # testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, suffix='-extrude-global', abs_tol=2e-6)
-    # testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, pr, suffix='-planar-periodic', abs_tol=2e-6)
-    # testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, pr, suffix='-volumetric-periodic', abs_tol=2e-6)
-    # testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, pr, suffix='-extrude-periodic', abs_tol=2e-6)
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, suffix='-volumetric-global', rel_tol=2e-4, abs_tol=2e-6)
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, suffix='-planar-global', rel_tol=2e-4, abs_tol=2e-6)
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, suffix='-extrude-global', rel_tol=2e-4, abs_tol=2e-6)
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, pr, suffix='-planar-periodic', rel_tol=2e-4, abs_tol=2e-6)
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, pr, suffix='-volumetric-periodic', rel_tol=2e-4, abs_tol=2e-6)
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, pr, suffix='-extrude-periodic', rel_tol=2e-4, abs_tol=2e-6)
 
 # Miscellaneous CLI options
 formats = ['vtk', 'vtu', 'pvd', 'vtf']

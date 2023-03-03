@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import (
     IO,
     Callable,
+    ClassVar,
     Dict,
     Generator,
     Generic,
@@ -15,7 +16,9 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Protocol,
     Tuple,
+    Type,
     TypeVar,
     Union,
     cast,
@@ -28,12 +31,34 @@ from typing_extensions import Self
 from .field_data import FieldData
 
 
-class NoSuchMarkError(Exception):
-    ...
+class HasName(Protocol):
+    name: ClassVar[str]
 
 
+N = TypeVar("N", bound=HasName)
 W = TypeVar("W")
 M = TypeVar("M", bound=Hashable)
+
+
+class Registry(Generic[N]):
+    classes: Dict[str, Type[N]]
+
+    def __init__(self):
+        self.classes = {}
+
+    def register(self, cls: Type[N]) -> Type[N]:
+        self.classes[cls.name.casefold()] = cls
+        return cls
+
+    def __getitem__(self, key: str) -> Type[N]:
+        return self.classes[key.casefold()]
+
+    def __contains__(self, key: str) -> bool:
+        return key.casefold() in self.classes
+
+
+class NoSuchMarkError(Exception):
+    ...
 
 
 class RandomAccessFile(Generic[W, M]):
@@ -157,6 +182,12 @@ def transpose_butlast(array: np.ndarray) -> np.ndarray:
 def _single_slice(ndims: int, axis: int, *args) -> Tuple[slice, ...]:
     retval = [slice(None)] * ndims
     retval[axis] = slice(*args)
+    return tuple(retval)
+
+
+def _single_index(ndims: int, axis: int, ix: int) -> Tuple[Union[slice, int], ...]:
+    retval: List[Union[slice, int]] = [slice(None)] * ndims
+    retval[axis] = ix
     return tuple(retval)
 
 
@@ -304,6 +335,15 @@ def structured_cells(cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[
     return eidxs
 
 
+def nodemap(shape: Tuple[int, ...], strides: Tuple[int, ...], periodic: Tuple[int, ...] = (), init: int = 0) -> np.ndarray:
+    indices = np.meshgrid(*(np.arange(s, dtype=int) for s in shape), indexing='ij')
+    nodes = sum(i*s for i, s in zip(indices, strides)) + init
+    assert isinstance(nodes, np.ndarray)
+    for axis in periodic:
+        nodes[_single_index(nodes.ndim, axis, -1)] = nodes[_single_index(nodes.ndim, axis, 0)]
+    return nodes
+
+
 def filename_generator(basename: Path, instantaneous: bool) -> Iterator[Path]:
     if instantaneous:
         yield basename
@@ -312,3 +352,9 @@ def filename_generator(basename: Path, instantaneous: bool) -> Iterator[Path]:
     suffix = basename.suffix
     for i in count(1):
         yield basename.with_name(f"{stem}-{i}").with_suffix(suffix)
+
+
+def angular_mean(data: np.ndarray) -> np.ndarray:
+    data = np.deg2rad(data)
+    data = np.arctan2(np.mean(np.sin(data)), np.mean(np.cos(data)))
+    return np.rad2deg(data)

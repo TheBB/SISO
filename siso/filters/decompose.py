@@ -1,5 +1,6 @@
-from dataclasses import dataclass
 from typing import Generic, Iterator, List, Optional, TypeVar
+
+from attrs import define
 
 from .. import api
 from ..topology import Topology
@@ -12,7 +13,7 @@ Z = TypeVar("Z", bound=api.Zone)
 T = TypeVar("T", bound=api.TimeStep)
 
 
-@dataclass
+@define
 class DecomposedField(api.Field, Generic[F]):
     original_field: F
     components: Optional[List[int]]
@@ -20,11 +21,11 @@ class DecomposedField(api.Field, Generic[F]):
     name: str
 
     @property
-    def cellwise(self) -> bool:  # type: ignore[override]
+    def cellwise(self) -> bool:
         return self.original_field.cellwise
 
     @property
-    def type(self) -> api.FieldType:  # type: ignore[override]
+    def type(self) -> api.FieldType:
         if self.components is not None:
             if len(self.components) > 1:
                 assert isinstance(self.original_field.type, api.Vector)

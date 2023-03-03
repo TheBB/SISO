@@ -1,12 +1,13 @@
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
+
+from attrs import define
 
 from ..api import Endianness, Source
 
 
-@dataclass
+@define
 class FindReaderSettings:
     endianness: Endianness
 
@@ -124,7 +125,7 @@ def wrf(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 @register_reader("GoTools")
 def gotools(path: Path, settings: FindReaderSettings) -> Optional[Source]:
-    if path.suffix.lower() != ".g2":
+    if path.suffix.casefold() != ".g2":
         return None
     from .gotools import GoTools
 
@@ -133,7 +134,7 @@ def gotools(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 @register_reader("LRSpline")
 def lrspline(path: Path, settings: FindReaderSettings) -> Optional[Source]:
-    if path.suffix.lower() != ".lr":
+    if path.suffix.casefold() != ".lr":
         return None
     from .lrspline import LrSpline
 

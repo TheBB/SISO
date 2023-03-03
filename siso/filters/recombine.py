@@ -1,6 +1,7 @@
-from dataclasses import dataclass
 from functools import reduce
 from typing import Generic, Iterator, List, TypeVar
+
+from attrs import define
 
 from .. import api
 from ..util import FieldData
@@ -12,7 +13,7 @@ Z = TypeVar("Z", bound=api.Zone)
 T = TypeVar("T", bound=api.TimeStep)
 
 
-@dataclass
+@define
 class RecombinedField(api.Field, Generic[F]):
     sources: List[F]
     name: str
@@ -22,11 +23,11 @@ class RecombinedField(api.Field, Generic[F]):
         assert all(src.type == self.sources[0].type for src in self.sources)
 
     @property
-    def cellwise(self) -> bool:  # type: ignore[override]
+    def cellwise(self) -> bool:
         return self.sources[0].cellwise
 
     @property
-    def type(self) -> api.FieldType:  # type: ignore[override]
+    def type(self) -> api.FieldType:
         return reduce(lambda x, y: x.concat(y), (s.type for s in self.sources))
 
     @property
@@ -34,7 +35,7 @@ class RecombinedField(api.Field, Generic[F]):
         return sum(src.ncomps for src in self.sources)
 
     @property
-    def splittable(self) -> bool:  # type: ignore[override]
+    def splittable(self) -> bool:
         if len(self.sources) == 1:
             return self.sources[0].splittable
         return False

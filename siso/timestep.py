@@ -1,8 +1,9 @@
-from dataclasses import dataclass
 from typing import Optional
 
+from attrs import define
 
-@dataclass
+
+@define
 class TimeStep:
     index: int
     time: Optional[float] = None
