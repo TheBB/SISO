@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterator, List
 
+from numpy import floating
+
 from .. import api
 from ..coords import Generic
 from ..field import Field
@@ -16,7 +18,7 @@ class LrSpline(api.Source[Field, TimeStep, Zone]):
     filename: Path
     corners: List[Coords]
     topologies: List[LrTopology]
-    controlpoints: List[FieldData]
+    controlpoints: List[FieldData[floating]]
 
     def __init__(self, filename: Path):
         self.filename = filename
@@ -67,5 +69,5 @@ class LrSpline(api.Source[Field, TimeStep, Zone]):
     def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> LrTopology:
         return self.topologies[int(zone.local_key)]
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         return self.controlpoints[int(zone.local_key)]

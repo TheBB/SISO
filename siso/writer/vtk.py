@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable, Sequence, Tuple, TypeVar, Union, cast
 
 import numpy as np
+from numpy import number
 from typing_extensions import Self
 
 from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
@@ -24,8 +25,8 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from .. import util
-from ..api import FieldType, Source, TimeStep
-from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
+from ..api import Source, TimeStep
+from ..topology import CellType, DiscreteTopology, StructuredTopology
 from ..util import FieldData
 from ..zone import Zone
 from .api import Field, OutputMode, Writer, WriterProperties, WriterSettings
@@ -37,7 +38,13 @@ class Behavior(Enum):
     Whatever = auto()
 
 
-def transpose(data: FieldData, grid: vtkPointSet, cellwise: bool = False):
+F = TypeVar("F", bound=Field)
+T = TypeVar("T", bound=TimeStep)
+Z = TypeVar("Z", bound=Zone)
+S = TypeVar("S", bound=number)
+
+
+def transpose(data: FieldData[S], grid: vtkPointSet, cellwise: bool = False) -> FieldData[S]:
     if not isinstance(grid, vtkStructuredGrid):
         return data
     shape = grid.GetDimensions()
@@ -96,11 +103,6 @@ def apply_output_mode(writer: Union[vtkXMLWriter, vtkDataWriter], mode: OutputMo
             writer.SetDataModeToAscii()
         elif mode == OutputMode.Appended:
             writer.SetDataModeToAppended()
-
-
-F = TypeVar("F", bound=Field)
-T = TypeVar("T", bound=TimeStep)
-Z = TypeVar("Z", bound=Zone)
 
 
 class VtkWriterBase(Writer):

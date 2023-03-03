@@ -1,6 +1,7 @@
 from typing import Generic, Iterator, List, Optional, TypeVar
 
 from attrs import define
+from numpy import floating
 
 from .. import api
 from ..topology import Topology
@@ -44,7 +45,7 @@ class DecomposeBase(Passthrough[F, T, Z, DecomposedField[F], T, Z]):
     def topology(self, timestep: T, field: DecomposedField, zone: Z) -> Topology:
         return self.source.topology(timestep, field.original_field, zone)
 
-    def field_data(self, timestep: T, field: DecomposedField, zone: Z) -> FieldData:
+    def field_data(self, timestep: T, field: DecomposedField, zone: Z) -> FieldData[floating]:
         data = self.source.field_data(timestep, field.original_field, zone)
         if field.components is not None:
             data = data.slice(field.components)

@@ -1,6 +1,8 @@
 from copy import deepcopy
 from typing import Dict, Iterator, TypeVar
 
+from numpy import floating
+
 from .. import api, util
 from ..util import FieldData
 from .passthrough import Passthrough
@@ -53,7 +55,7 @@ class Strict(Passthrough[F, T, Z, F, T, Z]):
                 assert b.time > a.time
         yield from timesteps
 
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData:
+    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
         data = self.source.field_data(timestep, field, zone)
         spec = self.field_specs[field.name]
         assert spec.cellwise == field.cellwise

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Generic, Iterator, TypeVar, cast
 
+from numpy import floating
 from typing_extensions import Self
 
 from .. import api
@@ -61,7 +62,7 @@ class Passthrough(api.Source[OutF, OutT, OutZ], Generic[InF, InT, InZ, OutF, Out
             cast(InZ, zone),
         )
 
-    def field_data(self, timestep: OutT, field: OutF, zone: OutZ) -> FieldData:
+    def field_data(self, timestep: OutT, field: OutF, zone: OutZ) -> FieldData[floating]:
         return self.source.field_data(
             cast(InT, timestep),
             cast(InF, field),

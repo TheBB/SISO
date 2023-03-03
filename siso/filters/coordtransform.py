@@ -1,5 +1,7 @@
 from typing import Dict, Tuple, TypeVar
 
+from numpy import floating
+
 from .. import api, util
 from ..coords import ConversionPath, convert_coords, convert_vectors
 from ..util import FieldData
@@ -13,14 +15,14 @@ T = TypeVar("T", bound=api.TimeStep)
 
 class CoordTransform(Passthrough[F, T, Z, F, T, Z]):
     path: ConversionPath
-    cache: Dict[str, FieldData]
+    cache: Dict[str, FieldData[floating]]
 
     def __init__(self, source: api.Source[F, T, Z], path: ConversionPath):
         super().__init__(source)
         self.path = path
         self.cache = {}
 
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData:
+    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
         indata = self.source.field_data(timestep, field, zone)
         if not field.is_geometry and not field.is_vector:
             return indata

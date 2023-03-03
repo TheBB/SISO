@@ -27,6 +27,7 @@ import f90nml
 import numpy as np
 import scipy.io
 from attrs import define
+from numpy import floating
 from typing_extensions import Self
 
 from .. import api, util
@@ -186,7 +187,7 @@ class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
         )
 
     @abstractmethod
-    def nodes(self) -> FieldData:
+    def nodes(self) -> FieldData[floating]:
         ...
 
     def corners(self) -> Coords:
@@ -216,7 +217,7 @@ class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
         return StructuredTopology(self.out_cellshape, celltype)
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         return self.nodes()
 
 
@@ -269,10 +270,10 @@ class SimraMap(SimraMeshBase):
                 values = tuple(map(float, line.split()))
 
     @lru_cache(maxsize=1)
-    def nodes(self) -> FieldData:
+    def nodes(self) -> FieldData[floating]:
         nodes = FieldData.from_iter(self.coords())
         nodes.data[..., 2] /= 10
-        return nodes.translate(mesh_offset(self.filename, dim=3))
+        return nodes + mesh_offset(self.filename, dim=3)
 
 
 class Simra2dMesh(SimraMeshBase):
@@ -310,10 +311,10 @@ class Simra2dMesh(SimraMeshBase):
         return (i - 1, j - 1)
 
     @lru_cache(maxsize=1)
-    def nodes(self) -> FieldData:
+    def nodes(self) -> FieldData[floating]:
         num_nodes = util.prod(self.simra_nodeshape)
         nodes = FieldData.from_iter(map(float, next(self.mesh).split()[1:]) for _ in range(num_nodes))
-        return nodes.translate(mesh_offset(self.filename, dim=2))
+        return nodes + mesh_offset(self.filename, dim=2)
 
 
 class Simra3dMesh(SimraMeshBase):
@@ -348,13 +349,11 @@ class Simra3dMesh(SimraMeshBase):
         self.mesh.__exit__(*args)
 
     @lru_cache(maxsize=1)
-    def nodes(self) -> FieldData:
+    def nodes(self) -> FieldData[floating]:
         with self.mesh.leap(1) as f:
             nodes = f.read_reals(self.f4_type)
-        return (
-            FieldData(transpose(nodes, self.simra_nodeshape))
-            .ensure_native()
-            .translate(mesh_offset(self.filename, dim=3))
+        return (FieldData(transpose(nodes, self.simra_nodeshape)).ensure_native()) + mesh_offset(
+            self.filename, dim=3
         )
 
 
@@ -441,7 +440,7 @@ class SimraBoundary(api.Source[Field, TimeStep, Zone]):
         return self.mesh.topology(timestep, field, zone)
 
     @lru_cache(maxsize=1)
-    def data(self) -> FieldData:
+    def data(self) -> FieldData[floating]:
         with self.save_excursion():
             next(self.boundary)
 
@@ -504,7 +503,7 @@ class SimraBoundary(api.Source[Field, TimeStep, Zone]):
 
         return FieldData(transpose(data, self.mesh.simra_nodeshape)).ensure_native()
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         return self.data()
@@ -634,7 +633,7 @@ class SimraContinuation(api.Source[Field, TimeStep, Zone]):
         return self.mesh.topology(timestep, field, zone)
 
     @lru_cache(maxsize=1)
-    def data(self) -> Tuple[FieldData, Optional[FieldData]]:
+    def data(self) -> Tuple[FieldData[floating], Optional[FieldData[floating]]]:
         cells = None
         with self.source.leap(0) as f:
             nodals = f.read_but_first(dtype=self.f4_type)
@@ -663,7 +662,7 @@ class SimraContinuation(api.Source[Field, TimeStep, Zone]):
             cdata = None
         return ndata, cdata
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data()
@@ -769,7 +768,7 @@ class SimraHistory(api.Source[Field, TimeStep, Zone]):
     def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> Topology:
         return self.mesh.topology(timestep, field, zone)
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data(timestep.index)
@@ -779,7 +778,7 @@ class SimraHistory(api.Source[Field, TimeStep, Zone]):
         return ndata
 
     @lru_cache(maxsize=1)
-    def data(self, index: int) -> Tuple[FieldData, FieldData]:
+    def data(self, index: int) -> Tuple[FieldData[floating], FieldData[floating]]:
         with self.source.leap(2 * index + 1) as f:
             ndata = f.read_but_first(self.f4_type)
             cdata = f.read_reals(self.f4_type)

@@ -18,6 +18,7 @@ from typing import (
 
 import numpy as np
 from attrs import Factory, define
+from numpy import floating, integer
 from typing_extensions import Self
 
 from .util import FieldData
@@ -319,7 +320,7 @@ class Source(ABC, Generic[F, T, Z]):
         ...
 
     @abstractmethod
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData:
+    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
         ...
 
 
@@ -363,5 +364,7 @@ class Tesselator(Protocol[S]):
     def tesselate_topology(self, topology: S) -> DiscreteTopology:
         ...
 
-    def tesselate_field(self, topology: S, field: Field, field_data: FieldData) -> FieldData:
+    def tesselate_field(
+        self, topology: S, field: Field, field_data: FieldData[floating]
+    ) -> FieldData[floating]:
         ...

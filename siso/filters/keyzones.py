@@ -5,6 +5,8 @@ from functools import reduce
 from operator import itemgetter
 from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, TypeVar, cast
 
+from numpy import floating
+
 from ..api import Field, Source, SourceProperties, TimeStep
 from ..topology import Topology
 from ..util import FieldData, bisect
@@ -40,7 +42,7 @@ class KeyZones(Passthrough[F, T, Z, F, T, Zone]):
     def topology(self, timestep: T, field: F, zone: Zone) -> Topology:
         return self.source.topology(timestep, field, cast(Z, zone))
 
-    def field_data(self, timestep: T, field: F, zone: Zone) -> FieldData:
+    def field_data(self, timestep: T, field: F, zone: Zone) -> FieldData[floating]:
         return self.source.field_data(timestep, field, cast(Z, zone))
 
 

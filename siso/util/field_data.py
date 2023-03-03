@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import logging
 import sys
-from numbers import Number
-from typing import Iterable, List, Tuple, Union, overload
+from typing import Generic, Iterable, List, Optional, Tuple, TypeVar, Union, overload
 
 import numpy as np
-from numpy.typing import NDArray
 from attrs import define
-from numpy.typing import DTypeLike
+from numpy import floating, integer, number
+from numpy.typing import DTypeLike, NDArray
 from scipy.spatial.transform import Rotation
 
 from ..zone import Coords
@@ -23,39 +22,56 @@ except ImportError:
     HAS_VTK = False
 
 
-def ensure_2d(array: np.ndarray) -> np.ndarray:
+T = TypeVar("T", bound=number)
+Index = Union[int, slice, None, NDArray[integer]]
+Indices = Union[Index, Tuple[Index, ...]]
+
+
+def ensure_2d(array: NDArray[T]) -> NDArray[T]:
     if array.ndim < 2:
         return array.reshape(-1, 1)
     return array
 
 
 @define
-class FieldData:
-    data: np.ndarray
+class FieldData(Generic[T]):
+    data: NDArray[T]
 
     def __post_init__(self) -> None:
         assert self.data.ndim == 2
 
     @overload
     @staticmethod
-    def concat(other: Iterable[Union[FieldData, np.ndarray]], /) -> FieldData:
+    def concat(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
         ...
 
     @overload
     @staticmethod
-    def concat(*other: Union[FieldData, np.ndarray]) -> FieldData:
+    def concat(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
         ...
 
     @staticmethod
-    def concat(*other) -> FieldData:
+    def concat(*other):
         if isinstance(other[0], (FieldData, np.ndarray)):
             data = np.hstack([ensure_2d(x.numpy() if isinstance(x, FieldData) else x) for x in other])
         else:
             data = np.hstack([ensure_2d(x.numpy() if isinstance(x, FieldData) else x) for x in other[0]])
         return FieldData(data)
 
+    @overload
     @staticmethod
-    def from_iter(iterable: Iterable[Iterable], dtype: DTypeLike = float) -> FieldData:
+    def from_iter(
+        iterable: Iterable[Iterable[Union[float, int]]], dtype: DTypeLike = float
+    ) -> FieldData[floating]:
+        ...
+
+    @overload
+    @staticmethod
+    def from_iter(iterable: Iterable[Iterable[T]], dtype: DTypeLike = float) -> FieldData[T]:
+        ...
+
+    @staticmethod
+    def from_iter(iterable, dtype: DTypeLike = float):
         ntuples = 0
 
         def values():
@@ -76,35 +92,35 @@ class FieldData:
         return self.data.shape[0]
 
     @property
-    def components(self) -> Iterable[np.ndarray]:
+    def components(self) -> Iterable[NDArray[T]]:
         return self.data.T
 
     @property
-    def vectors(self) -> Iterable[np.ndarray]:
+    def vectors(self) -> Iterable[NDArray[T]]:
         return self.data
 
-    def __getitem__(self, indices: Tuple[Union[int, slice, None, np.ndarray], ...]) -> FieldData:
+    def __getitem__(self, indices: Indices) -> FieldData[T]:
         return FieldData(self.data[indices])
 
-    def mean(self) -> np.ndarray:
-        return np.mean(self.data, axis=0)
+    def mean(self) -> NDArray[T]:
+        return self.data.mean(axis=0)
 
-    def join(self, other: FieldData) -> FieldData:
+    def join(self, other: FieldData[T]) -> FieldData[T]:
         return FieldData(np.vstack((self.data, other.data)))
 
-    def slice(self, index: Union[int, List[int]]) -> FieldData:
+    def slice(self, index: Union[int, List[int]]) -> FieldData[T]:
         if isinstance(index, int):
             return FieldData(data=self.data[:, index : index + 1])
         return FieldData(data=self.data[:, index])
 
-    def nan_filter(self, fill: float = 0.0) -> FieldData:
+    def nan_filter(self, fill: Optional[T] = None) -> FieldData[T]:
         i = np.where(np.isnan(self.data))
         if len(i[0]) > 0:
             logging.warning(f"NaN values set to {fill}")
-            self.data[i] = fill
+            self.data[i] = fill if fill is not None else np.zeros((), dtype=self.data.dtype)
         return self
 
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = False, pad_right: bool = True) -> FieldData:
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = False, pad_right: bool = True) -> FieldData[T]:
         if self.data.shape[-1] == 1 and allow_scalar:
             return self
         if self.data.shape[-1] >= ncomps:
@@ -114,33 +130,29 @@ class FieldData:
         to_stack = (self.data, filler) if pad_right else (filler, self.data)
         return FieldData(data=np.hstack(to_stack))
 
-    def ensure_native(self) -> FieldData:
+    def ensure_native(self) -> FieldData[T]:
         if self.data.dtype.byteorder in ("=", sys.byteorder):
             return self
         return FieldData(self.data.byteswap().newbyteorder())
 
-    def corners(self, shape: Tuple[int, ...]) -> Coords:
+    def corners(self: FieldData[floating], shape: Tuple[int, ...]) -> Coords:
         temp = self.data.reshape(*shape, -1)
         corners = temp[tuple(slice(None, None, j - 1) for j in temp.shape[:-1])]
         corners = corners.reshape(-1, self.ncomps)
         return tuple(tuple(corner) for corner in corners)
 
-    def translate(self, delta: np.ndarray) -> FieldData:
-        assert delta.ndim == 1
-        return FieldData(self.data + delta)
-
-    def collapse_weights(self) -> FieldData:
+    def collapse_weights(self: FieldData[floating]) -> FieldData[floating]:
         data = self.data[..., :-1] / self.data[..., -1:]
         return FieldData(data)
 
-    def transpose(self, shape: Tuple[int, ...], transposition: Tuple[int, ...]) -> FieldData:
+    def transpose(self, shape: Tuple[int, ...], transposition: Tuple[int, ...]) -> FieldData[T]:
         return FieldData(
             self.data.reshape(*shape, -1)
             .transpose(*transposition, len(transposition))
             .reshape(self.data.shape)
         )
 
-    def trigonometric(self) -> FieldData:
+    def trigonometric(self) -> FieldData[floating]:
         retval = np.zeros_like(self.data, shape=(self.ndofs, 4))
         lon, lat, *_ = self.components
         retval[:, 0] = np.cos(np.deg2rad(lon))
@@ -149,14 +161,14 @@ class FieldData:
         retval[:, 3] = np.sin(np.deg2rad(lat))
         return FieldData(retval)
 
-    def spherical_to_cartesian(self) -> FieldData:
+    def spherical_to_cartesian(self) -> FieldData[floating]:
         clon, clat, slon, slat = self.trigonometric().components
         retval = FieldData.concat(clon * clat, slon * clat, slat)
         if self.ncomps > 2:
-            retval.data *= self.data[:,2]
+            retval.data *= self.data[:, 2]
         return retval
 
-    def cartesian_to_spherical(self, with_radius: bool = True) -> FieldData:
+    def cartesian_to_spherical(self, with_radius: bool = True) -> FieldData[floating]:
         x, y, z = self.components
         lon = np.rad2deg(np.arctan2(y, x))
         lat = np.rad2deg(np.arctan(z / np.sqrt(x**2 + y**2)))
@@ -167,7 +179,7 @@ class FieldData:
         radius = np.sqrt(x**2 + y**2 + z**2)
         return FieldData.concat(lon, lat, radius)
 
-    def spherical_to_cartesian_vector_field(self, coords: FieldData) -> FieldData:
+    def spherical_to_cartesian_vector_field(self, coords: FieldData[floating]) -> FieldData[floating]:
         clon, clat, slon, slat = coords.trigonometric().components
         u, v, w = self.components
         retval = np.zeros_like(self.data)
@@ -181,7 +193,7 @@ class FieldData:
         retval[..., 2] += clat * v
         return FieldData(retval)
 
-    def cartesian_to_spherical_vector_field(self, coords: FieldData) -> FieldData:
+    def cartesian_to_spherical_vector_field(self, coords: FieldData[floating]) -> FieldData[floating]:
         clon, clat, slon, slat = coords.trigonometric().components
         u, v, w = self.components
         retval = np.zeros_like(self.data)
@@ -195,10 +207,10 @@ class FieldData:
         retval[..., 1] += clat * w
         return FieldData(retval)
 
-    def rotate(self, rotation: Rotation) -> FieldData:
+    def rotate(self, rotation: Rotation) -> FieldData[floating]:
         return FieldData(rotation.apply(self.data))
 
-    def numpy(self, *shape: int) -> np.ndarray:
+    def numpy(self, *shape: int) -> NDArray[T]:
         if not shape:
             return self.data
         return self.data.reshape(shape)

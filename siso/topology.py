@@ -8,6 +8,7 @@ import lrspline as lr
 import numpy as np
 import splipy.utils
 from attrs import define
+from numpy import floating
 from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
 from typing_extensions import Self
@@ -29,7 +30,7 @@ class UnstructuredTopology:
         self.celltype = celltype
 
     @staticmethod
-    def from_ifem(data: bytes) -> Tuple[Coords, UnstructuredTopology, FieldData]:
+    def from_ifem(data: bytes) -> Tuple[Coords, UnstructuredTopology, FieldData[floating]]:
         io = BytesIO(data)
 
         first_line = next(io)
@@ -111,7 +112,9 @@ class NoopTesselator(Tesselator[DiscreteTopology]):
     def tesselate_topology(self, topology: DiscreteTopology) -> DiscreteTopology:
         return topology
 
-    def tesselate_field(self, topology: DiscreteTopology, field: Field, field_data: FieldData) -> FieldData:
+    def tesselate_field(
+        self, topology: DiscreteTopology, field: Field, field_data: FieldData[floating]
+    ) -> FieldData[floating]:
         return field_data
 
 
@@ -131,7 +134,7 @@ class SplineTopology(Topology):
     weights: Optional[np.ndarray]
 
     @staticmethod
-    def from_splineobject(obj: SplineObject) -> Tuple[Coords, SplineTopology, FieldData]:
+    def from_splineobject(obj: SplineObject) -> Tuple[Coords, SplineTopology, FieldData[floating]]:
         corners = tuple(tuple(point) for point in obj.corners())
         if obj.rational:
             weights = util.transpose_butlast(obj.controlpoints[..., -1:]).flatten()
@@ -146,11 +149,11 @@ class SplineTopology(Topology):
         )
 
     @staticmethod
-    def from_bytes(data: bytes) -> Iterator[Tuple[Coords, SplineTopology, FieldData]]:
+    def from_bytes(data: bytes) -> Iterator[Tuple[Coords, SplineTopology, FieldData[floating]]]:
         yield from SplineTopology.from_string(data.decode())
 
     @staticmethod
-    def from_string(data: str) -> Iterator[Tuple[Coords, SplineTopology, FieldData]]:
+    def from_string(data: str) -> Iterator[Tuple[Coords, SplineTopology, FieldData[floating]]]:
         with G2Object(StringIO(data), "r") as g2:
             for obj in g2.read():
                 yield SplineTopology.from_splineobject(obj)
@@ -187,7 +190,9 @@ class SplineTesselator(Tesselator[SplineTopology]):
         cellshape = tuple(len(knots) - 1 for knots in self.nodal_knots)
         return StructuredTopology(cellshape, celltype)
 
-    def tesselate_field(self, topology: SplineTopology, field: Field, field_data: FieldData) -> FieldData:
+    def tesselate_field(
+        self, topology: SplineTopology, field: Field, field_data: FieldData[floating]
+    ) -> FieldData[floating]:
         if field.cellwise:
             bases = [BSplineBasis(order=1, knots=basis.knot_spans()) for basis in topology.bases]
             shape = tuple(basis.num_functions() for basis in bases)
@@ -214,7 +219,7 @@ class LrTopology(Topology):
     weights: Optional[np.ndarray]
 
     @staticmethod
-    def from_lrobject(obj: lr.LRSplineObject) -> Tuple[Coords, LrTopology, FieldData]:
+    def from_lrobject(obj: lr.LRSplineObject) -> Tuple[Coords, LrTopology, FieldData[floating]]:
         corners = tuple(tuple(point) for point in obj.corners())
         rational = obj.dimension > obj.pardim
         if rational:
@@ -237,11 +242,11 @@ class LrTopology(Topology):
         )
 
     @staticmethod
-    def from_bytes(data: bytes) -> Iterator[Tuple[Coords, LrTopology, FieldData]]:
+    def from_bytes(data: bytes) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
         yield from LrTopology.from_string(data.decode())
 
     @staticmethod
-    def from_string(data: str) -> Iterator[Tuple[Coords, LrTopology, FieldData]]:
+    def from_string(data: str) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
         for obj in lr.LRSplineObject.read_many(StringIO(data)):
             yield LrTopology.from_lrobject(obj)
 
@@ -282,10 +287,14 @@ class LrTesselator(Tesselator[LrTopology]):
         celltype = CellType.Hexahedron if topology.pardim == 3 else CellType.Quadrilateral
         return UnstructuredTopology(len(self.nodes), self.cells, celltype)
 
-    def tesselate_field(self, topology: LrTopology, field: Field, field_data: FieldData) -> FieldData:
+    def tesselate_field(
+        self, topology: LrTopology, field: Field, field_data: FieldData[floating]
+    ) -> FieldData[floating]:
         if field.cellwise:
             cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells)
-            return FieldData.from_iter(field_data.numpy()[topology.obj.element_at(*c).id] for c in cell_centers)
+            return FieldData.from_iter(
+                field_data.numpy()[topology.obj.element_at(*c).id] for c in cell_centers
+            )
         else:
             obj = topology.obj.clone()
             coeffs = field_data.data

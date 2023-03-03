@@ -2,6 +2,7 @@ from functools import reduce
 from typing import Generic, Iterator, List, TypeVar
 
 from attrs import define
+from numpy import floating
 
 from .. import api
 from ..util import FieldData
@@ -60,5 +61,5 @@ class Recombine(Passthrough[F, T, Z, RecombinedField[F], T, Z]):
     def topology(self, timestep: T, field: RecombinedField, zone: Z) -> api.Topology:
         return self.source.topology(timestep, field.sources[0], zone)
 
-    def field_data(self, timestep: T, field: RecombinedField, zone: Z) -> FieldData:
+    def field_data(self, timestep: T, field: RecombinedField, zone: Z) -> FieldData[floating]:
         return FieldData.concat(self.source.field_data(timestep, src, zone) for src in field.sources)

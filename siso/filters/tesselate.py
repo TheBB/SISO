@@ -1,5 +1,7 @@
 from typing import TypeVar
 
+from numpy import floating
+
 from ..api import Field, SourceProperties, TimeStep
 from ..topology import Topology
 from ..util import FieldData
@@ -27,7 +29,7 @@ class Tesselate(Passthrough[F, T, Z, F, T, Z]):
         tesselator = topology.tesselator()
         return tesselator.tesselate_topology(topology)
 
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData:
+    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
         topology = self.source.topology(timestep, field, zone)
         tesselator = topology.tesselator()
         field_data = self.source.field_data(timestep, field, zone)

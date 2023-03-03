@@ -1,6 +1,7 @@
 from typing import Generic, Iterator, TypeVar
 
 from attrs import define
+from numpy import floating
 
 from .. import api
 from ..util import FieldData
@@ -47,5 +48,5 @@ class EigenDisp(Passthrough[F, T, Z, Field[F], T, Z]):
         for field in self.source.fields():
             yield Field(field)
 
-    def field_data(self, timestep: T, field: Field[F], zone: Z) -> FieldData:
+    def field_data(self, timestep: T, field: Field[F], zone: Z) -> FieldData[floating]:
         return self.source.field_data(timestep, field.original_field, zone)

@@ -8,6 +8,7 @@ from typing import ClassVar, Dict, Iterator, List, Optional, Protocol, Tuple
 
 import h5py
 import numpy as np
+from numpy import floating
 from typing_extensions import Self
 
 from .. import api, util
@@ -84,7 +85,7 @@ class IfemBasis:
         return self.locator.patch_path(self.name, step, patch)
 
     @lru_cache(maxsize=128)
-    def patch_at(self, step: int, patch: int, source: Ifem) -> Tuple[Zone, api.Topology, FieldData]:
+    def patch_at(self, step: int, patch: int, source: Ifem) -> Tuple[Zone, api.Topology, FieldData[floating]]:
         while self.patch_path(step, patch) not in source.h5:
             step -= 1
 
@@ -164,7 +165,7 @@ class IfemField:
     def raw_cps_at(self, step: int, patch: int, source: Ifem) -> np.ndarray:
         return source.h5[self.patch_path(step, patch)][:]
 
-    def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData:
+    def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
         ncomps = self.ncomps(source)
         cps = self.raw_cps_at(step, patch, source)
         return FieldData(data=cps.reshape(-1, ncomps))
@@ -322,7 +323,7 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
         _, topology, _ = basis.patch_at(timestep.index, patch, self)
         return topology
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         patch = int(zone.local_key.split("/")[-1])
         if field.is_geometry:
             basis = self._bases[field.name]

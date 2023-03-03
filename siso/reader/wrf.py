@@ -1,10 +1,12 @@
 from enum import Enum, auto
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterator, Tuple, Optional
+from typing import Iterator, Optional, Tuple
 
 import numpy as np
 from netCDF4 import Dataset
+from numpy import floating, integer
+from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import Self
 
@@ -13,7 +15,7 @@ from ..coords import Generic, Geodetic, SphericalEarth
 from ..field import Field
 from ..timestep import TimeStep
 from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
-from ..util import FieldData, coords
+from ..util import FieldData
 from ..zone import Shape, Zone
 
 
@@ -127,7 +129,7 @@ class NetCdf:
         index: int,
         extrude_if_volumetric: bool = True,
         include_poles_if_periodic: bool = True,
-    ) -> FieldData:
+    ) -> FieldData[floating]:
         time, *dimensions = self.dataset[name].dimensions
         assert time == "Time"
         assert len(dimensions) in (2, 3)
@@ -174,7 +176,7 @@ class NetCdf:
 
         return FieldData(data.reshape(-1, 1))
 
-    def periodic_planar_topology(self) -> np.ndarray:
+    def periodic_planar_topology(self) -> NDArray[integer]:
         cells = util.structured_cells(self.wrf_planar_cellshape, pardim=2)
 
         nodemap = util.nodemap((self.num_latitude, 2), (self.num_longitude, self.num_longitude - 1))
@@ -188,33 +190,51 @@ class NetCdf:
         cells = np.append(cells, to_append, axis=0)
 
         north_pole_id = self.num_planar + 1
-        nodemap = util.nodemap((2, self.num_longitude + 1), (-self.num_longitude - 1, 1), periodic=(1,), init=north_pole_id)
-        nodemap[0] = nodemap[0,0]
+        nodemap = util.nodemap(
+            (2, self.num_longitude + 1), (-self.num_longitude - 1, 1), periodic=(1,), init=north_pole_id
+        )
+        nodemap[0] = nodemap[0, 0]
         to_append = util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap)
         cells = np.append(cells, to_append, axis=0)
 
         return cells
 
-    def periodic_volumetric_topology(self) -> np.ndarray:
+    def periodic_volumetric_topology(self) -> NDArray[integer]:
         cells = util.structured_cells(self.wrf_cellshape, pardim=3)
 
         cells += cells // self.num_planar * 2
         num_horizontal = self.num_planar + 2
 
-        nodemap = util.nodemap((self.num_vertical, self.num_latitude, 2), (num_horizontal, self.num_longitude, self.num_longitude - 1))
-        to_append = util.structured_cells((self.num_vertical - 1, self.num_latitude - 1, 1), pardim=3, nodemap=nodemap)
+        nodemap = util.nodemap(
+            (self.num_vertical, self.num_latitude, 2),
+            (num_horizontal, self.num_longitude, self.num_longitude - 1),
+        )
+        to_append = util.structured_cells(
+            (self.num_vertical - 1, self.num_latitude - 1, 1), pardim=3, nodemap=nodemap
+        )
         cells = np.append(cells, to_append, axis=0)
 
         south_pole_id = self.num_planar
-        nodemap = util.nodemap((self.num_vertical, 2, self.num_longitude + 1), (num_horizontal, south_pole_id, 1), periodic=(2,))
-        nodemap[:,1] = (nodemap[:,1] - south_pole_id) // num_horizontal * num_horizontal + south_pole_id
-        to_append = util.structured_cells((self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap)
+        nodemap = util.nodemap(
+            (self.num_vertical, 2, self.num_longitude + 1), (num_horizontal, south_pole_id, 1), periodic=(2,)
+        )
+        nodemap[:, 1] = (nodemap[:, 1] - south_pole_id) // num_horizontal * num_horizontal + south_pole_id
+        to_append = util.structured_cells(
+            (self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+        )
         cells = np.append(cells, to_append, axis=0)
 
         north_pole_id = self.num_planar + 1
-        nodemap = util.nodemap((self.num_vertical, 2, self.num_longitude + 1), (num_horizontal, -self.num_longitude - 1, 1), periodic=(2,), init=north_pole_id)
-        nodemap[:,0] = (nodemap[:,0] - north_pole_id) // num_horizontal * num_horizontal + north_pole_id
-        to_append = util.structured_cells((self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap)
+        nodemap = util.nodemap(
+            (self.num_vertical, 2, self.num_longitude + 1),
+            (num_horizontal, -self.num_longitude - 1, 1),
+            periodic=(2,),
+            init=north_pole_id,
+        )
+        nodemap[:, 0] = (nodemap[:, 0] - north_pole_id) // num_horizontal * num_horizontal + north_pole_id
+        to_append = util.structured_cells(
+            (self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+        )
         cells = np.append(cells, to_append, axis=0)
 
         return cells
@@ -290,9 +310,13 @@ class Wrf(NetCdf, api.Source[Field, TimeStep, Zone]):
             num_nodes = self.num_planar + 2
             if self.volumetric:
                 num_nodes *= self.num_vertical
-                return UnstructuredTopology(num_nodes, self.periodic_volumetric_topology(), celltype=CellType.Hexahedron)
+                return UnstructuredTopology(
+                    num_nodes, self.periodic_volumetric_topology(), celltype=CellType.Hexahedron
+                )
             else:
-                return UnstructuredTopology(num_nodes, self.periodic_planar_topology(), celltype=CellType.Quadrilateral)
+                return UnstructuredTopology(
+                    num_nodes, self.periodic_planar_topology(), celltype=CellType.Quadrilateral
+                )
         else:
             celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
             return StructuredTopology(self.wrf_cellshape, celltype)
@@ -305,13 +329,13 @@ class Wrf(NetCdf, api.Source[Field, TimeStep, Zone]):
             "ZYZ", [-self.dataset.STAND_LON, -self.dataset.MOAD_CEN_LAT, intrinsic], degrees=True
         )
 
-    def height(self, index: int) -> FieldData:
+    def height(self, index: int) -> FieldData[floating]:
         if self.volumetric:
             return (self.field_data_raw("PH", index) + self.field_data_raw("PHB", index)) / 9.81
         return self.field_data_raw("HGT", 0)
 
     @lru_cache(maxsize=1)
-    def wind(self, index: int) -> FieldData:
+    def wind(self, index: int) -> FieldData[floating]:
         local = FieldData.concat(
             self.field_data_raw("U", index, include_poles_if_periodic=False),
             self.field_data_raw("V", index, include_poles_if_periodic=False),
@@ -327,8 +351,7 @@ class Wrf(NetCdf, api.Source[Field, TimeStep, Zone]):
         )
 
         points = (
-            lonlat
-            .spherical_to_cartesian()
+            lonlat.spherical_to_cartesian()
             .rotate(self.rotation(with_intrinsic=True).inv())
             .cartesian_to_spherical(with_radius=False)
         )
@@ -356,21 +379,15 @@ class Wrf(NetCdf, api.Source[Field, TimeStep, Zone]):
             self.field_data_raw("XLAT", index),
         )
 
-        return (
-            FieldData(vectors)
-            .rotate(self.rotation())
-            .cartesian_to_spherical_vector_field(lonlat)
-        )
+        return FieldData(vectors).rotate(self.rotation()).cartesian_to_spherical_vector_field(lonlat)
 
     @lru_cache(maxsize=1)
-    def geometry(self, index: int) -> FieldData:
+    def geometry(self, index: int) -> FieldData[floating]:
         if self.geodetic:
             return FieldData.concat(
-                (
-                    self.field_data_raw("XLONG", index),
-                    self.field_data_raw("XLAT", index),
-                    self.height(index),
-                )
+                self.field_data_raw("XLONG", index),
+                self.field_data_raw("XLAT", index),
+                self.height(index),
             )
 
         x = np.zeros(self.wrf_nodeshape, dtype=float)
@@ -379,14 +396,12 @@ class Wrf(NetCdf, api.Source[Field, TimeStep, Zone]):
         y[...] = np.arange(self.num_latitude)[..., :, np.newaxis] * self.dataset.DY
 
         return FieldData.concat(
-            (
-                FieldData(x.reshape(-1, 1)),
-                FieldData(y.reshape(-1, 1)),
-                self.height(index),
-            )
+            FieldData(x.reshape(-1, 1)),
+            FieldData(y.reshape(-1, 1)),
+            self.height(index),
         )
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         if not field.is_geometry and not field.is_vector:
             return self.field_data_raw(field.name, timestep.index)
         if field.is_geometry:

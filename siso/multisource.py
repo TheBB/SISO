@@ -1,6 +1,7 @@
 from typing import Iterator, List, Optional, Sequence
 
 from attrs import define
+from numpy import floating
 from typing_extensions import Self
 
 from .api import Field, ReaderSettings, Source, SourceProperties, TimeStep
@@ -73,6 +74,6 @@ class MultiSource(Source):
         source = self.source_at(timestep.index)
         return source.topology(timestep.original, field, zone)
 
-    def field_data(self, timestep: MultiSourceTimeStep, field: Field, zone: Zone) -> FieldData:
+    def field_data(self, timestep: MultiSourceTimeStep, field: Field, zone: Zone) -> FieldData[floating]:
         source = self.source_at(timestep.index)
         return source.field_data(timestep.original, field, zone)

@@ -335,9 +335,11 @@ def structured_cells(cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[
     return eidxs
 
 
-def nodemap(shape: Tuple[int, ...], strides: Tuple[int, ...], periodic: Tuple[int, ...] = (), init: int = 0) -> np.ndarray:
-    indices = np.meshgrid(*(np.arange(s, dtype=int) for s in shape), indexing='ij')
-    nodes = sum(i*s for i, s in zip(indices, strides)) + init
+def nodemap(
+    shape: Tuple[int, ...], strides: Tuple[int, ...], periodic: Tuple[int, ...] = (), init: int = 0
+) -> np.ndarray:
+    indices = np.meshgrid(*(np.arange(s, dtype=int) for s in shape), indexing="ij")
+    nodes = sum(i * s for i, s in zip(indices, strides)) + init
     assert isinstance(nodes, np.ndarray)
     for axis in periodic:
         nodes[_single_index(nodes.ndim, axis, -1)] = nodes[_single_index(nodes.ndim, axis, 0)]

@@ -1,7 +1,7 @@
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Dict, Optional
+from typing import Callable, Dict, Optional
 
 from .api import Writer
 
