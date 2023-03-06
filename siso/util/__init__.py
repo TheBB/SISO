@@ -26,6 +26,7 @@ from typing import (
 
 import lrspline as lr
 import numpy as np
+from numpy import integer
 from typing_extensions import Self
 
 from .field_data import FieldData
@@ -304,7 +305,9 @@ def only(values: Iterable[T]) -> T:
     return next(iter(values))
 
 
-def structured_cells(cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[np.ndarray] = None):
+def structured_cells(
+    cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[np.ndarray] = None
+) -> FieldData[integer]:
     nodeshape = tuple(s + 1 for s in cellshape)
     ranges = [range(k) for k in cellshape]
     nidxs = [np.array(q) for q in zip(*product(*ranges))]
@@ -332,7 +335,7 @@ def structured_cells(cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[
     if nodemap is not None:
         eidxs = nodemap.flat[eidxs]
 
-    return eidxs
+    return FieldData(eidxs)
 
 
 def nodemap(

@@ -14,6 +14,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    runtime_checkable,
 )
 
 import numpy as np
@@ -347,13 +348,14 @@ class Topology(Protocol):
         ...
 
 
+@runtime_checkable
 class DiscreteTopology(Topology, Protocol):
     @property
     def celltype(self) -> CellType:
         ...
 
     @property
-    def cells(self) -> np.ndarray:
+    def cells(self) -> FieldData[integer]:
         ...
 
 

@@ -53,7 +53,4 @@ class ZoneMerge(Passthrough[F, T, Z, F, T, Zone]):
         )
 
     def field_data(self, timestep: T, field: F, zone: Zone) -> FieldData[floating]:
-        return reduce(
-            lambda x, y: x.join(y),
-            (self.source.field_data(timestep, field, z) for z in self.source.zones()),
-        )
+        return FieldData.join(*(self.source.field_data(timestep, field, z) for z in self.source.zones()))

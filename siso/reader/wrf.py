@@ -176,53 +176,50 @@ class NetCdf:
 
         return FieldData(data.reshape(-1, 1))
 
-    def periodic_planar_topology(self) -> NDArray[integer]:
-        cells = util.structured_cells(self.wrf_planar_cellshape, pardim=2)
+    def periodic_planar_topology(self) -> FieldData[integer]:
+        cells = [util.structured_cells(self.wrf_planar_cellshape, pardim=2)]
 
         nodemap = util.nodemap((self.num_latitude, 2), (self.num_longitude, self.num_longitude - 1))
-        to_append = util.structured_cells((self.num_latitude - 1, 1), pardim=2, nodemap=nodemap)
-        cells = np.append(cells, to_append, axis=0)
+        cells.append(util.structured_cells((self.num_latitude - 1, 1), pardim=2, nodemap=nodemap))
 
         south_pole_id = self.num_planar
         nodemap = util.nodemap((2, self.num_longitude + 1), (south_pole_id, 1), periodic=(1,))
         nodemap[1] = nodemap[1, 0]
-        to_append = util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap)
-        cells = np.append(cells, to_append, axis=0)
+        cells.append(util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap))
 
         north_pole_id = self.num_planar + 1
         nodemap = util.nodemap(
             (2, self.num_longitude + 1), (-self.num_longitude - 1, 1), periodic=(1,), init=north_pole_id
         )
         nodemap[0] = nodemap[0, 0]
-        to_append = util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap)
-        cells = np.append(cells, to_append, axis=0)
+        cells.append(util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap))
 
-        return cells
+        return FieldData.join(cells)
 
-    def periodic_volumetric_topology(self) -> NDArray[integer]:
-        cells = util.structured_cells(self.wrf_cellshape, pardim=3)
+    def periodic_volumetric_topology(self) -> FieldData[integer]:
+        cells = [util.structured_cells(self.wrf_cellshape, pardim=3)]
 
-        cells += cells // self.num_planar * 2
+        cells[0] += cells[0] // self.num_planar * 2
         num_horizontal = self.num_planar + 2
 
         nodemap = util.nodemap(
             (self.num_vertical, self.num_latitude, 2),
             (num_horizontal, self.num_longitude, self.num_longitude - 1),
         )
-        to_append = util.structured_cells(
-            (self.num_vertical - 1, self.num_latitude - 1, 1), pardim=3, nodemap=nodemap
+        cells.append(
+            util.structured_cells(
+                (self.num_vertical - 1, self.num_latitude - 1, 1), pardim=3, nodemap=nodemap
+            )
         )
-        cells = np.append(cells, to_append, axis=0)
 
         south_pole_id = self.num_planar
         nodemap = util.nodemap(
             (self.num_vertical, 2, self.num_longitude + 1), (num_horizontal, south_pole_id, 1), periodic=(2,)
         )
         nodemap[:, 1] = (nodemap[:, 1] - south_pole_id) // num_horizontal * num_horizontal + south_pole_id
-        to_append = util.structured_cells(
-            (self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+        cells.append(
+            util.structured_cells((self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap)
         )
-        cells = np.append(cells, to_append, axis=0)
 
         north_pole_id = self.num_planar + 1
         nodemap = util.nodemap(
@@ -232,12 +229,11 @@ class NetCdf:
             init=north_pole_id,
         )
         nodemap[:, 0] = (nodemap[:, 0] - north_pole_id) // num_horizontal * num_horizontal + north_pole_id
-        to_append = util.structured_cells(
-            (self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+        cells.append(
+            util.structured_cells((self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap)
         )
-        cells = np.append(cells, to_append, axis=0)
 
-        return cells
+        return FieldData.join(cells)
 
 
 class Wrf(NetCdf, api.Source[Field, TimeStep, Zone]):

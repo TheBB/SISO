@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 from io import BytesIO, StringIO
-from typing import IO, Dict, Iterator, List, Optional, Tuple
+from typing import IO, Dict, Iterable, Iterator, List, Optional, Tuple, overload
 
 import lrspline as lr
 import numpy as np
 import splipy.utils
 from attrs import define
-from numpy import floating
+from numpy import floating, integer
 from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
 from typing_extensions import Self
@@ -22,9 +22,9 @@ from .zone import Coords
 class UnstructuredTopology:
     celltype: CellType
     num_nodes: int
-    cells: np.ndarray
+    cells: FieldData[integer]
 
-    def __init__(self, num_nodes: int, cells: np.ndarray, celltype: CellType):
+    def __init__(self, num_nodes: int, cells: FieldData[integer], celltype: CellType):
         self.num_nodes = num_nodes
         self.cells = cells
         self.celltype = celltype
@@ -56,16 +56,41 @@ class UnstructuredTopology:
             cells[i, 2], cells[i, 3] = cells[i, 3], cells[i, 2]
 
         corners = (tuple(nodes[0]),)
-        topology = UnstructuredTopology(num_nodes, cells, CellType.Hexahedron)
+        topology = UnstructuredTopology(num_nodes, FieldData(cells), CellType.Hexahedron)
         return corners, topology, FieldData(nodes)
 
+    @overload
     @staticmethod
-    def join(left: DiscreteTopology, right: DiscreteTopology) -> UnstructuredTopology:
-        assert left.celltype == right.celltype
+    def join(other: Iterable[DiscreteTopology], /) -> UnstructuredTopology:
+        ...
+
+    @overload
+    @staticmethod
+    def join(*other: DiscreteTopology) -> UnstructuredTopology:
+        ...
+
+    @staticmethod
+    def join(*other) -> UnstructuredTopology:
+        iterable: Iterable[DiscreteTopology] = other if isinstance(other[0], DiscreteTopology) else other[0]
+        num_nodes = 0
+        celltype: Optional[CellType] = None
+
+        def consume() -> Iterable[FieldData[integer]]:
+            nonlocal num_nodes, celltype
+            for topo in iterable:
+                if celltype is None:
+                    celltype = topo.celltype
+                else:
+                    assert celltype == topo.celltype
+                yield topo.cells + num_nodes
+                num_nodes += topo.num_nodes
+
+        cells = FieldData.join(consume())
+        assert celltype
         return UnstructuredTopology(
-            num_nodes=left.num_nodes + right.num_nodes,
-            cells=np.vstack((left.cells, right.cells + left.num_nodes)),
-            celltype=left.celltype,
+            num_nodes=num_nodes,
+            cells=cells,
+            celltype=celltype,
         )
 
     @property
@@ -74,7 +99,7 @@ class UnstructuredTopology:
 
     @property
     def num_cells(self) -> int:
-        return len(self.cells)
+        return self.cells.ndofs
 
     def tesselator(self) -> NoopTesselator:
         return NoopTesselator()
@@ -101,7 +126,7 @@ class StructuredTopology:
         return util.prod(s + 1 for s in self.cellshape)
 
     @property
-    def cells(self) -> np.ndarray:
+    def cells(self) -> FieldData[integer]:
         return util.structured_cells(self.cellshape, self.pardim)
 
     def tesselator(self) -> Tesselator[Self]:
@@ -268,7 +293,7 @@ class LrTopology(Topology):
 
 class LrTesselator(Tesselator[LrTopology]):
     nodes: np.ndarray
-    cells: np.ndarray
+    cells: FieldData[integer]
     weights: Optional[np.ndarray]
     nvis: int
 
@@ -279,7 +304,7 @@ class LrTesselator(Tesselator[LrTopology]):
         for element in obj.elements:
             visitor(element, nodes, cells, nvis=1)
         self.nodes = FieldData.from_iter(nodes).numpy()
-        self.cells = np.array(cells, dtype=int)
+        self.cells = FieldData(np.array(cells, dtype=int))
         self.weights = weights
         self.nvis = nvis
 
@@ -291,7 +316,7 @@ class LrTesselator(Tesselator[LrTopology]):
         self, topology: LrTopology, field: Field, field_data: FieldData[floating]
     ) -> FieldData[floating]:
         if field.cellwise:
-            cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells)
+            cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells.vectors)
             return FieldData.from_iter(
                 field_data.numpy()[topology.obj.element_at(*c).id] for c in cell_centers
             )

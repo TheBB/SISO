@@ -62,7 +62,6 @@ def get_grid(
         shape = topology.cellshape
         while len(shape) < 3:
             shape = (*shape, 0)
-        # shape = shape[::-1]
         sgrid.SetDimensions(*(s + 1 for s in shape))
         if legacy:
             return sgrid, vtkStructuredGridWriter()
@@ -73,8 +72,15 @@ def get_grid(
     assert topology.celltype in (CellType.Line, CellType.Quadrilateral, CellType.Hexahedron)
 
     ugrid = vtkUnstructuredGrid()
-    cells = topology.cells
-    cells = np.hstack((cells.shape[-1] * np.ones((len(cells), 1), dtype=int), cells)).ravel().astype("i8")
+    cells = (
+        FieldData.concat(
+            topology.cells.constant_like(topology.cells.ncomps, ncomps=1, dtype=int),
+            topology.cells,
+        )
+        .numpy()
+        .ravel()
+        .astype("i8")
+    )
     cellarray = vtkCellArray()
     cellarray.SetCells(len(cells), numpy_to_vtkIdTypeArray(cells))
     celltype = {

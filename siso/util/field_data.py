@@ -23,13 +23,20 @@ except ImportError:
 
 
 T = TypeVar("T", bound=number)
+S = TypeVar("S", bound=number)
 Index = Union[int, slice, None, NDArray[integer]]
 Indices = Union[Index, Tuple[Index, ...]]
 
 
-def ensure_2d(array: NDArray[T]) -> NDArray[T]:
+def ensure_2d_right(array: NDArray[T]) -> NDArray[T]:
     if array.ndim < 2:
         return array.reshape(-1, 1)
+    return array
+
+
+def ensure_2d_left(array: NDArray[T]) -> NDArray[T]:
+    if array.ndim < 2:
+        return array.reshape(1, -1)
     return array
 
 
@@ -37,7 +44,7 @@ def ensure_2d(array: NDArray[T]) -> NDArray[T]:
 class FieldData(Generic[T]):
     data: NDArray[T]
 
-    def __post_init__(self) -> None:
+    def __attrs_post_init__(self) -> None:
         assert self.data.ndim == 2
 
     @overload
@@ -52,10 +59,24 @@ class FieldData(Generic[T]):
 
     @staticmethod
     def concat(*other):
-        if isinstance(other[0], (FieldData, np.ndarray)):
-            data = np.hstack([ensure_2d(x.numpy() if isinstance(x, FieldData) else x) for x in other])
-        else:
-            data = np.hstack([ensure_2d(x.numpy() if isinstance(x, FieldData) else x) for x in other[0]])
+        iterable = other if isinstance(other[0], (FieldData, np.ndarray)) else other[0]
+        data = np.hstack([ensure_2d_right(x.numpy() if isinstance(x, FieldData) else x) for x in iterable])
+        return FieldData(data)
+
+    @overload
+    @staticmethod
+    def join(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
+        ...
+
+    @overload
+    @staticmethod
+    def join(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
+        ...
+
+    @staticmethod
+    def join(*other):
+        iterable = other if isinstance(other[0], (FieldData, np.ndarray)) else other[0]
+        data = np.vstack([ensure_2d_left(x.numpy() if isinstance(x, FieldData) else x) for x in iterable])
         return FieldData(data)
 
     @overload
@@ -105,9 +126,6 @@ class FieldData(Generic[T]):
     def mean(self) -> NDArray[T]:
         return self.data.mean(axis=0)
 
-    def join(self, other: FieldData[T]) -> FieldData[T]:
-        return FieldData(np.vstack((self.data, other.data)))
-
     def slice(self, index: Union[int, List[int]]) -> FieldData[T]:
         if isinstance(index, int):
             return FieldData(data=self.data[:, index : index + 1])
@@ -151,6 +169,30 @@ class FieldData(Generic[T]):
             .transpose(*transposition, len(transposition))
             .reshape(self.data.shape)
         )
+
+    @overload
+    def constant_like(
+        self, value: int, ndofs: Optional[int] = None, ncomps: Optional[int] = None, dtype: DTypeLike = None
+    ) -> FieldData[integer]:
+        ...
+
+    @overload
+    def constant_like(
+        self, value: float, ndofs: Optional[int] = None, ncomps: Optional[int] = None, dtype: DTypeLike = None
+    ) -> FieldData[floating]:
+        ...
+
+    def constant_like(self, value, ndofs=None, ncomps=None, dtype=None):
+        retval = np.ones_like(
+            self.data,
+            shape=(
+                ndofs or self.ndofs,
+                ncomps or self.ncomps,
+            ),
+            dtype=dtype,
+        )
+        retval.fill(value)
+        return FieldData(retval)
 
     def trigonometric(self) -> FieldData[floating]:
         retval = np.zeros_like(self.data, shape=(self.ndofs, 4))
@@ -223,6 +265,30 @@ class FieldData(Generic[T]):
         if isinstance(other, FieldData):
             return FieldData(self.data + other.data)
         return FieldData(self.data + other)
+
+    @overload
+    def __mul__(
+        self: FieldData[integer], other: Union[int, NDArray[integer], FieldData[integer]]
+    ) -> FieldData[integer]:
+        ...
+
+    @overload
+    def __mul__(
+        self: FieldData[floating], other: Union[int, float, NDArray[number], FieldData[number]]
+    ) -> FieldData[floating]:
+        ...
+
+    def __mul__(self, other):
+        if isinstance(other, FieldData):
+            return FieldData(self.data * other.data)
+        return FieldData(self.data * other)
+
+    def __floordiv__(
+        self: FieldData[integer], other: Union[int, NDArray[integer], FieldData[integer]]
+    ) -> FieldData[integer]:
+        if isinstance(other, FieldData):
+            return FieldData(self.data // other.data)
+        return FieldData(self.data // other)
 
     def __truediv__(self, other) -> FieldData:
         if isinstance(other, FieldData):
