@@ -18,7 +18,7 @@ from typing import (
 )
 
 import numpy as np
-from attrs import Factory, define
+from attrs import Factory, define, asdict
 from numpy import floating, integer
 from typing_extensions import Self
 
@@ -77,7 +77,7 @@ class RecombineFieldSpec:
     new_name: str
 
 
-@define(slots=False)
+@define
 class SourceProperties:
     instantaneous: bool
     globally_keyed: bool = False
@@ -88,7 +88,7 @@ class SourceProperties:
     recombine_fields: List[RecombineFieldSpec] = Factory(list)
 
     def update(self, **kwargs) -> SourceProperties:
-        kwargs = {**self.__dict__, **kwargs}
+        kwargs = {**asdict(self), **kwargs}
         return SourceProperties(**kwargs)
 
 
@@ -136,7 +136,7 @@ class Scalar:
         return Vector(ncomps=other.ncomps + 1, interpretation=interpretation)
 
 
-@define(slots=False)
+@define
 class Vector:
     ncomps: int
     interpretation: VectorInterpretation = VectorInterpretation.Generic
@@ -153,7 +153,7 @@ class Vector:
         return Vector(ncomps=self.ncomps + other.ncomps, interpretation=interpretation)
 
     def update(self, **kwargs) -> Vector:
-        kwargs = {**self.__dict__, **kwargs}
+        kwargs = {**asdict(self), **kwargs}
         return Vector(**kwargs)
 
 
