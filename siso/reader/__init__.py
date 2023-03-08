@@ -123,6 +123,15 @@ def wrf(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
+@register_reader("GeoGrid")
+def geogrid(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+    from .wrf import GeoGrid
+
+    if GeoGrid.applicable(path):
+        return GeoGrid(path)
+    return None
+
+
 @register_reader("GoTools")
 def gotools(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     if path.suffix.casefold() != ".g2":

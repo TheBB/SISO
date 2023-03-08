@@ -164,6 +164,7 @@ testcase('hdf5/Square-modes.hdf5', 10, formats, '--ead', **kwargs)
 testcase('hdf5/Square-modes-freq.hdf5', 10, formats, '--ead', **kwargs)
 testcase('hdf5/Waterfall3D.hdf5', 1, formats, **kwargs)
 testcase('g2/annulus3D.g2', None, formats, **kwargs)
+testcase('geogrid/geo_em.d01.nc', None, formats, **kwargs)
 
 # Single precision, therefore inflated tolerance
 testcase('simra/box/box.res', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)

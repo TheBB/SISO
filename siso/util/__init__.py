@@ -356,7 +356,7 @@ def filename_generator(basename: Path, instantaneous: bool) -> Iterator[Path]:
     stem = basename.stem
     suffix = basename.suffix
     for i in count(1):
-        yield basename.with_name(f"{stem}-{i}").with_suffix(suffix)
+        yield basename.with_name(f"{stem}-{i}{suffix}")
 
 
 def angular_mean(data: np.ndarray) -> np.ndarray:
