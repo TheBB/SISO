@@ -60,6 +60,22 @@ python-versions = ">=3.7"
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
 
 [[package]]
+name = "click-option-group"
+version = "0.5.5"
+description = "Option groups missing in Click"
+category = "main"
+optional = false
+python-versions = ">=3.6,<4"
+
+[package.dependencies]
+Click = ">=7.0,<9"
+
+[package.extras]
+docs = ["sphinx (>=3.0,<6)", "pallets-sphinx-themes", "m2r2"]
+tests = ["pytest"]
+tests_cov = ["pytest", "pytest-cov", "coverage (<6)", "coveralls"]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 description = "Cross-platform colored terminal text."
@@ -558,13 +574,14 @@ web = ["wslink (>=1.0.4)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "5e262e3ba6b9d4a109dad899278548e138e1dffbc6ef4acad0207e31b104c941"
+content-hash = "846bfe4b44d595d6043828daba164e780c1bd4c38aa2be6658efdd8a4fa129e8"
 
 [metadata.files]
 attrs = []
 black = []
 cftime = []
 click = []
+click-option-group = []
 colorama = []
 contourpy = []
 cycler = [

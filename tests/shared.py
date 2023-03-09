@@ -216,6 +216,11 @@ for n in ['eastward', 'northward', 'outward']:
 # Miscellaneous CLI options
 formats = ['vtk', 'vtu', 'pvd', 'vtf']
 kwargs = {'format_args': {'vtk': ['--unstructured']}}
+testcase('hdf5/Square-ad.hdf5', 5, ['pvd'], '--times', '5', suffix='-endtime')
+testcase('hdf5/Square-ad.hdf5', 5, ['pvd'], '--times', ':5', suffix='-endtime')
+testcase('hdf5/Square-ad.hdf5', 6, ['pvd'], '--times', '5:', suffix='-starttime')
+testcase('hdf5/Square-ad.hdf5', 3, ['pvd'], '--times', '5:8', suffix='-intime')
+testcase('hdf5/Square-ad.hdf5', 3, ['pvd'], '--times', '5::2', suffix='-steptime')
 # testcase('hdf5/SmallBox.hdf5', None, formats, '--last', suffix='-with-last')
 # testcase('hdf5/Annulus.hdf5', 3, formats, '--nvis', '2', suffix='-with-nvis', **kwargs)
 # testcase('g2/annulus3D.g2', None, formats, '--nvis', '5', suffix='-with-nvis', **kwargs)

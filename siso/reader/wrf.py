@@ -240,6 +240,14 @@ class NetCdf(api.Source[Field, TimeStep, Zone]):
 
         return FieldData.join(cells)
 
+    def rotation(self, with_intrinsic: bool = True) -> Rotation:
+        intrinsic = 0.0
+        if with_intrinsic:
+            intrinsic = 360 * np.ceil(self.num_longitude / 2) / self.num_longitude
+        return Rotation.from_euler(
+            "ZYZ", [-self.dataset.STAND_LON, -self.dataset.MOAD_CEN_LAT, intrinsic], degrees=True
+        )
+
     def use_geometry(self, geometry: Field) -> None:
         self.geodetic = geometry.name == "Geodetic"
 
@@ -362,14 +370,6 @@ class Wrf(NetCdf):
         if field.name == "WIND":
             return self.wind(timestep.index)
         return super().field_data(timestep, field, zone)
-
-    def rotation(self, with_intrinsic: bool = True) -> Rotation:
-        intrinsic = 0.0
-        if with_intrinsic:
-            intrinsic = 360 * np.ceil(self.num_longitude / 2) / self.num_longitude
-        return Rotation.from_euler(
-            "ZYZ", [-self.dataset.STAND_LON, -self.dataset.MOAD_CEN_LAT, intrinsic], degrees=True
-        )
 
     @lru_cache(maxsize=1)
     def wind(self, index: int) -> FieldData[floating]:

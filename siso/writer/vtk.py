@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+from abc import ABC, abstractmethod
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from typing import Callable, Sequence, Tuple, TypeVar, Union, cast
+from typing import IO, Callable, Sequence, Tuple, TypeVar, Union, cast
 
 import numpy as np
 from numpy import number
@@ -43,6 +44,8 @@ T = TypeVar("T", bound=TimeStep)
 Z = TypeVar("Z", bound=Zone)
 S = TypeVar("S", bound=number)
 
+BackendWriter = Union[vtkXMLWriter, vtkDataWriter]
+
 
 def transpose(data: FieldData[S], grid: vtkPointSet, cellwise: bool = False) -> FieldData[S]:
     if not isinstance(grid, vtkStructuredGrid):
@@ -56,7 +59,7 @@ def transpose(data: FieldData[S], grid: vtkPointSet, cellwise: bool = False) -> 
 
 def get_grid(
     topology: DiscreteTopology, legacy: bool, behavior: Behavior
-) -> Tuple[vtkPointSet, Union[vtkXMLWriter, vtkDataWriter]]:
+) -> Tuple[vtkPointSet, BackendWriter]:
     if isinstance(topology, StructuredTopology) and behavior != Behavior.OnlyUnstructured:
         sgrid = vtkStructuredGrid()
         shape = topology.cellshape
@@ -111,10 +114,9 @@ def apply_output_mode(writer: Union[vtkXMLWriter, vtkDataWriter], mode: OutputMo
             writer.SetDataModeToAppended()
 
 
-class VtkWriterBase(Writer):
+class VtkWriterBase(ABC, Writer):
     filename: Path
     output_mode: OutputMode = OutputMode.Binary
-    grid_getter: Callable[[DiscreteTopology], Tuple[vtkPointSet, Union[vtkXMLWriter, vtkDataWriter]]]
     allow_nan_in_ascii: bool
 
     def __init__(self, filename: Path):
@@ -133,47 +135,56 @@ class VtkWriterBase(Writer):
             require_tesselated=True,
         )
 
-    def configure(self, settings: WriterSettings):
+    def configure(self, settings: WriterSettings) -> None:
         if settings.output_mode is not None:
             assert settings.output_mode in (OutputMode.Binary, OutputMode.Ascii)
             self.output_mode = settings.output_mode
 
-    def consume(self, source: Source[F, T, Z], geometry: F, fields: Sequence[F]):
+    @abstractmethod
+    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+        ...
+
+    def consume_timestep(
+        self, timestep: T, filename: Path, source: Source[F, T, Z], geometry: F, fields: Sequence[F]
+    ) -> None:
+        zone = next(source.zones())
+        topology = cast(DiscreteTopology, source.topology(timestep, geometry, zone))
+
+        grid, writer = self.grid_and_writer(topology)
+        apply_output_mode(writer, self.output_mode)
+
+        data = source.field_data(timestep, geometry, zone)
+        data = transpose(data, grid, geometry.cellwise)
+
+        points = vtkPoints()
+        p = data.ensure_ncomps(3, allow_scalar=False)
+        points.SetData(p.vtk())
+        grid.SetPoints(points)
+
+        for field in fields:
+            target = grid.GetCellData() if field.cellwise else grid.GetPointData()
+            data = source.field_data(timestep, field, zone)
+            if field.is_displacement:
+                data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
+            else:
+                data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
+            data = transpose(data, grid, field.cellwise)
+            if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
+                data = data.nan_filter()
+            array = data.vtk()
+            array.SetName(field.name)
+            target.AddArray(array)
+
+        writer.SetFileName(str(filename))
+        writer.SetInputData(grid)
+        writer.Write()
+
+        logging.info(filename)
+
+    def consume(self, source: Source[F, T, Z], geometry: F, fields: Sequence[F]) -> None:
         filenames = util.filename_generator(self.filename, source.properties.instantaneous)
         for timestep, filename in zip(source.timesteps(), filenames):
-            zone = next(source.zones())
-            topology = cast(DiscreteTopology, source.topology(timestep, geometry, zone))
-
-            grid, writer = self.grid_getter(topology)
-            apply_output_mode(writer, self.output_mode)
-
-            data = source.field_data(timestep, geometry, zone)
-            data = transpose(data, grid, geometry.cellwise)
-
-            points = vtkPoints()
-            p = data.ensure_ncomps(3, allow_scalar=False)
-            points.SetData(p.vtk())
-            grid.SetPoints(points)
-
-            for field in fields:
-                target = grid.GetCellData() if field.cellwise else grid.GetPointData()
-                data = source.field_data(timestep, field, zone)
-                if field.is_displacement:
-                    data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
-                else:
-                    data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
-                data = transpose(data, grid, field.cellwise)
-                if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
-                    data = data.nan_filter()
-                array = data.vtk()
-                array.SetName(field.name)
-                target.AddArray(array)
-
-            writer.SetFileName(str(filename))
-            writer.SetInputData(grid)
-            writer.Write()
-
-            logging.info(filename)
+            self.consume_timestep(timestep, filename, source, geometry, fields)
 
 
 class VtkWriter(VtkWriterBase):
@@ -181,7 +192,9 @@ class VtkWriter(VtkWriterBase):
 
     def __init__(self, filename: Path):
         super().__init__(filename)
-        self.grid_getter = partial(get_grid, legacy=True, behavior=Behavior.Whatever)
+
+    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+        return get_grid(topology, legacy=True, behavior=Behavior.Whatever)
 
 
 class VtuWriter(VtkWriterBase):
@@ -189,7 +202,9 @@ class VtuWriter(VtkWriterBase):
 
     def __init__(self, filename: Path):
         super().__init__(filename)
-        self.grid_getter = partial(get_grid, legacy=False, behavior=Behavior.OnlyUnstructured)
+
+    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+        return get_grid(topology, legacy=False, behavior=Behavior.OnlyUnstructured)
 
 
 class VtsWriter(VtkWriterBase):
@@ -197,4 +212,42 @@ class VtsWriter(VtkWriterBase):
 
     def __init__(self, filename: Path):
         super().__init__(filename)
-        self.grid_getter = partial(get_grid, legacy=False, behavior=Behavior.OnlyStructured)
+
+    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+        return get_grid(topology, legacy=False, behavior=Behavior.OnlyStructured)
+
+
+class PvdWriter(VtuWriter):
+    pvd_dirname: Path
+    pvd_filename: Path
+    pvd: IO[str]
+
+    def __init__(self, filename: Path):
+        self.pvd_filename = filename
+        self.pvd_dirname = filename.with_suffix(f"{filename.suffix}-data")
+        super().__init__(self.pvd_dirname / "data.vtu")
+
+    def __enter__(self) -> Self:
+        self.pvd_dirname.mkdir(exist_ok=True, parents=True)
+        self.pvd = self.pvd_filename.open("w").__enter__()
+        self.pvd.write('<VTKFile type="Collection">\n')
+        self.pvd.write("  <Collection>\n")
+        return super().__enter__()
+
+    def __exit__(self, *args) -> None:
+        super().__exit__(*args)
+        self.pvd.write("  </Collection>\n")
+        self.pvd.write("</VTKFile>\n")
+        self.pvd.__exit__(*args)
+        logging.info(self.pvd_filename)
+
+    def consume_timestep(
+        self, timestep: T, filename: Path, source: Source[F, T, Z], geometry: F, fields: Sequence[F]
+    ) -> None:
+        super().consume_timestep(timestep, filename, source, geometry, fields)
+        relative_filename = filename.relative_to(self.pvd_filename.parent)
+        if timestep.time is not None:
+            time = timestep.time
+        else:
+            time = timestep.index
+        self.pvd.write(f'    <DataSet timestep="{time}" part="0" file="{relative_filename}" />\n')

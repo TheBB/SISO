@@ -18,6 +18,7 @@ vtk = "^9.2.5"
 netCDF4 = "^1.6.2"
 pyerfa = "^2.0.0.1"
 attrs = "^22.2.0"
+click-option-group = "^0.5.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
@@ -45,7 +46,7 @@ line_length = 110
 lines_after_imports = 2
 
 [tool.poe.tasks]
-test = "pytest tests/test_vtk.py tests/test_vtu.py tests/test_vts.py"
+test = "pytest tests/test_vtk.py tests/test_vtu.py tests/test_vts.py tests/test_pvd.py"
 mypy = "mypy siso"
 check = ["mypy", "test"]
 black = "black siso"

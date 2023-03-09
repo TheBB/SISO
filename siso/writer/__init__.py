@@ -58,3 +58,10 @@ def vts(path: Path) -> Writer:
     from .vtk import VtsWriter
 
     return VtsWriter(path)
+
+
+@register_writer(OutputFormat.Pvd)
+def pvd(path: Path) -> Writer:
+    from .vtk import PvdWriter
+
+    return PvdWriter(path)

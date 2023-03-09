@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Literal, Optional, Sequence, Tuple, cast
 
 import click
+from click_option_group import MutuallyExclusiveOptionGroup, optgroup
 from rich.console import Console
 from rich.logging import RichHandler
 
@@ -38,6 +39,20 @@ class Coords(click.ParamType):
         return coords.find_system(value)
 
 
+class SliceType(click.ParamType):
+    name = "slice"
+
+    def convert(self, value, param, ctx):
+        if value is None or isinstance(value, tuple):
+            return value
+        try:
+            args = value.split(":")
+            assert 1 <= len(args) <= 3
+            return tuple(int(arg) if arg else None for arg in args)
+        except (AssertionError, ValueError):
+            self.fail(f"{value!r} is not valid slice syntax", param, ctx)
+
+
 def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     if len(inpath) == 1:
         source = find_reader(inpath[0], settings)
@@ -58,14 +73,24 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 
 @click.command()
 
+
 # Pipeline options
 @click.option("--unstructured", "require_unstructured", is_flag=True)
 @click.option("--decompose/--no-decompose", default=True)
 @click.option("--periodic", is_flag=True)
 @click.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
-@click.option("--out-coords", default=coords.Generic(), type=Coords())
-@click.option("--coords", "out_coords", default=coords.Generic(), type=Coords())
-@click.option("--in-coords", default=None)
+
+# Coordinate systems
+@optgroup.group("Coordinate systems")
+@optgroup.option("--out-coords", default=coords.Generic(), type=Coords())
+@optgroup.option("--coords", "out_coords", default=coords.Generic(), type=Coords())
+@optgroup.option("--in-coords", default=None)
+
+# Time slicing
+@optgroup.group("Time slicing", cls=MutuallyExclusiveOptionGroup)
+@optgroup.option("--times", "timestep_slice", default=None, type=SliceType())
+@optgroup.option("--time", "timestep_index", default=None, type=int)
+@optgroup.option("--last", "only_final_timestep", is_flag=True)
 
 # Writer options
 @click.option("--mode", "-m", "output_mode", type=Enum(OutputMode))
@@ -83,13 +108,18 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @click.option("--extrude", "dimensionality", flag_value=Dimensionality.Extrude, type=click.UNPROCESSED)
 @click.option("--staggering", type=Enum(Staggering), default="inner")
 
-# Logging, verbosity and testing
-@click.option("--verify-strict/--no-verify-strict", default=False)
-@click.option("--debug", "verbosity", flag_value="debug")
-@click.option("--info", "verbosity", flag_value="info", default=True)
-@click.option("--warning", "verbosity", flag_value="warning")
-@click.option("--error", "verbosity", flag_value="error")
-@click.option("--critical", "verbosity", flag_value="critical")
+# Debugging options
+@click.option("--verify-strict", is_flag=True)
+
+# Verbosity options
+@optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
+@optgroup.option("--debug", "verbosity", flag_value="debug")
+@optgroup.option("--info", "verbosity", flag_value="info", default=True)
+@optgroup.option("--warning", "verbosity", flag_value="warning")
+@optgroup.option("--error", "verbosity", flag_value="error")
+@optgroup.option("--critical", "verbosity", flag_value="critical")
+
+# Colors
 @click.option("--rich/--no-rich", default=True)
 
 # Input and output
@@ -99,6 +129,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     "inpath",
     nargs=-1,
     type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True, path_type=Path),
+    required=True,
 )
 def main(
     # Pipeline options
@@ -108,6 +139,9 @@ def main(
     eigenmodes_are_displacement: bool,
     out_coords: CoordinateSystem,
     in_coords: Optional[str],
+    timestep_slice: Tuple[Optional[int]],
+    timestep_index: Optional[int],
+    only_final_timestep: bool,
     # Writer options
     output_mode: Optional[OutputMode],
     # Reader options
@@ -137,12 +171,6 @@ def main(
             )
         ],
     )
-
-    # Assert that there are inputs
-    if not inpath:
-        logging.critical("No inputs given")
-        sys.exit(1)
-    assert len(inpath) > 0
 
     # Resolve potential mismatches between output and format
     if outpath and not fmt:
@@ -215,6 +243,13 @@ def main(
 
         if verify_strict:
             source = filters.Strict(source)
+
+        if timestep_slice is not None:
+            source = filters.TimeSlice(source, timestep_slice)
+        elif timestep_index is not None:
+            source = filters.TimeSlice(source, (timestep_index, timestep_index + 1))
+        elif only_final_timestep:
+            source = filters.LastTime(source)
 
         geometries: List[Field] = []
         fields: List[Field] = []

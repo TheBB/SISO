@@ -285,7 +285,7 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
     def timesteps(self) -> Iterator[TimeStep]:
         for i, group in enumerate(self.timestep_groups()):
             if "timeinfo/level" in group:
-                time = group["timeinfo/level"][:]
+                time = group["timeinfo/level"][0]
             else:
                 time = float(i)
             yield TimeStep(index=i, time=time)
