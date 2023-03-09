@@ -10,6 +10,10 @@ T = TypeVar("T", bound=api.TimeStep)
 
 
 class LastTime(Passthrough[F, T, Z, F, T, Z]):
+    @property
+    def properties(self) -> api.SourceProperties:
+        return self.source.properties.update(instantaneous=True)
+
     def timesteps(self) -> Iterator[T]:
         timesteps = self.source.timesteps()
         timestep = next(timesteps)
