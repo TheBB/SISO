@@ -73,12 +73,13 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 
 @click.command()
 
-
-# Pipeline options
-@click.option("--unstructured", "require_unstructured", is_flag=True)
-@click.option("--decompose/--no-decompose", default=True)
-@click.option("--periodic", is_flag=True)
-@click.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
+# Output
+@optgroup.group("Output")
+@optgroup.option(
+    "-o", "outpath", type=click.Path(file_okay=True, dir_okay=False, writable=True, path_type=Path)
+)
+@optgroup.option("--mode", "-m", "output_mode", type=Enum(OutputMode))
+@optgroup.option("--fmt", "-f", type=Enum(OutputFormat))
 
 # Coordinate systems
 @optgroup.group("Coordinate systems")
@@ -92,24 +93,29 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--time", "timestep_index", default=None, type=int)
 @optgroup.option("--last", "only_final_timestep", is_flag=True)
 
-# Writer options
-@click.option("--mode", "-m", "output_mode", type=Enum(OutputMode))
-
 # Reader options
-@click.option("--in-endianness", type=Enum(Endianness), default="native")
-@click.option(
+@optgroup.group("Input processing")
+@optgroup.option("--in-endianness", type=Enum(Endianness), default="native")
+@optgroup.option("--staggering", type=Enum(Staggering), default="inner")
+@optgroup.option("--periodic", is_flag=True)
+
+# Dimensionality
+@optgroup.group("Dimensionality", cls=MutuallyExclusiveOptionGroup)
+@optgroup.option(
     "--volumetric",
     "dimensionality",
     flag_value=Dimensionality.Volumetric,
     default=True,
     type=click.UNPROCESSED,
 )
-@click.option("--planar", "dimensionality", flag_value=Dimensionality.Planar, type=click.UNPROCESSED)
-@click.option("--extrude", "dimensionality", flag_value=Dimensionality.Extrude, type=click.UNPROCESSED)
-@click.option("--staggering", type=Enum(Staggering), default="inner")
+@optgroup.option("--planar", "dimensionality", flag_value=Dimensionality.Planar, type=click.UNPROCESSED)
+@optgroup.option("--extrude", "dimensionality", flag_value=Dimensionality.Extrude, type=click.UNPROCESSED)
 
-# Debugging options
-@click.option("--verify-strict", is_flag=True)
+# Miscellaneous options
+@optgroup.group("Miscellaneous")
+@click.option("--unstructured", "require_unstructured", is_flag=True)
+@click.option("--decompose/--no-decompose", default=True)
+@click.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
 
 # Verbosity options
 @optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
@@ -120,11 +126,14 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--critical", "verbosity", flag_value="critical")
 
 # Colors
-@click.option("--rich/--no-rich", default=True)
+@optgroup.group("Log formatting")
+@optgroup.option("--rich/--no-rich", default=True)
 
-# Input and output
-@click.option("-o", "outpath", type=click.Path(file_okay=True, dir_okay=False, writable=True, path_type=Path))
-@click.option("--fmt", "-f", type=Enum(OutputFormat))
+# Debugging options
+@optgroup.group("Debugging")
+@optgroup.option("--verify-strict", is_flag=True)
+
+# Input
 @click.argument(
     "inpath",
     nargs=-1,
