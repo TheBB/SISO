@@ -224,9 +224,9 @@ testcase('hdf5/Square-ad.hdf5', 3, ['pvd'], '--times', '5::2', suffix='-steptime
 testcase('hdf5/SmallBox.hdf5', None, formats, '--last', suffix='-with-last')
 testcase('hdf5/Annulus.hdf5', 3, formats, '--nvis', '2', suffix='-with-nvis', **kwargs)
 testcase('g2/annulus3D.g2', None, formats, '--nvis', '5', suffix='-with-nvis', **kwargs)
-# testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--no-fields', suffix='-no-fields')
-# testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U', '-l', 'V', '-l', 'W', suffix='-filtered')
-# testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'U,V,W', suffix='-filtered')
+testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--no-fields', suffix='-no-fields')
+testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'u', '-l', 'v', '-l', 'w', suffix='-filtered')
+testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'u,v,w', suffix='-filtered')
 
 
 def compare_vtk_data(out, ref, case: PreparedTestCase):

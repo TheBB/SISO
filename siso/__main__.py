@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import chain
 import logging
 import sys
 from pathlib import Path
@@ -93,6 +94,11 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--time", "timestep_index", default=None, type=int)
 @optgroup.option("--last", "only_final_timestep", is_flag=True)
 
+# Field filtering
+@optgroup.group("Field filtering", cls=MutuallyExclusiveOptionGroup)
+@optgroup.option("--no-fields", is_flag=True)
+@optgroup.option("--filter", "-l", "field_filter", multiple=True, default=None)
+
 # Reader options
 @optgroup.group("Input processing")
 @optgroup.option("--in-endianness", type=Enum(Endianness), default="native")
@@ -153,6 +159,8 @@ def main(
     timestep_index: Optional[int],
     only_final_timestep: bool,
     nvis: int,
+    no_fields: bool,
+    field_filter,
     # Writer options
     output_mode: Optional[OutputMode],
     # Reader options
@@ -276,6 +284,18 @@ def main(
                 geometries.append(field)
             else:
                 fields.append(field)
+
+        if no_fields:
+            fields = []
+        elif field_filter:
+            allowed_fields = set(chain.from_iterable(
+                map(str.casefold, field_name.split(','))
+                for field_name in field_filter
+            ))
+            fields = [
+                field for field in fields
+                if field.name.casefold() in allowed_fields
+            ]
 
         for field in fields:
             logging.debug(
