@@ -98,6 +98,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--in-endianness", type=Enum(Endianness), default="native")
 @optgroup.option("--staggering", type=Enum(Staggering), default="inner")
 @optgroup.option("--periodic", is_flag=True)
+@optgroup.option("--nvis", "-n", default=1)
 
 # Dimensionality
 @optgroup.group("Dimensionality", cls=MutuallyExclusiveOptionGroup)
@@ -113,9 +114,9 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 
 # Miscellaneous options
 @optgroup.group("Miscellaneous")
-@click.option("--unstructured", "require_unstructured", is_flag=True)
-@click.option("--decompose/--no-decompose", default=True)
-@click.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
+@optgroup.option("--unstructured", "require_unstructured", is_flag=True)
+@optgroup.option("--decompose/--no-decompose", default=True)
+@optgroup.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
 
 # Verbosity options
 @optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
@@ -151,6 +152,7 @@ def main(
     timestep_slice: Tuple[Optional[int]],
     timestep_index: Optional[int],
     only_final_timestep: bool,
+    nvis: int,
     # Writer options
     output_mode: Optional[OutputMode],
     # Reader options
@@ -227,9 +229,16 @@ def main(
         if not in_props.globally_keyed:
             source = filters.KeyZones(source)
 
-        if not in_props.tesselated:
-            if out_props.require_tesselated or out_props.require_single_zone or require_unstructured:
-                source = filters.Tesselate(source)
+        if (
+            nvis > 1 or (
+                not in_props.tesselated and (
+                    out_props.require_tesselated or
+                    out_props.require_single_zone or
+                    require_unstructured
+                )
+            )
+        ):
+            source = filters.Tesselate(source, nvis)
 
         if not in_props.single_zoned:
             if out_props.require_single_zone:

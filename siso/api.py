@@ -344,7 +344,7 @@ class Topology(Protocol):
     def num_cells(self) -> int:
         ...
 
-    def tesselator(self) -> Tesselator[Self]:
+    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
         ...
 
 

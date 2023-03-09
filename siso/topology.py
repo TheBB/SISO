@@ -101,7 +101,8 @@ class UnstructuredTopology:
     def num_cells(self) -> int:
         return self.cells.ndofs
 
-    def tesselator(self) -> NoopTesselator:
+    def tesselator(self, nvis: int = 1) -> Tesselator:
+        assert nvis == 1
         return NoopTesselator()
 
 
@@ -129,7 +130,8 @@ class StructuredTopology:
     def cells(self) -> FieldData[integer]:
         return util.structured_cells(self.cellshape, self.pardim)
 
-    def tesselator(self) -> Tesselator[Self]:
+    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
+        assert nvis == 1
         return NoopTesselator()
 
 
@@ -195,8 +197,8 @@ class SplineTopology(Topology):
     def num_cells(self) -> int:
         return util.prod(len(basis.knot_spans()) - 1 for basis in self.bases)
 
-    def tesselator(self) -> Tesselator[Self]:
-        return SplineTesselator(self, nvis=1)
+    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
+        return SplineTesselator(self, nvis)
 
 
 class SplineTesselator(Tesselator[SplineTopology]):
@@ -287,8 +289,8 @@ class LrTopology(Topology):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
-    def tesselator(self) -> Tesselator[Self]:
-        return LrTesselator(self.obj, self.weights, nvis=1)
+    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
+        return LrTesselator(self.obj, self.weights, nvis)
 
 
 class LrTesselator(Tesselator[LrTopology]):
