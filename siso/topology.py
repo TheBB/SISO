@@ -130,9 +130,20 @@ class StructuredTopology:
     def cells(self) -> FieldData[integer]:
         return util.structured_cells(self.cellshape, self.pardim)
 
+    @property
+    def nodeshape(self) -> Tuple[int, ...]:
+        return tuple(n+1 for n in self.cellshape)
+
     def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
         assert nvis == 1
         return NoopTesselator()
+
+    def transpose(self, axes: Tuple[int, ...]) -> StructuredTopology:
+        assert len(axes) == self.pardim
+        return StructuredTopology(
+            cellshape=tuple(self.cellshape[i] for i in axes),
+            celltype=self.celltype,
+        )
 
 
 class NoopTesselator(Tesselator[DiscreteTopology]):

@@ -12,7 +12,7 @@ from numpy import floating
 from typing_extensions import Self
 
 from .. import api, util
-from ..coords import Named
+from ..coord import Named
 from ..field import Field
 from ..timestep import TimeStep
 from ..topology import LrTopology, SplineTopology, UnstructuredTopology

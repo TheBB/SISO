@@ -249,9 +249,9 @@ def visit_face(
     xs = subdivide_linear((lft, rgt), nvis)
     ys = subdivide_linear((btm, top), nvis)
 
-    for l, r in pairwise(xs):
-        for b, t in pairwise(ys):
-            sw, se, nw, ne = (l, b), (r, b), (l, t), (r, t)
+    for lft, rgt in pairwise(xs):
+        for btm, top in pairwise(ys):
+            sw, se, nw, ne = (lft, btm), (rgt, btm), (lft, top), (rgt, top)
             for pt in (sw, se, nw, ne):
                 nodes.setdefault(pt, len(nodes))
             elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])

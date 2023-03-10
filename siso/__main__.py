@@ -4,14 +4,14 @@ from itertools import chain
 import logging
 import sys
 from pathlib import Path
-from typing import List, Literal, Optional, Sequence, Tuple, cast
+from typing import List, Literal, Optional, Sequence, Tuple
 
 import click
 from click_option_group import MutuallyExclusiveOptionGroup, optgroup
 from rich.console import Console
 from rich.logging import RichHandler
 
-from . import coords, filters, util
+from . import coord, filter, util
 from .api import CoordinateSystem, Dimensionality, Endianness, Field, ReaderSettings, Source, Staggering
 from .multisource import MultiSource
 from .reader import FindReaderSettings, find_reader
@@ -37,7 +37,7 @@ class Coords(click.ParamType):
             return None
         if isinstance(value, CoordinateSystem):
             return value
-        return coords.find_system(value)
+        return coord.find_system(value)
 
 
 class SliceType(click.ParamType):
@@ -84,8 +84,8 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 
 # Coordinate systems
 @optgroup.group("Coordinate systems")
-@optgroup.option("--out-coords", default=coords.Generic(), type=Coords())
-@optgroup.option("--coords", "out_coords", default=coords.Generic(), type=Coords())
+@optgroup.option("--out-coords", default=coord.Generic(), type=Coords())
+@optgroup.option("--coords", "out_coords", default=coord.Generic(), type=Coords())
 @optgroup.option("--in-coords", default=None)
 
 # Time slicing
@@ -99,9 +99,12 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--no-fields", is_flag=True)
 @optgroup.option("--filter", "-l", "field_filter", multiple=True, default=None)
 
+@optgroup.group("Endianness")
+@optgroup.option("--in-endianness", type=Enum(Endianness), default="native")
+@optgroup.option("--out-endianness", type=Enum(Endianness), default="native")
+
 # Reader options
 @optgroup.group("Input processing")
-@optgroup.option("--in-endianness", type=Enum(Endianness), default="native")
 @optgroup.option("--staggering", type=Enum(Staggering), default="inner")
 @optgroup.option("--periodic", is_flag=True)
 @optgroup.option("--nvis", "-n", default=1)
@@ -163,6 +166,7 @@ def main(
     field_filter,
     # Writer options
     output_mode: Optional[OutputMode],
+    out_endianness: Endianness,
     # Reader options
     in_endianness: Endianness,
     dimensionality: Dimensionality,
@@ -193,7 +197,14 @@ def main(
 
     # Resolve potential mismatches between output and format
     if outpath and not fmt:
-        fmt = OutputFormat(outpath.suffix[1:].casefold())
+        suffix = outpath.suffix[1:].casefold()
+        if suffix == 'dat':
+            logging.warning("Interpreting .dat filetype as SIMRA Mesh file")
+            logging.warning("Note: the .dat extension is overloaded - don't rely on this behavior")
+            logging.warning("Prefer using '-f simra'")
+            fmt = OutputFormat.Simra
+        else:
+            fmt = OutputFormat(suffix)
     elif not outpath:
         fmt = fmt or OutputFormat.Pvd
         outpath = Path(inpath[0].name).with_suffix(fmt.default_suffix())
@@ -224,6 +235,7 @@ def main(
     sink.configure(
         WriterSettings(
             output_mode=output_mode,
+            endianness=out_endianness,
         )
     )
 
@@ -232,10 +244,10 @@ def main(
         out_props = sink.properties
 
         if verify_strict:
-            source = filters.Strict(source)
+            source = filter.Strict(source)
 
         if not in_props.globally_keyed:
-            source = filters.KeyZones(source)
+            source = filter.KeyZones(source)
 
         if (
             nvis > 1 or (
@@ -246,36 +258,38 @@ def main(
                 )
             )
         ):
-            source = filters.Tesselate(source, nvis)
+            source = filter.Tesselate(source, nvis)
 
         if not in_props.single_zoned:
             if out_props.require_single_zone:
-                source = filters.ZoneMerge(source)
+                source = filter.ZoneMerge(source)
 
         if in_props.split_fields:
-            source = filters.Split(source, in_props.split_fields)
+            source = filter.Split(source, in_props.split_fields)
 
         if in_props.recombine_fields:
-            source = filters.Recombine(source, in_props.recombine_fields)
+            source = filter.Recombine(source, in_props.recombine_fields)
 
         if decompose:
-            source = filters.Decompose(source)
+            source = filter.Decompose(source)
 
         if require_unstructured:
-            source = filters.ForceUnstructured(source)
+            source = filter.ForceUnstructured(source)
 
         if eigenmodes_are_displacement:
-            source = filters.EigenDisp(source)
+            source = filter.EigenDisp(source)
 
         if verify_strict:
-            source = filters.Strict(source)
+            source = filter.Strict(source)
 
         if timestep_slice is not None:
-            source = filters.TimeSlice(source, timestep_slice)
+            source = filter.TimeSlice(source, timestep_slice)
         elif timestep_index is not None:
-            source = filters.TimeSlice(source, (timestep_index, timestep_index + 1))
+            source = filter.TimeSlice(source, (timestep_index, timestep_index + 1))
         elif only_final_timestep:
-            source = filters.LastTime(source)
+            source = filter.LastTime(source)
+
+        assert not (out_props.require_instantaneous and not source.properties.instantaneous)
 
         geometries: List[Field] = []
         fields: List[Field] = []
@@ -311,7 +325,7 @@ def main(
             names = ", ".join(f"'{geometry.name}'" for geometry in geometries)
             logging.debug(f"Retaining {names}")
 
-        result = coords.optimal_system([geometry.coords for geometry in geometries], out_coords)
+        result = coord.optimal_system([geometry.coords for geometry in geometries], out_coords)
         if result is None:
             logging.critical(f"Unable to determine a coordinate system conversion path to {out_coords}")
             logging.critical("These source coordinate systems were considered:")
@@ -328,7 +342,7 @@ def main(
             logging.debug("Coordinate conversion path:")
             str_path = " -> ".join(str(system) for system in path)
             logging.debug(str_path)
-            source = filters.CoordTransform(source, path)
+            source = filter.CoordTransform(source, path)
 
         with sink:
             sink.consume(source, geometry, fields)

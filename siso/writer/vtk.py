@@ -3,11 +3,9 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from functools import partial
 from pathlib import Path
-from typing import IO, Callable, Sequence, Tuple, TypeVar, Union, cast
+from typing import IO, Sequence, Tuple, TypeVar, Union, cast
 
-import numpy as np
 from numpy import number
 from typing_extensions import Self
 

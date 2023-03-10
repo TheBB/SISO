@@ -4,7 +4,7 @@ from typing import Optional, Protocol, Sequence, TypeVar
 from attrs import define
 from typing_extensions import Self
 
-from ..api import Field, Source, TimeStep
+from ..api import Field, Source, TimeStep, Endianness
 from ..zone import Zone
 
 
@@ -17,12 +17,14 @@ class OutputMode(Enum):
 @define
 class WriterSettings:
     output_mode: Optional[OutputMode] = None
+    endianness: Endianness = Endianness.Native
 
 
 @define
 class WriterProperties:
     require_single_zone: bool = False
     require_tesselated: bool = False
+    require_instantaneous: bool = False
 
 
 F = TypeVar("F", bound=Field)

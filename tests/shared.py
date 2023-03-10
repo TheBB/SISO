@@ -53,6 +53,9 @@ class PreparedTestCase:
     abs_tol: float
     rel_tol: float
 
+    out_endian: str = '='
+    ref_endian: str = '='
+
     def check_files(self, path: Path) -> Iterator[Tuple[Path, Path]]:
         """Yield a sequence of tuples, the first being the output of the test
         and the second being the reference to check against.  The test
@@ -95,6 +98,10 @@ TESTDATA_DIR = Path(__file__).parent / 'testdata'
 # needed to know which files to compare after conversion.
 MULTISTEP_FORMATS = {'pvd', 'vtf'}
 
+SUFFIX = {
+    'simra': 'dat',
+}
+
 
 def testcase(
     sourcefile: Path,
@@ -104,7 +111,7 @@ def testcase(
     suffix: str = '',
     abs_tol: float = 2e-7,
     rel_tol: float  = 2e-7,
-    format_args: Dict[str, List[str]] = {}
+    format_args: Dict[str, List[str]] = {},
 ):
     """Create test cases for converting SOURCEFILE to every format listed
     in FORMATS.  NSTEPS should be None if the source data has no
@@ -112,8 +119,8 @@ def testcase(
     """
     sourcefile = TESTDATA_DIR / sourcefile
     for fmt in formats:
-        basename = Path(f'{sourcefile.stem}{suffix}.{fmt}')
-        reference_files = filename_maker(fmt, fmt in MULTISTEP_FORMATS)(basename, nsteps)
+        basename = Path(f'{sourcefile.stem}{suffix}.{SUFFIX.get(fmt, fmt)}')
+        reference_files = filename_maker(SUFFIX.get(fmt, fmt), fmt in MULTISTEP_FORMATS)(basename, nsteps)
 
         TESTCASES.setdefault(fmt, []).append(PreparedTestCase(
             sourcefile=sourcefile,
@@ -212,6 +219,9 @@ for n in ['eastward', 'northward', 'outward']:
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, pr, suffix='-planar-periodic', rel_tol=2e-4, abs_tol=2e-6)
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, pr, suffix='-volumetric-periodic', rel_tol=2e-4, abs_tol=2e-6)
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, pr, suffix='-extrude-periodic', rel_tol=2e-4, abs_tol=2e-6)
+
+# Simra mesh output (relatively untested, here mostly to prevent regressions)
+testcase('g2/simra.g2', None, ['simra'])
 
 # Miscellaneous CLI options
 formats = ['vtk', 'vtu', 'pvd', 'vtf']

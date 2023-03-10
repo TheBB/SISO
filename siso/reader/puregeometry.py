@@ -3,7 +3,7 @@ from typing import Generic, Iterator, List, TypeVar
 
 from numpy import floating
 
-from .. import api, coords
+from .. import api, coord
 from ..field import Field
 from ..timestep import TimeStep
 from ..util import FieldData
@@ -38,7 +38,7 @@ class PureGeometry(api.Source[Field, TimeStep, Zone], Generic[T]):
         return
 
     def fields(self) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coords.Generic()))
+        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()))
 
     def timesteps(self) -> Iterator[TimeStep]:
         yield TimeStep(index=0)

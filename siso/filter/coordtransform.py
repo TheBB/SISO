@@ -1,9 +1,9 @@
-from typing import Dict, Tuple, TypeVar
+from typing import Dict, TypeVar
 
 from numpy import floating
 
 from .. import api, util
-from ..coords import ConversionPath, convert_coords, convert_vectors
+from ..coord import ConversionPath, convert_coords, convert_vectors
 from ..util import FieldData
 from .passthrough import Passthrough
 

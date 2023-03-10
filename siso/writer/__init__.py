@@ -12,8 +12,11 @@ class OutputFormat(Enum):
     Vtu = "vtu"
     Vts = "vts"
     Pvd = "pvd"
+    Simra = "simra"
 
     def default_suffix(self):
+        if self == OutputFormat.Simra:
+            return '.dat'
         return f".{self.value}"
 
 
@@ -65,3 +68,10 @@ def pvd(path: Path) -> Writer:
     from .vtk import PvdWriter
 
     return PvdWriter(path)
+
+
+@register_writer(OutputFormat.Simra)
+def simra(path: Path) -> Writer:
+    from .simra import SimraWriter
+
+    return SimraWriter(path)

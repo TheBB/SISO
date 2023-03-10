@@ -6,12 +6,11 @@ from typing import ClassVar, Iterator, Optional, Tuple
 import numpy as np
 from netCDF4 import Dataset
 from numpy import floating, integer
-from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import Self
 
 from .. import api, util
-from ..coords import Generic, Geodetic, SphericalEarth
+from ..coord import Generic, Geodetic, SphericalEarth
 from ..field import Field
 from ..timestep import TimeStep
 from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
@@ -393,7 +392,7 @@ class Wrf(NetCdf):
             .cartesian_to_spherical(with_radius=False)
         )
 
-        vectors = local.spherical_to_cartesian_vector_field(points).numpy(-1, *self.wrf_planar_nodeshape, 3)
+        vectors = local.spherical_to_cartesian_vector_field(points).numpy(-1, *self.wrf_planar_nodeshape)
 
         south: Optional[np.ndarray] = None
         north: Optional[np.ndarray] = None

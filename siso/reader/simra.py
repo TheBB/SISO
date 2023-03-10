@@ -31,7 +31,7 @@ from numpy import floating
 from typing_extensions import Self
 
 from .. import api, util
-from ..coords import Generic
+from ..coord import Generic
 from ..field import Field
 from ..timestep import TimeStep
 from ..topology import CellType, StructuredTopology, Topology
@@ -100,7 +100,7 @@ def mesh_offset(root: Path, dim: Union[Literal[2], Literal[3]]) -> np.ndarray:
     filename = root.parent / "info.txt"
     if not filename.exists():
         logging.warning("Unable to find mesh origin info (info.txt) - coordinates may be unreliable")
-        return np.zeros((dim,), dtype=float)
+        return np.zeros((dim,), dtype=np.float32)
     else:
         with open(filename, "r") as f:
             dx, dy = map(float, next(f).split())
@@ -215,6 +215,7 @@ class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
 
     def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
+        print(self.out_cellshape)
         return StructuredTopology(self.out_cellshape, celltype)
 
     def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
@@ -352,9 +353,8 @@ class Simra3dMesh(SimraMeshBase):
     def nodes(self) -> FieldData[floating]:
         with self.mesh.leap(1) as f:
             nodes = f.read_reals(self.f4_type)
-        return (FieldData(transpose(nodes, self.simra_nodeshape)).ensure_native()) + mesh_offset(
-            self.filename, dim=3
-        )
+        data = FieldData(transpose(nodes, self.simra_nodeshape)).ensure_native()
+        return data + mesh_offset(self.filename, dim=3)
 
 
 class SimraBoundary(api.Source[Field, TimeStep, Zone]):

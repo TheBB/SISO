@@ -11,7 +11,6 @@ from typing_extensions import Self
 
 from . import api, util
 from .util import FieldData
-from .util import coords as coord_utils
 
 
 systems: util.Registry[api.CoordinateSystem] = util.Registry()

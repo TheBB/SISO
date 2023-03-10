@@ -38,6 +38,9 @@ build-backend = "poetry.core.masonry.api"
 [tool.black]
 line-length = 110
 
+[tool.ruff]
+line-length = 110
+
 [tool.isort]
 profile = "black"
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "VTK", "FIRSTPARTY", "LOCALFOLDER"]
@@ -46,9 +49,10 @@ line_length = 110
 lines_after_imports = 2
 
 [tool.poe.tasks]
-test = "pytest tests/test_vtk.py tests/test_vtu.py tests/test_vts.py tests/test_pvd.py"
+test = "pytest tests/test_vtk.py tests/test_vtu.py tests/test_vts.py tests/test_pvd.py tests/test_simra.py"
 mypy = "mypy siso"
-check = ["mypy", "test"]
+lint = "ruff siso"
+check = ["mypy", "lint", "test"]
 black = "black siso"
 isort = "isort siso"
 fmt = ["black", "isort"]

@@ -105,6 +105,10 @@ class FieldData(Generic[T]):
         return FieldData(array.reshape(ntuples, -1))
 
     @property
+    def dtype(self) -> np.dtype:
+        return self.data.dtype
+
+    @property
     def ncomps(self) -> int:
         return self.data.shape[-1]
 
@@ -169,6 +173,10 @@ class FieldData(Generic[T]):
             .transpose(*transposition, len(transposition))
             .reshape(self.data.shape)
         )
+
+    def swap_components(self, i: int, j: int) -> FieldData[T]:
+        self.data[:,i], self.data[:,j] = self.data[:,j].copy(), self.data[:,i].copy()
+        return self
 
     @overload
     def constant_like(
@@ -255,7 +263,7 @@ class FieldData(Generic[T]):
     def numpy(self, *shape: int) -> NDArray[T]:
         if not shape:
             return self.data
-        return self.data.reshape(shape)
+        return self.data.reshape(*shape, self.ncomps)
 
     def vtk(self) -> vtkDataArray:
         assert HAS_VTK
