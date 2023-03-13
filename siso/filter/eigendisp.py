@@ -10,7 +10,7 @@ from .passthrough import Passthrough
 
 Z = TypeVar("Z", bound=api.Zone)
 F = TypeVar("F", bound=api.Field)
-T = TypeVar("T", bound=api.TimeStep)
+S = TypeVar("S", bound=api.Step)
 
 
 @define
@@ -40,7 +40,7 @@ class Field(api.Field, Generic[F]):
         )
 
 
-class EigenDisp(Passthrough[F, T, Z, Field[F], T, Z]):
+class EigenDisp(Passthrough[F, S, Z, Field[F], S, Z]):
     def use_geometry(self, geometry: Field[F]) -> None:
         return self.source.use_geometry(geometry.original_field)
 
@@ -48,5 +48,8 @@ class EigenDisp(Passthrough[F, T, Z, Field[F], T, Z]):
         for field in self.source.fields():
             yield Field(field)
 
-    def field_data(self, timestep: T, field: Field[F], zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: Field[F], zone: Z) -> FieldData[floating]:
         return self.source.field_data(timestep, field.original_field, zone)
+
+    def field_updates(self, timestep: S, field: Field[F]) -> bool:
+        return self.source.field_updates(timestep, field.original_field)

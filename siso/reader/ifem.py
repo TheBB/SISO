@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+from abc import ABC, abstractmethod
 from functools import lru_cache
 from itertools import chain, count, repeat
 from pathlib import Path
-from typing import ClassVar, Dict, Iterator, List, Optional, Protocol, Tuple
+from typing import ClassVar, Dict, Iterator, List, Optional, Tuple
 
 import h5py
 import numpy as np
@@ -14,35 +15,43 @@ from typing_extensions import Self
 from .. import api, util
 from ..coord import Named
 from ..field import Field
-from ..timestep import TimeStep
+from ..timestep import Step
 from ..topology import LrTopology, SplineTopology, UnstructuredTopology
 from ..util import FieldData
 from ..zone import Shape, Zone
 
 
-class Locator(Protocol):
+class Locator(ABC):
+    @abstractmethod
+    def patch_root(self, name: str, step: int) -> str:
+        ...
+
     def patch_path(self, name: str, step: int, patch: int) -> str:
+        return f"{self.patch_root(name, step)}/{patch + 1}"
+
+    @abstractmethod
+    def coeff_root(self, basis_name: str, field_name: str, step: int, cellwise: bool) -> str:
         ...
 
     def coeff_path(self, basis_name: str, field_name: str, step: int, patch: int, cellwise: bool) -> str:
-        ...
+        return f"{self.coeff_root(basis_name, field_name, step, cellwise)}/{patch + 1}"
 
 
-class StandardLocator:
-    def patch_path(self, name: str, step: int, patch: int) -> str:
-        return f"{step}/{name}/basis//{patch+1}"
+class StandardLocator(Locator):
+    def patch_root(self, name: str, step: int) -> str:
+        return f"{step}/{name}/basis"
 
-    def coeff_path(self, basis_name: str, field_name: str, step: int, patch: int, cellwise: bool) -> str:
+    def coeff_root(self, basis_name: str, field_name: str, step: int, cellwise: bool) -> str:
         subdir = "knotspan" if cellwise else "fields"
-        return f"{int(step)}/{basis_name}/{subdir}/{field_name}/{patch+1}"
+        return f"{int(step)}/{basis_name}/{subdir}/{field_name}"
 
 
-class EigenLocator:
-    def patch_path(self, name: str, step: int, patch: int) -> str:
-        return f"0/{name}/basis/{patch+1}"
+class EigenLocator(Locator):
+    def patch_root(self, name: str, step: int) -> str:
+        return f"0/{name}/basis"
 
-    def coeff_path(self, basis_name: str, field_name: str, step: int, patch: int, cellwise: bool) -> str:
-        return f"0/{basis_name}/Eigenmode/{step+1}/{patch+1}"
+    def coeff_root(self, basis_name: str, field_name: str, step: int, cellwise: bool) -> str:
+        return f"0/{basis_name}/Eigenmode/{step+1}"
 
 
 def is_legal_group_name(name: str) -> bool:
@@ -81,14 +90,20 @@ class IfemBasis:
             return self.name == other.name
         return False
 
+    def updates_at(self, step: int, source: Ifem) -> bool:
+        return self.locator.patch_root(self.name, step) in source.h5
+
+    def last_update_before(self, step: int, source: Ifem) -> int:
+        while not self.updates_at(step, source):
+            step -= 1
+        return step
+
     def patch_path(self, step: int, patch: int) -> str:
         return self.locator.patch_path(self.name, step, patch)
 
     @lru_cache(maxsize=128)
     def patch_at(self, step: int, patch: int, source: Ifem) -> Tuple[Zone, api.Topology, FieldData[floating]]:
-        while self.patch_path(step, patch) not in source.h5:
-            step -= 1
-
+        step = self.last_update_before(step, source)
         topology: api.Topology
         patchdata = source.h5[self.patch_path(step, patch)][:]
         initial = patchdata[:20].tobytes()
@@ -143,7 +158,23 @@ class IfemField:
                 destroy=True,
             )
 
-    def patch_path(self, step: int, patch: int) -> str:
+    def updates_at(self, step: int, source: Ifem) -> bool:
+        return self.coeff_root(step) in source.h5
+
+    def last_update_before(self, step: int, source: Ifem) -> int:
+        while not self.updates_at(step, source):
+            step -= 1
+        return step
+
+    def coeff_root(self, step: int) -> str:
+        return self.basis.locator.coeff_root(
+            self.basis.name,
+            self.name,
+            step,
+            self.cellwise,
+        )
+
+    def coeff_path(self, step: int, patch: int) -> str:
         return self.basis.locator.coeff_path(
             self.basis.name,
             self.name,
@@ -163,7 +194,7 @@ class IfemField:
 
     @lru_cache(maxsize=8)
     def raw_cps_at(self, step: int, patch: int, source: Ifem) -> np.ndarray:
-        return source.h5[self.patch_path(step, patch)][:]
+        return source.h5[self.coeff_path(step, patch)][:]
 
     def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
         ncomps = self.ncomps(source)
@@ -171,7 +202,7 @@ class IfemField:
         return FieldData(data=cps.reshape(-1, ncomps))
 
 
-class Ifem(api.Source[Field, TimeStep, Zone]):
+class Ifem(api.Source[Field, Step, Zone]):
     filename: Path
     h5: h5py.File
 
@@ -282,13 +313,13 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
     def use_geometry(self, geometry: Field) -> None:
         self.geometry = self._bases[geometry.name]
 
-    def timesteps(self) -> Iterator[TimeStep]:
+    def steps(self) -> Iterator[Step]:
         for i, group in enumerate(self.timestep_groups()):
             if "timeinfo/level" in group:
                 time = group["timeinfo/level"][0]
             else:
                 time = float(i)
-            yield TimeStep(index=i, time=time)
+            yield Step(index=i, value=time)
 
     def zones(self) -> Iterator[Zone]:
         for patch in range(self.geometry.num_patches):
@@ -314,7 +345,7 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
                 cellwise=field.cellwise,
             )
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> api.Topology:
+    def topology(self, timestep: Step, field: Field, zone: Zone) -> api.Topology:
         if field.is_geometry:
             basis = self._bases[field.name]
         else:
@@ -323,7 +354,7 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
         _, topology, _ = basis.patch_at(timestep.index, patch, self)
         return topology
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         patch = int(zone.local_key.split("/")[-1])
         if field.is_geometry:
             basis = self._bases[field.name]
@@ -332,6 +363,12 @@ class Ifem(api.Source[Field, TimeStep, Zone]):
         ifield = self._fields[field.name]
         coeffs = ifield.cps_at(timestep.index, patch, self)
         return coeffs
+
+    def field_updates(self, timestep: Step, field: Field) -> bool:
+        if field.is_geometry:
+            basis = self._bases[field.name]
+            return basis.updates_at(timestep.index, self)
+        return self._fields[field.name].updates_at(timestep.index, self)
 
 
 class IfemModes(Ifem):
@@ -350,6 +387,17 @@ class IfemModes(Ifem):
             return True
         except (AssertionError, OSError):
             return False
+
+    @property
+    def properties(self) -> api.SourceProperties:
+        basis = next(iter(self._bases.values()))
+        group = self.h5[f"0/{basis.name}/Eigenmode/1"]
+        if "Value" in group:
+            step = api.StepInterpretation.Eigenmode
+        else:
+            assert "Frequency" in group
+            step = api.StepInterpretation.EigenFrequency
+        return super().properties.update(step_interpretation=step)
 
     def discover_bases(self) -> None:
         group = self.h5["0"]
@@ -370,10 +418,15 @@ class IfemModes(Ifem):
         for index in range(self.nsteps):
             yield self.h5[f"0/{basis.name}/Eigenmode/{index+1}"]
 
-    def timesteps(self) -> Iterator[TimeStep]:
+    def steps(self) -> Iterator[Step]:
         for i, group in enumerate(self.timestep_groups()):
             if "Value" in group:
                 time = group["Value"][0]
             else:
                 time = group["Frequency"][0]
-            yield TimeStep(index=i, time=time)
+            yield Step(index=i, value=time)
+
+    def field_updates(self, timestep: Step, field: Field) -> bool:
+        if field.is_geometry:
+            return timestep.index == 0
+        return super().field_updates(timestep, field)

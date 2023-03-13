@@ -33,7 +33,7 @@ from typing_extensions import Self
 from .. import api, util
 from ..coord import Generic
 from ..field import Field
-from ..timestep import TimeStep
+from ..timestep import Step
 from ..topology import CellType, StructuredTopology, Topology
 from ..util import FieldData
 from ..zone import Coords, Shape, Zone
@@ -154,7 +154,7 @@ class SimraScales:
         )
 
 
-class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
+class SimraMeshBase(api.Source[Field, Step, Zone]):
     filename: Path
     simra_nodeshape: Tuple[int, ...]
 
@@ -202,8 +202,8 @@ class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
     def fields(self) -> Iterator[Field]:
         yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()))
 
-    def timesteps(self) -> Iterator[TimeStep]:
-        yield TimeStep(index=0)
+    def steps(self) -> Iterator[Step]:
+        yield Step(index=0)
 
     def zones(self) -> Iterator[Zone]:
         shape = Shape.Hexahedron if self.pardim == 3 else Shape.Quatrilateral
@@ -213,12 +213,12 @@ class SimraMeshBase(api.Source[Field, TimeStep, Zone]):
             local_key="0",
         )
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> StructuredTopology:
+    def topology(self, timestep: Step, field: Field, zone: Zone) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
         print(self.out_cellshape)
         return StructuredTopology(self.out_cellshape, celltype)
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         return self.nodes()
 
 
@@ -357,7 +357,7 @@ class Simra3dMesh(SimraMeshBase):
         return data + mesh_offset(self.filename, dim=3)
 
 
-class SimraBoundary(api.Source[Field, TimeStep, Zone]):
+class SimraBoundary(api.Source[Field, Step, Zone]):
     filename: Path
     boundary: TextIO
 
@@ -426,8 +426,8 @@ class SimraBoundary(api.Source[Field, TimeStep, Zone]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
-    def timesteps(self) -> Iterator[TimeStep]:
-        yield TimeStep(index=0)
+    def steps(self) -> Iterator[Step]:
+        yield Step(index=0)
 
     def zones(self) -> Iterator[Zone]:
         yield from self.mesh.zones()
@@ -436,7 +436,7 @@ class SimraBoundary(api.Source[Field, TimeStep, Zone]):
         yield from self.mesh.fields()
         yield Field("nodal", type=api.Vector(16), splittable=False)
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> Topology:
+    def topology(self, timestep: Step, field: Field, zone: Zone) -> Topology:
         return self.mesh.topology(timestep, field, zone)
 
     @lru_cache(maxsize=1)
@@ -503,7 +503,7 @@ class SimraBoundary(api.Source[Field, TimeStep, Zone]):
 
         return FieldData(transpose(data, self.mesh.simra_nodeshape)).ensure_native()
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         return self.data()
@@ -515,7 +515,7 @@ class ExtraField(Enum):
     Unknown = auto()
 
 
-class SimraContinuation(api.Source[Field, TimeStep, Zone]):
+class SimraContinuation(api.Source[Field, Step, Zone]):
     filename: Path
     source: RandomAccessFortranFile
     mesh: Simra3dMesh
@@ -621,15 +621,15 @@ class SimraContinuation(api.Source[Field, TimeStep, Zone]):
         elif self.extra_field == ExtraField.Unknown:
             yield Field("pressure?", type=api.Scalar(), cellwise=True)
 
-    def timesteps(self) -> Iterator[TimeStep]:
+    def steps(self) -> Iterator[Step]:
         with self.source.leap(0) as f:
             time = f.read_first(self.f4_type)
-        yield TimeStep(index=0, time=time)
+        yield Step(index=0, value=time)
 
     def zones(self) -> Iterator[Zone]:
         yield from self.mesh.zones()
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> Topology:
+    def topology(self, timestep: Step, field: Field, zone: Zone) -> Topology:
         return self.mesh.topology(timestep, field, zone)
 
     @lru_cache(maxsize=1)
@@ -662,7 +662,7 @@ class SimraContinuation(api.Source[Field, TimeStep, Zone]):
             cdata = None
         return ndata, cdata
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data()
@@ -672,7 +672,7 @@ class SimraContinuation(api.Source[Field, TimeStep, Zone]):
         return ndata
 
 
-class SimraHistory(api.Source[Field, TimeStep, Zone]):
+class SimraHistory(api.Source[Field, Step, Zone]):
     filename: Path
     source: RandomAccessFortranFile
     mesh: Simra3dMesh
@@ -753,22 +753,22 @@ class SimraHistory(api.Source[Field, TimeStep, Zone]):
         yield Field("nodal", type=api.Vector(12), splittable=False)
         yield Field("pressure", type=api.Scalar(), cellwise=True)
 
-    def timesteps(self) -> Iterator[TimeStep]:
+    def steps(self) -> Iterator[Step]:
         for ts_index, rec_index in enumerate(count(start=1, step=2)):
             try:
                 with self.source.leap(rec_index) as f:
                     time = f.read_first(self.f4_type)
             except util.NoSuchMarkError:
                 return
-            yield TimeStep(index=ts_index, time=time)
+            yield Step(index=ts_index, value=time)
 
     def zones(self) -> Iterator[Zone]:
         yield from self.mesh.zones()
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> Topology:
+    def topology(self, timestep: Step, field: Field, zone: Zone) -> Topology:
         return self.mesh.topology(timestep, field, zone)
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data(timestep.index)

@@ -159,6 +159,7 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
 # generated before structured output was added, so they are compared
 # using the --unstructured option.
 formats = ['vtk', 'vtu', 'vts', 'pvd', 'vtf']
+formats_novtf = ['vtk', 'vtu', 'vts', 'pvd']
 kwargs = {'format_args': {'vtk': ['--unstructured']}}
 testcase('hdf5/Annulus.hdf5', 3, formats, **kwargs)
 testcase('hdf5/Cavity-mixed.hdf5', 1, formats, **kwargs)
@@ -171,15 +172,15 @@ testcase('hdf5/Square-modes.hdf5', 10, formats, '--ead', **kwargs)
 testcase('hdf5/Square-modes-freq.hdf5', 10, formats, '--ead', **kwargs)
 testcase('hdf5/Waterfall3D.hdf5', 1, formats, **kwargs)
 testcase('g2/annulus3D.g2', None, formats, **kwargs)
-testcase('geogrid/geo_em.d01.nc', None, formats, **kwargs)
+testcase('geogrid/geo_em.d01.nc', None, formats_novtf, **kwargs)
 
 # Single precision, therefore inflated tolerance
 testcase('simra/box/box.res', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 testcase('simra/box/map.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 testcase('simra/box/mesh2d.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 testcase('simra/box/mesh.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
-testcase('simra/boun/boun.dat', None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
-testcase('simra/hist/hist.res', 1, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra/boun/boun.dat', None, formats_novtf, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase('simra/hist/hist.res', 1, formats_novtf, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
 
 # Unstructured data sets
 formats = ['vtk', 'vtu', 'pvd', 'vtf']

@@ -4,6 +4,6 @@ from attrs import define
 
 
 @define
-class TimeStep:
+class Step:
     index: int
-    time: Optional[float] = None
+    value: Optional[float] = None

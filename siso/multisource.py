@@ -4,20 +4,21 @@ from attrs import define
 from numpy import floating
 from typing_extensions import Self
 
-from .api import Field, ReaderSettings, Source, SourceProperties, TimeStep
+from .api import Field, ReaderSettings, Source, SourceProperties, Step
 from .topology import Topology
 from .util import FieldData, bisect
 from .zone import Zone
 
 
 @define
-class MultiSourceTimeStep:
+class MultiSourceStep:
     index: int
-    original: TimeStep
+    original: Step
+    source: Source
 
     @property
-    def time(self) -> Optional[float]:
-        return self.original.time
+    def value(self) -> Optional[float]:
+        return self.original.value
 
 
 class MultiSource(Source):
@@ -58,11 +59,11 @@ class MultiSource(Source):
     def fields(self) -> Iterator[Field]:
         yield from self.sources[0].fields()
 
-    def timesteps(self) -> Iterator[TimeStep]:
+    def steps(self) -> Iterator[Step]:
         index = 0
         for i, src in enumerate(self.sources):
-            for timestep in src.timesteps():
-                yield MultiSourceTimeStep(index=index, original=timestep)
+            for timestep in src.steps():
+                yield MultiSourceStep(index=index, original=timestep, source=src)
                 index += 1
             if len(self.maxindex) <= i:
                 self.maxindex.append(index)
@@ -70,10 +71,13 @@ class MultiSource(Source):
     def zones(self) -> Iterator[Zone]:
         yield from self.sources[0].zones()
 
-    def topology(self, timestep: MultiSourceTimeStep, field: Field, zone: Zone) -> Topology:
+    def topology(self, timestep: MultiSourceStep, field: Field, zone: Zone) -> Topology:
         source = self.source_at(timestep.index)
         return source.topology(timestep.original, field, zone)
 
-    def field_data(self, timestep: MultiSourceTimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: MultiSourceStep, field: Field, zone: Zone) -> FieldData[floating]:
         source = self.source_at(timestep.index)
         return source.field_data(timestep.original, field, zone)
+
+    def field_updates(self, timestep: MultiSourceStep, field: Field) -> bool:
+        return timestep.source.field_updates(timestep.original, field)

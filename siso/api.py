@@ -77,12 +77,34 @@ class RecombineFieldSpec:
     new_name: str
 
 
+class StepInterpretation(Enum):
+    Time = auto()
+    Eigenmode = auto()
+    EigenFrequency = auto()
+
+    @property
+    def is_time(self):
+        return self == StepInterpretation.Time
+
+    @property
+    def is_eigen(self):
+        return self != StepInterpretation.Time
+
+    def __str__(self) -> str:
+        return {
+            StepInterpretation.Time: "Time",
+            StepInterpretation.Eigenmode: "Eigenvalue",
+            StepInterpretation.EigenFrequency: "Frequency",
+        }[self]
+
+
 @define
 class SourceProperties:
     instantaneous: bool
     globally_keyed: bool = False
     tesselated: bool = False
     single_zoned: bool = False
+    step_interpretation: StepInterpretation = StepInterpretation.Time
 
     split_fields: List[SplitFieldSpec] = Factory(list)
     recombine_fields: List[RecombineFieldSpec] = Factory(list)
@@ -263,13 +285,13 @@ class Field(ABC):
         return self.type.ncomps
 
 
-class TimeStep(Protocol):
+class Step(Protocol):
     @property
     def index(self) -> int:
         ...
 
     @property
-    def time(self) -> Optional[float]:
+    def value(self) -> Optional[float]:
         ...
 
 
@@ -283,10 +305,10 @@ class ReaderSettings:
 
 Z = TypeVar("Z", bound=Zone)
 F = TypeVar("F", bound=Field)
-T = TypeVar("T", bound=TimeStep)
+S = TypeVar("S", bound=Step)
 
 
-class Source(ABC, Generic[F, T, Z]):
+class Source(ABC, Generic[F, S, Z]):
     def __enter__(self) -> Self:
         return self
 
@@ -309,7 +331,7 @@ class Source(ABC, Generic[F, T, Z]):
         ...
 
     @abstractmethod
-    def timesteps(self) -> Iterator[T]:
+    def steps(self) -> Iterator[S]:
         ...
 
     @abstractmethod
@@ -317,12 +339,15 @@ class Source(ABC, Generic[F, T, Z]):
         ...
 
     @abstractmethod
-    def topology(self, timestep: T, field: F, zone: Z) -> Topology:
+    def topology(self, timestep: S, field: F, zone: Z) -> Topology:
         ...
 
     @abstractmethod
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: F, zone: Z) -> FieldData[floating]:
         ...
+
+    def field_updates(self, timestep: S, field: F) -> bool:
+        return True
 
 
 class CellType(Enum):
@@ -359,14 +384,14 @@ class DiscreteTopology(Topology, Protocol):
         ...
 
 
-S = TypeVar("S", bound=Topology, contravariant=True)
+T = TypeVar("T", bound=Topology, contravariant=True)
 
 
-class Tesselator(Protocol[S]):
-    def tesselate_topology(self, topology: S) -> DiscreteTopology:
+class Tesselator(Protocol[T]):
+    def tesselate_topology(self, topology: T) -> DiscreteTopology:
         ...
 
     def tesselate_field(
-        self, topology: S, field: Field, field_data: FieldData[floating]
+        self, topology: T, field: Field, field_data: FieldData[floating]
     ) -> FieldData[floating]:
         ...

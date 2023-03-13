@@ -49,7 +49,7 @@ line_length = 110
 lines_after_imports = 2
 
 [tool.poe.tasks]
-test = "pytest tests/test_vtk.py tests/test_vtu.py tests/test_vts.py tests/test_pvd.py tests/test_simra.py"
+test = "pytest"
 mypy = "mypy siso"
 lint = "ruff siso"
 check = ["mypy", "lint", "test"]
@@ -86,4 +86,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "splipy.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "vtfwriter"
 ignore_missing_imports = true

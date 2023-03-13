@@ -10,19 +10,19 @@ from .passthrough import Passthrough
 
 F = TypeVar("F", bound=api.Field)
 Z = TypeVar("Z", bound=api.Zone)
-T = TypeVar("T", bound=api.TimeStep)
+S = TypeVar("S", bound=api.Step)
 
 
-class CoordTransform(Passthrough[F, T, Z, F, T, Z]):
+class CoordTransform(Passthrough[F, S, Z, F, S, Z]):
     path: ConversionPath
     cache: Dict[str, FieldData[floating]]
 
-    def __init__(self, source: api.Source[F, T, Z], path: ConversionPath):
+    def __init__(self, source: api.Source[F, S, Z], path: ConversionPath):
         super().__init__(source)
         self.path = path
         self.cache = {}
 
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: F, zone: Z) -> FieldData[floating]:
         indata = self.source.field_data(timestep, field, zone)
         if not field.is_geometry and not field.is_vector:
             return indata

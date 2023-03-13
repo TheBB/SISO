@@ -3,24 +3,24 @@ from .decompose import Decompose, Split
 from .eigendisp import EigenDisp
 from .force_unstructured import ForceUnstructured
 from .keyzones import KeyZones
-from .lasttime import LastTime
 from .recombine import Recombine
 from .strict import Strict
 from .tesselate import Tesselate
-from .timeslice import TimeSlice
+from .timeslice import LastTime, StepSlice
 from .zonemerge import ZoneMerge
 
+
 __all__ = [
-    'CoordTransform',
-    'Decompose',
-    'EigenDisp',
-    'ForceUnstructured',
-    'KeyZones',
-    'LastTime',
-    'Recombine',
-    'Split',
-    'Strict',
-    'Tesselate',
-    'TimeSlice',
-    'ZoneMerge',
+    "CoordTransform",
+    "Decompose",
+    "EigenDisp",
+    "ForceUnstructured",
+    "KeyZones",
+    "LastTime",
+    "Recombine",
+    "Split",
+    "Strict",
+    "Tesselate",
+    "StepSlice",
+    "ZoneMerge",
 ]

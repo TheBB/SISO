@@ -10,13 +10,13 @@ from .passthrough import Passthrough
 
 Z = TypeVar("Z", bound=api.Zone)
 F = TypeVar("F", bound=api.Field)
-T = TypeVar("T", bound=api.TimeStep)
+S = TypeVar("S", bound=api.Step)
 
 
-class Tesselate(Passthrough[F, T, Z, F, T, Z]):
+class Tesselate(Passthrough[F, S, Z, F, S, Z]):
     nvis: int
 
-    def __init__(self, source: api.Source[F, T, Z], nvis: int):
+    def __init__(self, source: api.Source[F, S, Z], nvis: int):
         super().__init__(source)
         self.nvis = nvis
 
@@ -29,12 +29,12 @@ class Tesselate(Passthrough[F, T, Z, F, T, Z]):
             tesselated=True,
         )
 
-    def topology(self, timestep: T, field: F, zone: Z) -> Topology:
+    def topology(self, timestep: S, field: F, zone: Z) -> Topology:
         topology = self.source.topology(timestep, field, zone)
         tesselator = topology.tesselator(self.nvis)
         return tesselator.tesselate_topology(topology)
 
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: F, zone: Z) -> FieldData[floating]:
         topology = self.source.topology(timestep, field, zone)
         tesselator = topology.tesselator(self.nvis)
         field_data = self.source.field_data(timestep, field, zone)

@@ -12,7 +12,7 @@ from typing_extensions import Self
 from .. import api, util
 from ..coord import Generic, Geodetic, SphericalEarth
 from ..field import Field
-from ..timestep import TimeStep
+from ..timestep import Step
 from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
 from ..util import FieldData
 from ..zone import Shape, Zone
@@ -24,7 +24,7 @@ class FieldDimensionality(Enum):
     Unknown = auto()
 
 
-class NetCdf(api.Source[Field, TimeStep, Zone]):
+class NetCdf(api.Source[Field, Step, Zone]):
     filename: Path
     dataset: Dataset
 
@@ -278,7 +278,7 @@ class NetCdf(api.Source[Field, TimeStep, Zone]):
             if self.field_domain(variable) in self.valid_domains:
                 yield Field(variable, type=api.Scalar())
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> DiscreteTopology:
+    def topology(self, timestep: Step, field: Field, zone: Zone) -> DiscreteTopology:
         if self.periodic:
             num_nodes = self.num_planar + 2
             if self.volumetric:
@@ -294,7 +294,7 @@ class NetCdf(api.Source[Field, TimeStep, Zone]):
             celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
             return StructuredTopology(self.wrf_cellshape, celltype)
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if not field.is_geometry and not field.is_vector:
             return self.field_data_raw(field.name, timestep.index)
         assert field.is_geometry
@@ -356,16 +356,16 @@ class Wrf(NetCdf):
         self.staggering = settings.staggering
         self.periodic = settings.periodic
 
-    def timesteps(self) -> Iterator[TimeStep]:
+    def steps(self) -> Iterator[Step]:
         for index in range(self.num_timesteps):
             time = self.dataset["XTIME"][index] * 60
-            yield TimeStep(index=index, time=time)
+            yield Step(index=index, value=time)
 
     def fields(self) -> Iterator[Field]:
         yield from super().fields()
         yield Field("WIND", type=api.Vector(3, api.VectorInterpretation.Flow), splittable=False)
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if field.name == "WIND":
             return self.wind(timestep.index)
         return super().field_data(timestep, field, zone)
@@ -444,5 +444,5 @@ class GeoGrid(NetCdf):
         self.staggering = settings.staggering
         self.periodic = settings.periodic
 
-    def timesteps(self) -> Iterator[TimeStep]:
-        yield TimeStep(index=0, time=0.0)
+    def steps(self) -> Iterator[Step]:
+        yield Step(index=0, value=0.0)

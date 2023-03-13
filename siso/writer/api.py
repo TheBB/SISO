@@ -4,7 +4,7 @@ from typing import Optional, Protocol, Sequence, TypeVar
 from attrs import define
 from typing_extensions import Self
 
-from ..api import Field, Source, TimeStep, Endianness
+from ..api import Endianness, Field, Source, Step
 from ..zone import Zone
 
 
@@ -28,7 +28,7 @@ class WriterProperties:
 
 
 F = TypeVar("F", bound=Field)
-T = TypeVar("T", bound=TimeStep)
+T = TypeVar("T", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 

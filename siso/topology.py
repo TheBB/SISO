@@ -132,7 +132,7 @@ class StructuredTopology:
 
     @property
     def nodeshape(self) -> Tuple[int, ...]:
-        return tuple(n+1 for n in self.cellshape)
+        return tuple(n + 1 for n in self.cellshape)
 
     def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
         assert nvis == 1

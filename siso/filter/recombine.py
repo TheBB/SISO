@@ -11,7 +11,7 @@ from .passthrough import Passthrough
 
 F = TypeVar("F", bound=api.Field)
 Z = TypeVar("Z", bound=api.Zone)
-T = TypeVar("T", bound=api.TimeStep)
+S = TypeVar("S", bound=api.Step)
 
 
 @define
@@ -42,7 +42,7 @@ class RecombinedField(api.Field, Generic[F]):
         return False
 
 
-class Recombine(Passthrough[F, T, Z, RecombinedField[F], T, Z]):
+class Recombine(Passthrough[F, S, Z, RecombinedField[F], S, Z]):
     recombinations: List[api.RecombineFieldSpec]
 
     def __init__(self, source: api.Source, recombinations: List[api.RecombineFieldSpec]):
@@ -58,8 +58,11 @@ class Recombine(Passthrough[F, T, Z, RecombinedField[F], T, Z]):
         for spec in self.recombinations:
             yield RecombinedField(name=spec.new_name, sources=[in_fields[src] for src in spec.source_names])
 
-    def topology(self, timestep: T, field: RecombinedField, zone: Z) -> api.Topology:
+    def topology(self, timestep: S, field: RecombinedField, zone: Z) -> api.Topology:
         return self.source.topology(timestep, field.sources[0], zone)
 
-    def field_data(self, timestep: T, field: RecombinedField, zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: RecombinedField, zone: Z) -> FieldData[floating]:
         return FieldData.concat(self.source.field_data(timestep, src, zone) for src in field.sources)
+
+    def field_updates(self, timestep: S, field: RecombinedField[F]) -> bool:
+        return any(self.source.field_updates(timestep, src) for src in field.sources)

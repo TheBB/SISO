@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from itertools import chain
 import logging
 import sys
+from itertools import chain
 from pathlib import Path
 from typing import List, Literal, Optional, Sequence, Tuple
 
@@ -98,7 +98,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.group("Field filtering", cls=MutuallyExclusiveOptionGroup)
 @optgroup.option("--no-fields", is_flag=True)
 @optgroup.option("--filter", "-l", "field_filter", multiple=True, default=None)
-
 @optgroup.group("Endianness")
 @optgroup.option("--in-endianness", type=Enum(Endianness), default="native")
 @optgroup.option("--out-endianness", type=Enum(Endianness), default="native")
@@ -198,7 +197,7 @@ def main(
     # Resolve potential mismatches between output and format
     if outpath and not fmt:
         suffix = outpath.suffix[1:].casefold()
-        if suffix == 'dat':
+        if suffix == "dat":
             logging.warning("Interpreting .dat filetype as SIMRA Mesh file")
             logging.warning("Note: the .dat extension is overloaded - don't rely on this behavior")
             logging.warning("Prefer using '-f simra'")
@@ -249,14 +248,9 @@ def main(
         if not in_props.globally_keyed:
             source = filter.KeyZones(source)
 
-        if (
-            nvis > 1 or (
-                not in_props.tesselated and (
-                    out_props.require_tesselated or
-                    out_props.require_single_zone or
-                    require_unstructured
-                )
-            )
+        if nvis > 1 or (
+            not in_props.tesselated
+            and (out_props.require_tesselated or out_props.require_single_zone or require_unstructured)
         ):
             source = filter.Tesselate(source, nvis)
 
@@ -283,9 +277,9 @@ def main(
             source = filter.Strict(source)
 
         if timestep_slice is not None:
-            source = filter.TimeSlice(source, timestep_slice)
+            source = filter.StepSlice(source, timestep_slice)
         elif timestep_index is not None:
-            source = filter.TimeSlice(source, (timestep_index, timestep_index + 1))
+            source = filter.StepSlice(source, (timestep_index, timestep_index + 1))
         elif only_final_timestep:
             source = filter.LastTime(source)
 
@@ -302,14 +296,10 @@ def main(
         if no_fields:
             fields = []
         elif field_filter:
-            allowed_fields = set(chain.from_iterable(
-                map(str.casefold, field_name.split(','))
-                for field_name in field_filter
-            ))
-            fields = [
-                field for field in fields
-                if field.name.casefold() in allowed_fields
-            ]
+            allowed_fields = set(
+                chain.from_iterable(map(str.casefold, field_name.split(",")) for field_name in field_filter)
+            )
+            fields = [field for field in fields if field.name.casefold() in allowed_fields]
 
         for field in fields:
             logging.debug(

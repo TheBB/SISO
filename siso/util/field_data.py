@@ -175,7 +175,7 @@ class FieldData(Generic[T]):
         )
 
     def swap_components(self, i: int, j: int) -> FieldData[T]:
-        self.data[:,i], self.data[:,j] = self.data[:,j].copy(), self.data[:,i].copy()
+        self.data[:, i], self.data[:, j] = self.data[:, j].copy(), self.data[:, i].copy()
         return self
 
     @overload

@@ -24,7 +24,7 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from .. import util
-from ..api import Source, TimeStep
+from ..api import Source, Step
 from ..topology import CellType, DiscreteTopology, StructuredTopology
 from ..util import FieldData
 from ..zone import Zone
@@ -38,7 +38,7 @@ class Behavior(Enum):
 
 
 F = TypeVar("F", bound=Field)
-T = TypeVar("T", bound=TimeStep)
+T = TypeVar("T", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 S = TypeVar("S", bound=number)
 
@@ -181,7 +181,7 @@ class VtkWriterBase(ABC, Writer):
 
     def consume(self, source: Source[F, T, Z], geometry: F, fields: Sequence[F]) -> None:
         filenames = util.filename_generator(self.filename, source.properties.instantaneous)
-        for timestep, filename in zip(source.timesteps(), filenames):
+        for timestep, filename in zip(source.steps(), filenames):
             self.consume_timestep(timestep, filename, source, geometry, fields)
 
 
@@ -244,8 +244,8 @@ class PvdWriter(VtuWriter):
     ) -> None:
         super().consume_timestep(timestep, filename, source, geometry, fields)
         relative_filename = filename.relative_to(self.pvd_filename.parent)
-        if timestep.time is not None:
-            time = timestep.time
+        if timestep.value is not None:
+            time = timestep.value
         else:
             time = timestep.index
         self.pvd.write(f'    <DataSet timestep="{time}" part="0" file="{relative_filename}" />\n')

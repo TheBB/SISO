@@ -11,7 +11,7 @@ from .passthrough import Passthrough
 
 F = TypeVar("F", bound=api.Field)
 Z = TypeVar("Z", bound=api.Zone)
-T = TypeVar("T", bound=api.TimeStep)
+S = TypeVar("S", bound=api.Step)
 
 
 @define
@@ -41,18 +41,21 @@ class DecomposedField(api.Field, Generic[F]):
         return self.original_field.ncomps
 
 
-class DecomposeBase(Passthrough[F, T, Z, DecomposedField[F], T, Z]):
-    def topology(self, timestep: T, field: DecomposedField, zone: Z) -> Topology:
+class DecomposeBase(Passthrough[F, S, Z, DecomposedField[F], S, Z]):
+    def topology(self, timestep: S, field: DecomposedField, zone: Z) -> Topology:
         return self.source.topology(timestep, field.original_field, zone)
 
-    def field_data(self, timestep: T, field: DecomposedField, zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: DecomposedField, zone: Z) -> FieldData[floating]:
         data = self.source.field_data(timestep, field.original_field, zone)
         if field.components is not None:
             data = data.slice(field.components)
         return data
 
+    def field_updates(self, timestep: S, field: DecomposedField[F]) -> bool:
+        return self.source.field_updates(timestep, field.original_field)
 
-class Decompose(DecomposeBase[F, T, Z]):
+
+class Decompose(DecomposeBase[F, S, Z]):
     def fields(self) -> Iterator[DecomposedField[F]]:
         for field in self.source.fields():
             yield DecomposedField(name=field.name, original_field=field, components=None, splittable=False)
@@ -63,7 +66,7 @@ class Decompose(DecomposeBase[F, T, Z]):
                 yield DecomposedField(name=name, original_field=field, components=[i], splittable=False)
 
 
-class Split(DecomposeBase[F, T, Z]):
+class Split(DecomposeBase[F, S, Z]):
     splits: List[api.SplitFieldSpec]
 
     def __init__(self, source: api.Source, splits: List[api.SplitFieldSpec]):

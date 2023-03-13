@@ -13,16 +13,16 @@ from ..zone import Zone
 
 InZ = TypeVar("InZ", bound=Zone)
 InF = TypeVar("InF", bound=api.Field)
-InT = TypeVar("InT", bound=api.TimeStep)
+InS = TypeVar("InS", bound=api.Step)
 OutZ = TypeVar("OutZ", bound=Zone)
 OutF = TypeVar("OutF", bound=api.Field)
-OutT = TypeVar("OutT", bound=api.TimeStep)
+OutS = TypeVar("OutS", bound=api.Step)
 
 
-class Passthrough(api.Source[OutF, OutT, OutZ], Generic[InF, InT, InZ, OutF, OutT, OutZ]):
-    source: api.Source[InF, InT, InZ]
+class Passthrough(api.Source[OutF, OutS, OutZ], Generic[InF, InS, InZ, OutF, OutS, OutZ]):
+    source: api.Source[InF, InS, InZ]
 
-    def __init__(self, source: api.Source[InF, InT, InZ]):
+    def __init__(self, source: api.Source[InF, InS, InZ]):
         self.source = source
         self.validate_source()
 
@@ -49,22 +49,28 @@ class Passthrough(api.Source[OutF, OutT, OutZ], Generic[InF, InT, InZ, OutF, Out
     def fields(self) -> Iterator[OutF]:
         return cast(Iterator[OutF], self.source.fields())
 
-    def timesteps(self) -> Iterator[OutT]:
-        return cast(Iterator[OutT], self.source.timesteps())
+    def steps(self) -> Iterator[OutS]:
+        return cast(Iterator[OutS], self.source.steps())
 
     def zones(self) -> Iterator[OutZ]:
         return cast(Iterator[OutZ], self.source.zones())
 
-    def topology(self, timestep: OutT, field: OutF, zone: OutZ) -> Topology:
+    def topology(self, step: OutS, field: OutF, zone: OutZ) -> Topology:
         return self.source.topology(
-            cast(InT, timestep),
+            cast(InS, step),
             cast(InF, field),
             cast(InZ, zone),
         )
 
-    def field_data(self, timestep: OutT, field: OutF, zone: OutZ) -> FieldData[floating]:
+    def field_data(self, step: OutS, field: OutF, zone: OutZ) -> FieldData[floating]:
         return self.source.field_data(
-            cast(InT, timestep),
+            cast(InS, step),
             cast(InF, field),
             cast(InZ, zone),
+        )
+
+    def field_updates(self, step: OutS, field: OutF) -> bool:
+        return self.source.field_updates(
+            cast(InS, step),
+            cast(InF, field),
         )

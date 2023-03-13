@@ -5,7 +5,7 @@ from numpy import floating
 
 from .. import api, coord
 from ..field import Field
-from ..timestep import TimeStep
+from ..timestep import Step
 from ..util import FieldData
 from ..zone import Coords, Shape, Zone
 
@@ -13,7 +13,7 @@ from ..zone import Coords, Shape, Zone
 T = TypeVar("T", bound=api.Topology)
 
 
-class PureGeometry(api.Source[Field, TimeStep, Zone], Generic[T]):
+class PureGeometry(api.Source[Field, Step, Zone], Generic[T]):
     filename: Path
     corners: List[Coords]
     controlpoints: List[FieldData[floating]]
@@ -40,8 +40,8 @@ class PureGeometry(api.Source[Field, TimeStep, Zone], Generic[T]):
     def fields(self) -> Iterator[Field]:
         yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()))
 
-    def timesteps(self) -> Iterator[TimeStep]:
-        yield TimeStep(index=0)
+    def steps(self) -> Iterator[Step]:
+        yield Step(index=0)
 
     def zones(self) -> Iterator[Zone]:
         for i, (corners, topology) in enumerate(zip(self.corners, self.topologies)):
@@ -53,8 +53,8 @@ class PureGeometry(api.Source[Field, TimeStep, Zone], Generic[T]):
                 global_key=None,
             )
 
-    def topology(self, timestep: TimeStep, field: Field, zone: Zone) -> T:
+    def topology(self, timestep: Step, field: Field, zone: Zone) -> T:
         return self.topologies[int(zone.local_key)]
 
-    def field_data(self, timestep: TimeStep, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         return self.controlpoints[int(zone.local_key)]

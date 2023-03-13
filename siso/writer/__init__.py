@@ -16,7 +16,7 @@ class OutputFormat(Enum):
 
     def default_suffix(self):
         if self == OutputFormat.Simra:
-            return '.dat'
+            return ".dat"
         return f".{self.value}"
 
 
@@ -75,3 +75,10 @@ def simra(path: Path) -> Writer:
     from .simra import SimraWriter
 
     return SimraWriter(path)
+
+
+@register_writer(OutputFormat.Vtf)
+def vtf(path: Path) -> Writer:
+    from .vtf import VtfWriter
+
+    return VtfWriter(path)

@@ -10,15 +10,15 @@ from .passthrough import Passthrough
 
 F = TypeVar("F", bound=api.Field)
 Z = TypeVar("Z", bound=api.Zone)
-T = TypeVar("T", bound=api.TimeStep)
+S = TypeVar("S", bound=api.Step)
 
 
-class Strict(Passthrough[F, T, Z, F, T, Z]):
+class Strict(Passthrough[F, S, Z, F, S, Z]):
     field_specs: Dict[str, F]
     original_properties: api.SourceProperties
     geometry: F
 
-    def __init__(self, source: api.Source[F, T, Z]):
+    def __init__(self, source: api.Source[F, S, Z]):
         super().__init__(source)
         self.field_specs = {}
         self.original_properties = deepcopy(source.properties)
@@ -45,17 +45,17 @@ class Strict(Passthrough[F, T, Z, F, T, Z]):
                 assert spec.type == field.type
             yield field
 
-    def timesteps(self) -> Iterator[T]:
-        timesteps = list(self.source.timesteps())
+    def steps(self) -> Iterator[S]:
+        steps = list(self.source.steps())
         if self.original_properties.instantaneous:
-            assert len(timesteps) == 1
-        for a, b in util.pairwise(timesteps):
+            assert len(steps) == 1
+        for a, b in util.pairwise(steps):
             assert b.index > a.index
-            if b.time is not None and a.time is not None:
-                assert b.time > a.time
-        yield from timesteps
+            if b.value is not None and a.value is not None:
+                assert b.value > a.value
+        yield from steps
 
-    def field_data(self, timestep: T, field: F, zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: F, zone: Z) -> FieldData[floating]:
         data = self.source.field_data(timestep, field, zone)
         spec = self.field_specs[field.name]
         assert spec.cellwise == field.cellwise

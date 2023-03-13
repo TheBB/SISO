@@ -1,20 +1,19 @@
-from pathlib import Path
-from typing import TypeVar, Sequence
 import logging
+from pathlib import Path
+from typing import Sequence, TypeVar
 
 import numpy as np
 from numpy.linalg import norm
 from scipy.io import FortranFile
-
 from typing_extensions import Self
 
 from .. import api, util
-from .api import Writer, WriterSettings, WriterProperties
 from ..topology import StructuredTopology
+from .api import Writer, WriterProperties, WriterSettings
 
 
 F = TypeVar("F", bound=api.Field)
-T = TypeVar("T", bound=api.TimeStep)
+T = TypeVar("T", bound=api.Step)
 Z = TypeVar("Z", bound=api.Zone)
 
 
@@ -29,7 +28,7 @@ class SimraWriter(Writer):
         self.filename = filename
 
     def __enter__(self) -> Self:
-        self.data = FortranFile(self.filename, 'w', header_dtype=self.u4_type)
+        self.data = FortranFile(self.filename, "w", header_dtype=self.u4_type)
         return self
 
     def __exit__(self, *args) -> None:
@@ -49,7 +48,7 @@ class SimraWriter(Writer):
         self.u4_type = settings.endianness.u4_type()
 
     def consume(self, source: api.Source[F, T, Z], geometry: F, fields: Sequence[F]):
-        timestep = next(source.timesteps())
+        timestep = next(source.steps())
         zone = next(source.zones())
 
         topology = source.topology(timestep, geometry, zone)
@@ -71,7 +70,7 @@ class SimraWriter(Writer):
         nodes = nodes.astype(self.f4_type)
         cells = topology.cells.swap_components(1, 3).swap_components(5, 7).numpy().astype(self.u4_type) + 1
 
-        macro_shape = tuple(c-1 for c in topology.cellshape)
+        macro_shape = tuple(c - 1 for c in topology.cellshape)
         macro_cells = (
             util.structured_cells(macro_shape, topology.pardim)
             .swap_components(1, 3)
@@ -82,14 +81,19 @@ class SimraWriter(Writer):
             .astype(self.u4_type)
         ) + 1
 
-        self.data.write_record(np.array([
-            nodes.size // 3,
-            cells.shape[0],
-            nodes.shape[1],
-            nodes.shape[0],
-            nodes.shape[2],
-            macro_cells.shape[0],
-        ], dtype=self.u4_type))
+        self.data.write_record(
+            np.array(
+                [
+                    nodes.size // 3,
+                    cells.shape[0],
+                    nodes.shape[1],
+                    nodes.shape[0],
+                    nodes.shape[2],
+                    macro_cells.shape[0],
+                ],
+                dtype=self.u4_type,
+            )
+        )
 
         self.data.write_record(nodes.flatten())
         self.data.write_record(cells.flatten())
