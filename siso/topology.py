@@ -14,7 +14,7 @@ from splipy.io import G2
 from typing_extensions import Self
 
 from . import util
-from .api import CellType, DiscreteTopology, Field, Tesselator, Topology
+from .api import CellType, DiscreteTopology, Field, Rationality, Tesselator, Topology
 from .util import FieldData
 from .zone import Coords
 
@@ -151,7 +151,10 @@ class NoopTesselator(Tesselator[DiscreteTopology]):
         return topology
 
     def tesselate_field(
-        self, topology: DiscreteTopology, field: Field, field_data: FieldData[floating]
+        self,
+        topology: DiscreteTopology,
+        field: Field,
+        field_data: FieldData[floating],
     ) -> FieldData[floating]:
         return field_data
 
@@ -229,7 +232,10 @@ class SplineTesselator(Tesselator[SplineTopology]):
         return StructuredTopology(cellshape, celltype)
 
     def tesselate_field(
-        self, topology: SplineTopology, field: Field, field_data: FieldData[floating]
+        self,
+        topology: SplineTopology,
+        field: Field,
+        field_data: FieldData[floating],
     ) -> FieldData[floating]:
         if field.cellwise:
             bases = [BSplineBasis(order=1, knots=basis.knot_spans()) for basis in topology.bases]
@@ -257,14 +263,25 @@ class LrTopology(Topology):
     weights: Optional[np.ndarray]
 
     @staticmethod
-    def from_lrobject(obj: lr.LRSplineObject) -> Tuple[Coords, LrTopology, FieldData[floating]]:
+    def from_lrobject(
+        obj: lr.LRSplineObject,
+        rationality: Optional[Rationality],
+    ) -> Tuple[Coords, LrTopology, FieldData[floating]]:
         corners = tuple(tuple(point) for point in obj.corners())
-        rational = obj.dimension > obj.pardim
-        if rational:
-            logging.warning(
-                f"Treating LR spline with parametric dimension {obj.pardim} "
-                f"and physical dimension {obj.dimension} as rational"
-            )
+        if rationality == Rationality.Always:
+            rational = True
+        elif rationality == Rationality.Never:
+            rational = False
+        else:
+            rational = obj.dimension > obj.pardim
+            if rational:
+                logging.warning(
+                    f"Treating LR spline with parametric dimension {obj.pardim} "
+                    f"and physical dimension {obj.dimension} as rational"
+                )
+                logging.warning(
+                    "Use --rational/--non-rational to override this behavior " "or suppress this warning"
+                )
 
         if rational:
             weights = obj.controlpoints[:, -1]
@@ -280,13 +297,19 @@ class LrTopology(Topology):
         )
 
     @staticmethod
-    def from_bytes(data: bytes) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
-        yield from LrTopology.from_string(data.decode())
+    def from_bytes(
+        data: bytes,
+        rationality: Optional[Rationality],
+    ) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
+        yield from LrTopology.from_string(data.decode(), rationality)
 
     @staticmethod
-    def from_string(data: str) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
+    def from_string(
+        data: str,
+        rationality: Optional[Rationality],
+    ) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
         for obj in lr.LRSplineObject.read_many(StringIO(data)):
-            yield LrTopology.from_lrobject(obj)
+            yield LrTopology.from_lrobject(obj, rationality)
 
     @property
     def pardim(self) -> int:
@@ -326,7 +349,10 @@ class LrTesselator(Tesselator[LrTopology]):
         return UnstructuredTopology(len(self.nodes), self.cells, celltype)
 
     def tesselate_field(
-        self, topology: LrTopology, field: Field, field_data: FieldData[floating]
+        self,
+        topology: LrTopology,
+        field: Field,
+        field_data: FieldData[floating],
     ) -> FieldData[floating]:
         if field.cellwise:
             cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells.vectors)
@@ -337,7 +363,7 @@ class LrTesselator(Tesselator[LrTopology]):
             obj = topology.obj.clone()
             coeffs = field_data.data
             if self.weights is not None:
-                coeffs = np.hstack((coeffs, self.weights))
+                coeffs = np.hstack((coeffs, self.weights.reshape(-1, 1)))
             obj.controlpoints = coeffs
             evaluated = FieldData.from_iter(obj(*node) for node in self.nodes)
             if self.weights is not None:

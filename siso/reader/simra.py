@@ -194,7 +194,8 @@ class SimraMeshBase(api.Source[Field, Step, Zone]):
         return self.nodes().corners(self.simra_nodeshape)
 
     def configure(self, settings: api.ReaderSettings) -> None:
-        return
+        if settings.mesh_filename:
+            self.filename = settings.mesh_filename
 
     def use_geometry(self, geometry: Field) -> None:
         return
@@ -215,7 +216,6 @@ class SimraMeshBase(api.Source[Field, Step, Zone]):
 
     def topology(self, timestep: Step, field: Field, zone: Zone) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
-        print(self.out_cellshape)
         return StructuredTopology(self.out_cellshape, celltype)
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
@@ -336,6 +336,7 @@ class Simra3dMesh(SimraMeshBase):
             return False
 
     def configure(self, settings: api.ReaderSettings) -> None:
+        super().configure(settings)
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
@@ -366,7 +367,7 @@ class SimraBoundary(api.Source[Field, Step, Zone]):
         try:
             with open(path, "r") as f:
                 assert next(f).startswith("Boundary conditions")
-            assert Simra3dMesh.applicable(path.with_name("mesh.dat"), settings)
+            assert Simra3dMesh.applicable(settings.mesh_filename or path.with_name("mesh.dat"), settings)
             return True
         except (AssertionError, UnicodeDecodeError):
             return False
@@ -538,7 +539,7 @@ class SimraContinuation(api.Source[Field, Step, Zone]):
                     assert (size // u4_type.itemsize - 1) % 11 == 0
                 elif path.suffix.casefold() == ".dat":
                     assert (size // u4_type.itemsize) % 11 == 0
-            assert Simra3dMesh.applicable(path.with_name("mesh.dat"), settings)
+            assert Simra3dMesh.applicable(settings.mesh_filename or path.with_name("mesh.dat"), settings)
             return True
         except AssertionError:
             return False
@@ -694,7 +695,7 @@ class SimraHistory(api.Source[Field, Step, Zone]):
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
                 assert (size // u4_type.itemsize - 1) % 12 == 0
-            assert Simra3dMesh.applicable(path.with_name("mesh.dat"), settings)
+            assert Simra3dMesh.applicable(settings.mesh_filename or path.with_name("mesh.dat"), settings)
             return True
         except AssertionError:
             return False

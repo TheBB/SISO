@@ -111,7 +111,7 @@ class IfemBasis:
         if initial.startswith(b"# LAGRANGIAN"):
             corners, topology, cps = UnstructuredTopology.from_ifem(raw_data)
         elif initial.startswith(b"# LRSPLINE"):
-            corners, topology, cps = next(LrTopology.from_bytes(raw_data))
+            corners, topology, cps = next(LrTopology.from_bytes(raw_data, source.rationality))
         else:
             corners, topology, cps = next(SplineTopology.from_bytes(raw_data))
         shape = [Shape.Line, Shape.Quatrilateral, Shape.Hexahedron][topology.pardim - 1]
@@ -215,6 +215,8 @@ class Ifem(api.Source[Field, Step, Zone]):
     default_scalar: ClassVar[api.ScalarInterpretation] = api.ScalarInterpretation.Generic
     default_vector: ClassVar[api.VectorInterpretation] = api.VectorInterpretation.Generic
 
+    rationality: Optional[api.Rationality] = None
+
     @staticmethod
     def applicable(path: Path) -> bool:
         try:
@@ -253,7 +255,7 @@ class Ifem(api.Source[Field, Step, Zone]):
         )
 
     def configure(self, settings: api.ReaderSettings) -> None:
-        return
+        self.rationality = settings.rationality
 
     @property
     def nsteps(self) -> int:

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Optional, Protocol, Tuple
 
-from attrs import define
-
 from .api import Source
 
 
@@ -20,28 +18,24 @@ METHODS = [
 
 class MethodInstrumenter:
     func: Method
+    ncalls: int
 
     def __init__(self, func: Method):
         self.func = func
-        self.call_data = CallData()
+        self.ncalls = 0
 
     def __call__(self, *args, **kwargs):
-        self.call_data.ncalls += 1
+        self.ncalls += 1
         return self.func(*args, **kwargs)
 
     def format(self) -> str:
-        desc = f"{self.func.__name__}: {self.call_data.ncalls} calls"
+        desc = f"{self.func.__name__}: {self.ncalls} calls"
         func = self.func.__func__
         if hasattr(func, "cache_info"):
             info = func.cache_info()
             hitrate = info.hits / (info.hits + info.misses)
             desc = f"{desc} ({hitrate*100:.2g}% cache hit rate)"
         return desc
-
-
-@define
-class CallData:
-    ncalls: int = 0
 
 
 class Instrumenter:

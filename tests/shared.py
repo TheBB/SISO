@@ -186,10 +186,12 @@ testcase('simra/hist/hist.res', 1, formats_novtf, **kwargs, abs_tol=1e-5, rel_to
 formats = ['vtk', 'vtu', 'pvd', 'vtf']
 testcase('hdf5/Cyl2D-VMSFSI-weak.hdf5', 11, formats)
 testcase('hdf5/NACA0015_a6_small_weak_mixed_SA.hdf5', 4, formats)
+testcase('hdf5/ScordelisPoint-NURBS.hdf5', 3, ['pvd'], '--rational')
 testcase('hdf5/singular-pressure-corner-rec.hdf5', 3, formats)
 testcase('hdf5/Square-LR.hdf5', 1, formats)
 testcase('hdf5/SmallBox.hdf5', 3, formats)
 testcase('g2/Backstep2D.g2', None, formats)
+testcase('g2/scordelis-lo-NURBS.g2', None, ['vtu'], '--nvis', '5')
 testcase('lr/square-2.lr', None, formats)
 testcase('lr/backstep-3.lr', None, formats)
 testcase('lr/cube-3.lr', None, formats)
@@ -238,6 +240,9 @@ testcase('g2/annulus3D.g2', None, formats, '--nvis', '5', suffix='-with-nvis', *
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--no-fields', suffix='-no-fields')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'u', '-l', 'v', '-l', 'w', suffix='-filtered')
 testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '-l', 'u,v,w', suffix='-filtered')
+testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--planar', '--out-coords', 'geocentric', suffix='-planar-global', rel_tol=2e-4, abs_tol=2e-6)
+testcase('wrf/wrfout_d01-eastward.nc', 4, ['pvd'], '--planar', '--geocentric', suffix='-planar-global', rel_tol=2e-4, abs_tol=2e-6)
+testcase('simra/nomesh/boun.dat', None, ['vtu'], '--mesh', str(TESTDATA_DIR / 'simra' / 'boun' / 'mesh.dat'), abs_tol=1e-5, rel_tol=1e-5)
 
 
 def compare_vtk_data(out, ref, case: PreparedTestCase):

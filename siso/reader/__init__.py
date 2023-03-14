@@ -10,6 +10,7 @@ from ..api import Endianness, Source
 @define
 class FindReaderSettings:
     endianness: Endianness
+    mesh_filename: Optional[Path]
 
 
 ReaderCheck = Callable[[Path, FindReaderSettings], Optional[Source]]

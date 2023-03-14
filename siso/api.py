@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from pathlib import Path
 from typing import (
     ClassVar,
     Generic,
@@ -60,6 +61,11 @@ class Dimensionality(Enum):
 class Staggering(Enum):
     Outer = "outer"
     Inner = "inner"
+
+
+class Rationality(Enum):
+    Always = "always"
+    Never = "never"
 
 
 @define
@@ -301,6 +307,8 @@ class ReaderSettings:
     dimensionality: Dimensionality
     staggering: Staggering
     periodic: bool
+    mesh_filename: Optional[Path]
+    rationality: Optional[Rationality]
 
 
 Z = TypeVar("Z", bound=Zone)

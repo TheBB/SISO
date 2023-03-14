@@ -12,7 +12,16 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from . import coord, filter, util
-from .api import CoordinateSystem, Dimensionality, Endianness, Field, ReaderSettings, Source, Staggering
+from .api import (
+    CoordinateSystem,
+    Dimensionality,
+    Endianness,
+    Field,
+    Rationality,
+    ReaderSettings,
+    Source,
+    Staggering,
+)
 from .instrument import Instrumenter
 from .multisource import MultiSource
 from .reader import FindReaderSettings, find_reader
@@ -35,7 +44,7 @@ class Coords(click.ParamType):
 
     def convert(self, value, param, ctx):
         if value is None or value is False:
-            return None
+            return coord.Generic()
         if isinstance(value, CoordinateSystem):
             return value
         return coord.find_system(value)
@@ -83,10 +92,13 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--mode", "-m", "output_mode", type=Enum(OutputMode))
 @optgroup.option("--fmt", "-f", type=Enum(OutputFormat))
 
-# Coordinate systems
-@optgroup.group("Coordinate systems")
-@optgroup.option("--out-coords", default=coord.Generic(), type=Coords())
-@optgroup.option("--coords", "out_coords", default=coord.Generic(), type=Coords())
+# Output coordinate systems
+@optgroup.group("Output coordinate systems", cls=MutuallyExclusiveOptionGroup)
+@optgroup.option("--out-coords", "--coords", "out_coords", default=coord.Generic(), type=Coords())
+@optgroup.option("--geocentric", "out_coords", flag_value=coord.Geocentric(), type=Coords())
+
+# Input coordinate systems
+@optgroup.group("Input coordinate systems")
 @optgroup.option("--in-coords", default=None)
 
 # Time slicing
@@ -121,11 +133,19 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--planar", "dimensionality", flag_value=Dimensionality.Planar, type=click.UNPROCESSED)
 @optgroup.option("--extrude", "dimensionality", flag_value=Dimensionality.Extrude, type=click.UNPROCESSED)
 
+# Rationality
+@optgroup.group("Rationality")
+@optgroup.option("--rational", "rationality", flag_value=Rationality.Always, type=click.UNPROCESSED)
+@optgroup.option("--non-rational", "rationality", flag_value=Rationality.Never, type=click.UNPROCESSED)
+
 # Miscellaneous options
 @optgroup.group("Miscellaneous")
 @optgroup.option("--unstructured", "require_unstructured", is_flag=True)
 @optgroup.option("--decompose/--no-decompose", default=True)
 @optgroup.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
+@optgroup.option(
+    "--mesh", "mesh_filename", type=click.Path(exists=True, file_okay=True, readable=True, path_type=Path)
+)
 
 # Verbosity options
 @optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
@@ -172,6 +192,8 @@ def main(
     in_endianness: Endianness,
     dimensionality: Dimensionality,
     staggering: Staggering,
+    rationality: Optional[Rationality],
+    mesh_filename: Optional[Path],
     # Logging, verbosity and testing
     verify_strict: bool,
     instrument: bool,
@@ -218,6 +240,7 @@ def main(
         inpath,
         FindReaderSettings(
             endianness=in_endianness,
+            mesh_filename=mesh_filename,
         ),
     )
     if not source:
@@ -228,6 +251,8 @@ def main(
             dimensionality=dimensionality,
             staggering=staggering,
             periodic=periodic,
+            mesh_filename=mesh_filename,
+            rationality=rationality,
         )
     )
 
