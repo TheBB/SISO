@@ -309,6 +309,7 @@ class ReaderSettings:
     periodic: bool
     mesh_filename: Optional[Path]
     rationality: Optional[Rationality]
+    basis_name: Optional[str]
 
 
 Z = TypeVar("Z", bound=Zone)

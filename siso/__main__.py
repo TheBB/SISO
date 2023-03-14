@@ -144,8 +144,9 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--decompose/--no-decompose", default=True)
 @optgroup.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
 @optgroup.option(
-    "--mesh", "mesh_filename", type=click.Path(exists=True, file_okay=True, readable=True, path_type=Path)
+    "--mesh", "mesh_filename", type=click.Path(exists=True, file_okay=True, readable=True, path_type=Path),
 )
+@optgroup.option("--basis", "basis_name")
 
 # Verbosity options
 @optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
@@ -194,6 +195,7 @@ def main(
     staggering: Staggering,
     rationality: Optional[Rationality],
     mesh_filename: Optional[Path],
+    basis_name: Optional[str],
     # Logging, verbosity and testing
     verify_strict: bool,
     instrument: bool,
@@ -253,6 +255,7 @@ def main(
             periodic=periodic,
             mesh_filename=mesh_filename,
             rationality=rationality,
+            basis_name=basis_name,
         )
     )
 

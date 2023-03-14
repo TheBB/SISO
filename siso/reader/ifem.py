@@ -216,6 +216,7 @@ class Ifem(api.Source[Field, Step, Zone]):
     default_vector: ClassVar[api.VectorInterpretation] = api.VectorInterpretation.Generic
 
     rationality: Optional[api.Rationality] = None
+    basis_name: Optional[str] = None
 
     @staticmethod
     def applicable(path: Path) -> bool:
@@ -256,6 +257,7 @@ class Ifem(api.Source[Field, Step, Zone]):
 
     def configure(self, settings: api.ReaderSettings) -> None:
         self.rationality = settings.rationality
+        self.basis_name = settings.basis_name
 
     @property
     def nsteps(self) -> int:
@@ -270,6 +272,9 @@ class Ifem(api.Source[Field, Step, Zone]):
 
     def discover_bases(self) -> None:
         basis_names = set(chain.from_iterable(self.h5.values())) - {"timeinfo"}
+        if self.basis_name is not None:
+            prefix = self.basis_name.casefold()
+            basis_names = {name for name in basis_names if name.casefold().startswith(prefix)}
         bases = (self.make_basis(name) for name in basis_names)
         self._bases = {basis.name: basis for basis in bases if basis.num_patches > 0}
 
