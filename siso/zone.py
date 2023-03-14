@@ -26,7 +26,7 @@ class Shape(Enum):
     Shapeless = auto()
 
 
-@define
+@define(eq=False)
 class Zone:
     shape: Shape
     coords: Coords

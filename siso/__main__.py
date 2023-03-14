@@ -13,6 +13,7 @@ from rich.logging import RichHandler
 
 from . import coord, filter, util
 from .api import CoordinateSystem, Dimensionality, Endianness, Field, ReaderSettings, Source, Staggering
+from .instrument import Instrumenter
 from .multisource import MultiSource
 from .reader import FindReaderSettings, find_reader
 from .writer import OutputFormat, find_writer
@@ -141,6 +142,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 # Debugging options
 @optgroup.group("Debugging")
 @optgroup.option("--verify-strict", is_flag=True)
+@optgroup.option("--instrument", is_flag=True)
 
 # Input
 @click.argument(
@@ -172,6 +174,7 @@ def main(
     staggering: Staggering,
     # Logging, verbosity and testing
     verify_strict: bool,
+    instrument: bool,
     verbosity: str,
     rich: bool,
     # Input and output
@@ -334,5 +337,13 @@ def main(
             logging.debug(str_path)
             source = filter.CoordTransform(source, path)
 
+        instrumenter: Optional[Instrumenter] = None
+        if instrument:
+            instrumenter = Instrumenter(source)
+
         with sink:
             sink.consume(source, geometry, fields)
+
+        if instrument:
+            assert instrumenter
+            instrumenter.report()

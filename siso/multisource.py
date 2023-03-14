@@ -81,3 +81,6 @@ class MultiSource(Source):
 
     def field_updates(self, timestep: MultiSourceStep, field: Field) -> bool:
         return timestep.source.field_updates(timestep.original, field)
+
+    def children(self) -> Iterator[Source]:
+        yield from self.sources

@@ -349,6 +349,10 @@ class Source(ABC, Generic[F, S, Z]):
     def field_updates(self, timestep: S, field: F) -> bool:
         return True
 
+    def children(self) -> Iterator[Source]:
+        return
+        yield
+
 
 class CellType(Enum):
     Line = auto()

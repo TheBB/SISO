@@ -74,3 +74,6 @@ class Passthrough(api.Source[OutF, OutS, OutZ], Generic[InF, InS, InZ, OutF, Out
             cast(InS, step),
             cast(InF, field),
         )
+
+    def children(self) -> Iterator[api.Source]:
+        yield self.source
