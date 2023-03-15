@@ -266,14 +266,14 @@ class NetCdf(api.Source[Field, Step, Zone]):
             local_key="0",
         )
 
-    def fields(self) -> Iterator[Field]:
+    def geometries(self) -> Iterator[Field]:
         yield Field("Generic", type=api.Geometry(ncomps=3, coords=Generic()))
-
         yield Field(
             "Geodetic",
             type=api.Geometry(ncomps=3, coords=Geodetic(SphericalEarth(semi_major_axis=6370000.0))),
         )
 
+    def fields(self) -> Iterator[Field]:
         for variable in self.dataset.variables:
             if self.field_domain(variable) in self.valid_domains:
                 yield Field(variable, type=api.Scalar())

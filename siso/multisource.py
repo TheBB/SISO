@@ -56,8 +56,11 @@ class MultiSource(Source):
         for source in self.sources:
             source.use_geometry(geometry)
 
+    def geometries(self) -> Iterator[Field]:
+        return self.sources[0].geometries()
+
     def fields(self) -> Iterator[Field]:
-        yield from self.sources[0].fields()
+        return self.sources[0].fields()
 
     def steps(self) -> Iterator[Step]:
         index = 0

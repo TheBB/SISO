@@ -44,6 +44,10 @@ class EigenDisp(Passthrough[F, S, Z, Field[F], S, Z]):
     def use_geometry(self, geometry: Field[F]) -> None:
         return self.source.use_geometry(geometry.original_field)
 
+    def geometries(self) -> Iterator[Field[F]]:
+        for field in self.source.geometries():
+            yield Field(field)
+
     def fields(self) -> Iterator[Field[F]]:
         for field in self.source.fields():
             yield Field(field)

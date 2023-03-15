@@ -333,12 +333,14 @@ class Ifem(api.Source[Field, Step, Zone]):
             zone, _, _ = self.geometry.patch_at(0, patch, self)
             yield zone
 
-    def fields(self) -> Iterator[Field]:
+    def geometries(self) -> Iterator[Field]:
         for basis in self._bases.values():
             yield Field(
-                name=basis.name, type=api.Geometry(ncomps=basis.ncomps(self), coords=Named(basis.name))
+                name=basis.name,
+                type=api.Geometry(ncomps=basis.ncomps(self), coords=Named(basis.name))
             )
 
+    def fields(self) -> Iterator[Field]:
         for field in self._fields.values():
             ncomps = field.ncomps(self)
             tp: api.FieldType

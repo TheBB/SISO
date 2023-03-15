@@ -16,7 +16,6 @@ from .api import (
     CoordinateSystem,
     Dimensionality,
     Endianness,
-    Field,
     Rationality,
     ReaderSettings,
     Source,
@@ -324,18 +323,13 @@ def main(
 
         assert not (out_props.require_instantaneous and not source.properties.instantaneous)
 
-        geometries: List[Field] = []
         for field in source.fields():
-            if field.is_geometry:
-                geometries.append(field)
-            else:
-                logging.debug(
-                    f"Discovered field '{field.name}' with "
-                    f"{util.pluralize(field.ncomps, 'component', 'components')}"
-                )
+            logging.debug(
+                f"Discovered field '{field.name}' with "
+                f"{util.pluralize(field.ncomps, 'component', 'components')}"
+            )
 
-        for geometry in geometries:
-            logging.debug(f"Discovered geometry '{geometry.name}' with coordinate system {geometry.coords}")
+        geometries = list(source.geometries())
 
         if in_coords:
             geometries = [geometry for geometry in geometries if geometry.fits_system_name(in_coords)]

@@ -49,6 +49,10 @@ class Recombine(Passthrough[F, S, Z, RecombinedField[F], S, Z]):
         super().__init__(source)
         self.recombinations = recombinations
 
+    def geometries(self) -> Iterator[RecombinedField]:
+        for field in self.source.geometries():
+            yield RecombinedField(name=field.name, sources=[field])
+
     def fields(self) -> Iterator[RecombinedField]:
         in_fields = {field.name: field for field in self.source.fields()}
 

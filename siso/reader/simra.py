@@ -201,6 +201,10 @@ class SimraMeshBase(api.Source[Field, Step, Zone]):
         return
 
     def fields(self) -> Iterator[Field]:
+        return
+        yield
+
+    def geometries(self) -> Iterator[Field]:
         yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()))
 
     def steps(self) -> Iterator[Step]:
@@ -433,8 +437,10 @@ class SimraBoundary(api.Source[Field, Step, Zone]):
     def zones(self) -> Iterator[Zone]:
         yield from self.mesh.zones()
 
+    def geometries(self) -> Iterator[Field]:
+        yield from self.mesh.geometries()
+
     def fields(self) -> Iterator[Field]:
-        yield from self.mesh.fields()
         yield Field("nodal", type=api.Vector(16), splittable=False)
 
     def topology(self, timestep: Step, field: Field, zone: Zone) -> Topology:
@@ -609,9 +615,10 @@ class SimraContinuation(api.Source[Field, Step, Zone]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
-    def fields(self) -> Iterator[Field]:
-        yield from self.mesh.fields()
+    def geometries(self) -> Iterator[Field]:
+        yield from self.mesh.geometries()
 
+    def fields(self) -> Iterator[Field]:
         num_nodal = 11
         if self.extra_field == ExtraField.Stratification:
             num_nodal += 1
@@ -749,8 +756,10 @@ class SimraHistory(api.Source[Field, Step, Zone]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
+    def geometries(self) -> Iterator[Field]:
+        yield from self.mesh.geometries()
+
     def fields(self) -> Iterator[Field]:
-        yield from self.mesh.fields()
         yield Field("nodal", type=api.Vector(12), splittable=False)
         yield Field("pressure", type=api.Scalar(), cellwise=True)
 

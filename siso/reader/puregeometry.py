@@ -38,6 +38,10 @@ class PureGeometry(api.Source[Field, Step, Zone], Generic[T]):
         return
 
     def fields(self) -> Iterator[Field]:
+        return
+        yield
+
+    def geometries(self) -> Iterator[Field]:
         yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()))
 
     def steps(self) -> Iterator[Step]:

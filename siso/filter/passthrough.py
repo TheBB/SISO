@@ -46,6 +46,9 @@ class Passthrough(api.Source[OutF, OutS, OutZ], Generic[InF, InS, InZ, OutF, Out
     def use_geometry(self, geometry: OutF) -> None:
         self.source.use_geometry(cast(InF, geometry))
 
+    def geometries(self) -> Iterator[OutF]:
+        return cast(Iterator[OutF], self.source.geometries())
+
     def fields(self) -> Iterator[OutF]:
         return cast(Iterator[OutF], self.source.fields())
 

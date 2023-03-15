@@ -340,6 +340,10 @@ class Source(ABC, Generic[F, S, Z]):
         ...
 
     @abstractmethod
+    def geometries(self) -> Iterator[F]:
+        ...
+
+    @abstractmethod
     def steps(self) -> Iterator[S]:
         ...
 

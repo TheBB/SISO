@@ -42,6 +42,10 @@ class DecomposedField(api.Field, Generic[F]):
 
 
 class DecomposeBase(Passthrough[F, S, Z, DecomposedField[F], S, Z]):
+    def geometries(self) -> Iterator[DecomposedField[F]]:
+        for field in self.source.geometries():
+            yield DecomposedField(name=field.name, original_field=field, components=None, splittable=False)
+
     def topology(self, timestep: S, field: DecomposedField, zone: Z) -> Topology:
         return self.source.topology(timestep, field.original_field, zone)
 
@@ -59,7 +63,7 @@ class Decompose(DecomposeBase[F, S, Z]):
     def fields(self) -> Iterator[DecomposedField[F]]:
         for field in self.source.fields():
             yield DecomposedField(name=field.name, original_field=field, components=None, splittable=False)
-            if field.is_geometry or field.is_scalar or not field.splittable:
+            if field.is_scalar or not field.splittable:
                 continue
             for i, suffix in zip(range(field.ncomps), "xyz"):
                 name = f"{field.name}_{suffix}"

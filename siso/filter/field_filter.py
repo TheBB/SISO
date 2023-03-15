@@ -18,7 +18,5 @@ class FieldFilter(Passthrough[F, S, Z, F, S, Z]):
 
     def fields(self) -> Iterator[F]:
         for field in self.source.fields():
-            if field.is_geometry:
-                yield field
             if field.name.casefold() in self.filters:
                 yield field
