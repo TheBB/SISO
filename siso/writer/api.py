@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, Protocol, Sequence, TypeVar
+from typing import Optional, Protocol, TypeVar
 
 from attrs import define
 from typing_extensions import Self
@@ -46,5 +46,5 @@ class Writer(Protocol[F, T, Z]):
     def configure(self, settings: WriterSettings):
         ...
 
-    def consume(self, source: Source[F, T, Z], geometry: F, fields: Sequence[F]):
+    def consume(self, source: Source[F, T, Z], geometry: F):
         ...

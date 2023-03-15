@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple, Type, TypeVar
+from typing import Dict, List, Tuple, Type, TypeVar
 
 import vtfwriter as vtf
 from attrs import define
@@ -128,17 +128,17 @@ class VtfWriter(Writer[F, T, Z]):
             steps = self.field_info[field.name].steps
             steps.setdefault(timestep.index + 1, []).append(result_block)
 
-    def consume_timestep(
-        self, timestep: T, source: Source[F, T, Z], geometry: F, fields: Sequence[F]
-    ) -> None:
+    def consume_timestep(self, timestep: T, source: Source[F, T, Z], geometry: F) -> None:
         if source.field_updates(timestep, geometry):
             self.update_geometry(timestep, source, geometry)
-        for field in fields:
+        for field in source.fields():
+            if field.is_geometry:
+                continue
             if source.field_updates(timestep, field):
                 self.update_field(timestep, source, field)
 
-    def consume(self, source: Source[F, T, Z], geometry: F, fields: Sequence[F]):
+    def consume(self, source: Source[F, T, Z], geometry: F):
         self.step_interpretation = source.properties.step_interpretation
         for timestep in source.steps():
             self.timesteps.append(timestep)
-            self.consume_timestep(timestep, source, geometry, fields)
+            self.consume_timestep(timestep, source, geometry)

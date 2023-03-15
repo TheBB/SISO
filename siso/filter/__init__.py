@@ -1,6 +1,7 @@
 from .coordtransform import CoordTransform
 from .decompose import Decompose, Split
 from .eigendisp import EigenDisp
+from .field_filter import FieldFilter
 from .force_unstructured import ForceUnstructured
 from .keyzones import KeyZones
 from .recombine import Recombine
@@ -14,6 +15,7 @@ __all__ = [
     "CoordTransform",
     "Decompose",
     "EigenDisp",
+    "FieldFilter",
     "ForceUnstructured",
     "KeyZones",
     "LastTime",

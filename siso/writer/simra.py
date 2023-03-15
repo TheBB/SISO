@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Sequence, TypeVar
+from typing import TypeVar
 
 import numpy as np
 from numpy.linalg import norm
@@ -47,7 +47,7 @@ class SimraWriter(Writer):
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
-    def consume(self, source: api.Source[F, T, Z], geometry: F, fields: Sequence[F]):
+    def consume(self, source: api.Source[F, T, Z], geometry: F):
         timestep = next(source.steps())
         zone = next(source.zones())
 

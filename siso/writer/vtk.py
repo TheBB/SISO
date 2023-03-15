@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
-from typing import IO, Sequence, Tuple, TypeVar, Union, cast
+from typing import IO, Tuple, TypeVar, Union, cast
 
 from numpy import number
 from typing_extensions import Self
@@ -142,9 +142,7 @@ class VtkWriterBase(ABC, Writer):
     def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
         ...
 
-    def consume_timestep(
-        self, timestep: T, filename: Path, source: Source[F, T, Z], geometry: F, fields: Sequence[F]
-    ) -> None:
+    def consume_timestep(self, timestep: T, filename: Path, source: Source[F, T, Z], geometry: F) -> None:
         zone = next(source.zones())
         topology = cast(DiscreteTopology, source.topology(timestep, geometry, zone))
 
@@ -159,7 +157,9 @@ class VtkWriterBase(ABC, Writer):
         points.SetData(p.vtk())
         grid.SetPoints(points)
 
-        for field in fields:
+        for field in source.fields():
+            if field.is_geometry:
+                continue
             target = grid.GetCellData() if field.cellwise else grid.GetPointData()
             data = source.field_data(timestep, field, zone)
             if field.is_displacement:
@@ -179,10 +179,10 @@ class VtkWriterBase(ABC, Writer):
 
         logging.info(filename)
 
-    def consume(self, source: Source[F, T, Z], geometry: F, fields: Sequence[F]) -> None:
+    def consume(self, source: Source[F, T, Z], geometry: F) -> None:
         filenames = util.filename_generator(self.filename, source.properties.instantaneous)
         for timestep, filename in zip(source.steps(), filenames):
-            self.consume_timestep(timestep, filename, source, geometry, fields)
+            self.consume_timestep(timestep, filename, source, geometry)
 
 
 class VtkWriter(VtkWriterBase):
@@ -239,10 +239,8 @@ class PvdWriter(VtuWriter):
         self.pvd.__exit__(*args)
         logging.info(self.pvd_filename)
 
-    def consume_timestep(
-        self, timestep: T, filename: Path, source: Source[F, T, Z], geometry: F, fields: Sequence[F]
-    ) -> None:
-        super().consume_timestep(timestep, filename, source, geometry, fields)
+    def consume_timestep(self, timestep: T, filename: Path, source: Source[F, T, Z], geometry: F) -> None:
+        super().consume_timestep(timestep, filename, source, geometry)
         relative_filename = filename.relative_to(self.pvd_filename.parent)
         if timestep.value is not None:
             time = timestep.value

@@ -314,29 +314,25 @@ def main(
         elif only_final_timestep:
             source = filter.LastTime(source)
 
-        assert not (out_props.require_instantaneous and not source.properties.instantaneous)
-
-        geometries: List[Field] = []
-        fields: List[Field] = []
-        for field in source.fields():
-            if field.is_geometry:
-                geometries.append(field)
-            else:
-                fields.append(field)
-
         if no_fields:
-            fields = []
+            source = filter.FieldFilter(source, set())
         elif field_filter:
             allowed_fields = set(
                 chain.from_iterable(map(str.casefold, field_name.split(",")) for field_name in field_filter)
             )
-            fields = [field for field in fields if field.name.casefold() in allowed_fields]
+            source = filter.FieldFilter(source, allowed_fields)
 
-        for field in fields:
-            logging.debug(
-                f"Discovered field '{field.name}' with "
-                f"{util.pluralize(field.ncomps, 'component', 'components')}"
-            )
+        assert not (out_props.require_instantaneous and not source.properties.instantaneous)
+
+        geometries: List[Field] = []
+        for field in source.fields():
+            if field.is_geometry:
+                geometries.append(field)
+            else:
+                logging.debug(
+                    f"Discovered field '{field.name}' with "
+                    f"{util.pluralize(field.ncomps, 'component', 'components')}"
+                )
 
         for geometry in geometries:
             logging.debug(f"Discovered geometry '{geometry.name}' with coordinate system {geometry.coords}")
@@ -370,7 +366,7 @@ def main(
             instrumenter = Instrumenter(source)
 
         with sink:
-            sink.consume(source, geometry, fields)
+            sink.consume(source, geometry)
 
         if instrument:
             assert instrumenter

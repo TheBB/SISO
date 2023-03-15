@@ -3,7 +3,7 @@ name = "siso"
 version = "4.0.0"
 description = ""
 authors = ["Eivind Fonn <evfonn@gmail.com>"]
-readme = "README.md"
+readme = "README.rst"
 
 [tool.poetry.dependencies]
 python = "^3.8"
