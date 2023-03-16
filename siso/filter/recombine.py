@@ -6,7 +6,7 @@ from numpy import floating
 
 from .. import api
 from ..util import FieldData
-from .passthrough import Passthrough
+from .passthrough import Passthrough, WrappedField
 
 
 F = TypeVar("F", bound=api.Field)
@@ -15,7 +15,7 @@ S = TypeVar("S", bound=api.Step)
 
 
 @define
-class RecombinedField(api.Field, Generic[F]):
+class RecombinedField(WrappedField[F]):
     sources: List[F]
     name: str
 
@@ -25,20 +25,12 @@ class RecombinedField(api.Field, Generic[F]):
         assert all(src.basis == self.sources[0].basis for src in self.sources)
 
     @property
-    def basis(self) -> api.Basis:
-        return self.sources[0].basis
-
-    @property
-    def cellwise(self) -> bool:
-        return self.sources[0].cellwise
+    def original_field(self) -> F:
+        return self.sources[0]
 
     @property
     def type(self) -> api.FieldType:
         return reduce(lambda x, y: x.concat(y), (s.type for s in self.sources))
-
-    @property
-    def ncomps(self) -> int:
-        return sum(src.ncomps for src in self.sources)
 
     @property
     def splittable(self) -> bool:
@@ -59,7 +51,6 @@ class Recombine(Passthrough[F, S, Z, RecombinedField[F], S, Z]):
             yield RecombinedField(name=field.name, sources=[field])
 
     def fields(self, basis: api.Basis) -> Iterator[RecombinedField]:
-        # print(basis.name)
         in_fields = {field.name: field for field in self.source.fields(basis)}
 
         for field in in_fields.values():

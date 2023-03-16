@@ -5,7 +5,7 @@ from numpy import floating
 
 from .. import api
 from ..util import FieldData
-from .passthrough import Passthrough
+from .passthrough import Passthrough, WrappedField
 
 
 Z = TypeVar("Z", bound=api.Zone)
@@ -14,24 +14,8 @@ S = TypeVar("S", bound=api.Step)
 
 
 @define
-class Field(api.Field, Generic[F]):
+class Wrapped(WrappedField[F]):
     original_field: F
-
-    @property
-    def basis(self) -> api.Basis:
-        return self.original_field.basis
-
-    @property
-    def name(self) -> str:
-        return self.original_field.name
-
-    @property
-    def cellwise(self) -> bool:
-        return self.original_field.cellwise
-
-    @property
-    def splittable(self) -> bool:
-        return self.original_field.splittable
 
     @property
     def type(self) -> api.FieldType:
@@ -44,20 +28,20 @@ class Field(api.Field, Generic[F]):
         )
 
 
-class EigenDisp(Passthrough[F, S, Z, Field[F], S, Z]):
-    def use_geometry(self, geometry: Field[F]) -> None:
+class EigenDisp(Passthrough[F, S, Z, Wrapped[F], S, Z]):
+    def use_geometry(self, geometry: Wrapped[F]) -> None:
         return self.source.use_geometry(geometry.original_field)
 
-    def geometries(self, basis: api.Basis) -> Iterator[Field[F]]:
+    def geometries(self, basis: api.Basis) -> Iterator[Wrapped[F]]:
         for field in self.source.geometries(basis):
-            yield Field(field)
+            yield Wrapped(field)
 
-    def fields(self, basis: api.Basis) -> Iterator[Field[F]]:
+    def fields(self, basis: api.Basis) -> Iterator[Wrapped[F]]:
         for field in self.source.fields(basis):
-            yield Field(field)
+            yield Wrapped(field)
 
-    def field_data(self, timestep: S, field: Field[F], zone: Z) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: Wrapped[F], zone: Z) -> FieldData[floating]:
         return self.source.field_data(timestep, field.original_field, zone)
 
-    def field_updates(self, timestep: S, field: Field[F]) -> bool:
+    def field_updates(self, timestep: S, field: Wrapped[F]) -> bool:
         return self.source.field_updates(timestep, field.original_field)

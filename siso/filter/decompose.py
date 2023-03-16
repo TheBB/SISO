@@ -1,4 +1,4 @@
-from typing import Generic, Iterator, List, Optional, TypeVar
+from typing import Iterator, List, Optional, TypeVar
 
 from attrs import define
 from numpy import floating
@@ -6,7 +6,7 @@ from numpy import floating
 from .. import api
 from ..topology import Topology
 from ..util import FieldData
-from .passthrough import Passthrough
+from .passthrough import Passthrough, WrappedField
 
 
 F = TypeVar("F", bound=api.Field)
@@ -15,19 +15,11 @@ S = TypeVar("S", bound=api.Step)
 
 
 @define
-class DecomposedField(api.Field, Generic[F]):
+class DecomposedField(WrappedField[F]):
     original_field: F
     components: Optional[List[int]]
     splittable: bool
     name: str
-
-    @property
-    def basis(self) -> api.Basis:
-        return self.original_field.basis
-
-    @property
-    def cellwise(self) -> bool:
-        return self.original_field.cellwise
 
     @property
     def type(self) -> api.FieldType:
@@ -37,12 +29,6 @@ class DecomposedField(api.Field, Generic[F]):
                 return self.original_field.type.update(ncomps=len(self.components))
             return self.original_field.type.slice()
         return self.original_field.type
-
-    @property
-    def ncomps(self) -> int:
-        if self.components is not None:
-            return len(self.components)
-        return self.original_field.ncomps
 
 
 class DecomposeBase(Passthrough[F, S, Z, DecomposedField[F], S, Z]):

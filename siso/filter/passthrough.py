@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import Generic, Iterator, TypeVar, cast
 
 from numpy import floating
@@ -86,3 +87,30 @@ class Passthrough(api.Source[OutF, OutS, OutZ], Generic[InF, InS, InZ, OutF, Out
 
     def children(self) -> Iterator[api.Source]:
         yield self.source
+
+
+class WrappedField(api.Field, Generic[InF]):
+    @property
+    @abstractmethod
+    def original_field(self) -> InF:
+        ...
+
+    @property
+    def cellwise(self) -> bool:
+        return self.original_field.cellwise
+
+    @property
+    def splittable(self) -> bool:
+        return self.original_field.splittable
+
+    @property
+    def name(self) -> str:
+        return self.original_field.name
+
+    @property
+    def type(self) -> api.FieldType:
+        return self.original_field.type
+
+    @property
+    def basis(self) -> api.Basis:
+        return self.original_field.basis
