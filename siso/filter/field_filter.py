@@ -16,7 +16,7 @@ class FieldFilter(Passthrough[F, S, Z, F, S, Z]):
         super().__init__(source)
         self.filters = filters
 
-    def fields(self) -> Iterator[F]:
-        for field in self.source.fields():
+    def fields(self, basis: api.Basis) -> Iterator[F]:
+        for field in self.source.fields(basis):
             if field.name.casefold() in self.filters:
                 yield field

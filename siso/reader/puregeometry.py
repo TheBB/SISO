@@ -37,12 +37,15 @@ class PureGeometry(api.Source[Field, Step, Zone], Generic[T]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
-    def fields(self) -> Iterator[Field]:
+    def bases(self) -> Iterator[api.Basis]:
+        yield api.Basis('mesh')
+
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
         return
         yield
 
-    def geometries(self) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()))
+    def geometries(self, basis: api.Basis) -> Iterator[Field]:
+        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()), basis=basis)
 
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
@@ -57,7 +60,7 @@ class PureGeometry(api.Source[Field, Step, Zone], Generic[T]):
                 global_key=None,
             )
 
-    def topology(self, timestep: Step, field: Field, zone: Zone) -> T:
+    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> T:
         return self.topologies[int(zone.local_key)]
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:

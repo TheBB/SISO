@@ -333,15 +333,21 @@ class Ifem(api.Source[Field, Step, Zone]):
             zone, _, _ = self.geometry.patch_at(0, patch, self)
             yield zone
 
-    def geometries(self) -> Iterator[Field]:
+    def bases(self) -> Iterator[api.Basis]:
         for basis in self._bases.values():
-            yield Field(
-                name=basis.name,
-                type=api.Geometry(ncomps=basis.ncomps(self), coords=Named(basis.name))
-            )
+            yield api.Basis(basis.name)
 
-    def fields(self) -> Iterator[Field]:
+    def geometries(self, basis: api.Basis) -> Iterator[Field]:
+        yield Field(
+            name=basis.name,
+            type=api.Geometry(ncomps=self._bases[basis.name].ncomps(self), coords=Named(basis.name)),
+            basis=basis,
+        )
+
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
         for field in self._fields.values():
+            if field.basis.name != basis.name:
+                continue
             ncomps = field.ncomps(self)
             tp: api.FieldType
             if ncomps > 1:
@@ -352,15 +358,13 @@ class Ifem(api.Source[Field, Step, Zone]):
                 name=field.name,
                 type=tp,
                 cellwise=field.cellwise,
+                basis=basis,
             )
 
-    def topology(self, timestep: Step, field: Field, zone: Zone) -> api.Topology:
-        if field.is_geometry:
-            basis = self._bases[field.name]
-        else:
-            basis = self._fields[field.name].basis
+    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> api.Topology:
+        ibasis = self._bases[basis.name]
         patch = int(zone.local_key.split("/")[-1])
-        _, topology, _ = basis.patch_at(timestep.index, patch, self)
+        _, topology, _ = ibasis.patch_at(timestep.index, patch, self)
         return topology
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:

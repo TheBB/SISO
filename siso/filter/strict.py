@@ -33,8 +33,8 @@ class Strict(Passthrough[F, S, Z, F, S, Z]):
         super().use_geometry(geometry)
         self.geometry = deepcopy(geometry)
 
-    def geometries(self) -> Iterator[F]:
-        for field in self.source.geometries():
+    def geometries(self, basis: api.Basis) -> Iterator[F]:
+        for field in self.source.geometries(basis):
             assert field.is_geometry
             if field.name not in self.field_specs:
                 self.field_specs[field.name] = field
@@ -46,8 +46,8 @@ class Strict(Passthrough[F, S, Z, F, S, Z]):
                 assert spec.type == field.type
             yield field
 
-    def fields(self) -> Iterator[F]:
-        for field in self.source.fields():
+    def fields(self, basis: api.Basis) -> Iterator[F]:
+        for field in self.source.fields(basis):
             assert not field.is_geometry
             if field.name not in self.field_specs:
                 self.field_specs[field.name] = field

@@ -74,8 +74,11 @@ class GroupedStep(Generic[S]):
 
 
 class GroupedTimeSource(Passthrough[F, S, Z, F, GroupedStep[S], Z]):
-    def topology(self, step: GroupedStep[S], field: F, zone: Z) -> api.Topology:
-        return self.source.topology(step.steps[-1], field, zone)
+    def topology(self, step: GroupedStep[S], basis: api.Basis, zone: Z) -> api.Topology:
+        return self.source.topology(step.steps[-1], basis, zone)
+
+    def topology_updates(self, step: GroupedStep[S], basis: api.Basis) -> bool:
+        return any(self.source.topology_updates(s, basis) for s in step.steps)
 
     def field_data(self, step: GroupedStep[S], field: F, zone: Z) -> util.FieldData[floating]:
         return self.source.field_data(step.steps[-1], field, zone)

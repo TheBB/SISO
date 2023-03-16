@@ -85,7 +85,7 @@ class VtfWriter(Writer[F, T, Z]):
         for zone in source.zones():
             assert zone.global_key is not None
 
-            topology = source.topology(timestep, geometry, zone)
+            topology = source.topology(timestep, geometry.basis, zone)
             nodes = source.field_data(timestep, geometry, zone).ensure_ncomps(3)
             assert isinstance(topology, DiscreteTopology)
 
@@ -131,11 +131,10 @@ class VtfWriter(Writer[F, T, Z]):
     def consume_timestep(self, timestep: T, source: Source[F, T, Z], geometry: F) -> None:
         if source.field_updates(timestep, geometry):
             self.update_geometry(timestep, source, geometry)
-        for field in source.fields():
-            if field.is_geometry:
-                continue
-            if source.field_updates(timestep, field):
-                self.update_field(timestep, source, field)
+        for basis in source.bases():
+            for field in source.fields(basis):
+                if source.field_updates(timestep, field):
+                    self.update_field(timestep, source, field)
 
     def consume(self, source: Source[F, T, Z], geometry: F):
         self.step_interpretation = source.properties.step_interpretation

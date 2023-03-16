@@ -144,7 +144,7 @@ class VtkWriterBase(ABC, Writer):
 
     def consume_timestep(self, timestep: T, filename: Path, source: Source[F, T, Z], geometry: F) -> None:
         zone = next(source.zones())
-        topology = cast(DiscreteTopology, source.topology(timestep, geometry, zone))
+        topology = cast(DiscreteTopology, source.topology(timestep, geometry.basis, zone))
 
         grid, writer = self.grid_and_writer(topology)
         apply_output_mode(writer, self.output_mode)
@@ -157,21 +157,22 @@ class VtkWriterBase(ABC, Writer):
         points.SetData(p.vtk())
         grid.SetPoints(points)
 
-        for field in source.fields():
-            if field.is_geometry:
-                continue
-            target = grid.GetCellData() if field.cellwise else grid.GetPointData()
-            data = source.field_data(timestep, field, zone)
-            if field.is_displacement:
-                data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
-            else:
-                data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
-            data = transpose(data, grid, field.cellwise)
-            if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
-                data = data.nan_filter()
-            array = data.vtk()
-            array.SetName(field.name)
-            target.AddArray(array)
+        for basis in source.bases():
+            for field in source.fields(basis):
+                if field.is_geometry:
+                    continue
+                target = grid.GetCellData() if field.cellwise else grid.GetPointData()
+                data = source.field_data(timestep, field, zone)
+                if field.is_displacement:
+                    data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
+                else:
+                    data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
+                data = transpose(data, grid, field.cellwise)
+                if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
+                    data = data.nan_filter()
+                array = data.vtk()
+                array.SetName(field.name)
+                target.AddArray(array)
 
         writer.SetFileName(str(filename))
         writer.SetInputData(grid)

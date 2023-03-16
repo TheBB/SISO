@@ -22,6 +22,10 @@ class DecomposedField(api.Field, Generic[F]):
     name: str
 
     @property
+    def basis(self) -> api.Basis:
+        return self.original_field.basis
+
+    @property
     def cellwise(self) -> bool:
         return self.original_field.cellwise
 
@@ -42,12 +46,12 @@ class DecomposedField(api.Field, Generic[F]):
 
 
 class DecomposeBase(Passthrough[F, S, Z, DecomposedField[F], S, Z]):
-    def geometries(self) -> Iterator[DecomposedField[F]]:
-        for field in self.source.geometries():
+    def geometries(self, basis: api.Basis) -> Iterator[DecomposedField[F]]:
+        for field in self.source.geometries(basis):
             yield DecomposedField(name=field.name, original_field=field, components=None, splittable=False)
 
-    def topology(self, timestep: S, field: DecomposedField, zone: Z) -> Topology:
-        return self.source.topology(timestep, field.original_field, zone)
+    def topology(self, timestep: S, basis: api.Basis, zone: Z) -> Topology:
+        return self.source.topology(timestep, basis, zone)
 
     def field_data(self, timestep: S, field: DecomposedField, zone: Z) -> FieldData[floating]:
         data = self.source.field_data(timestep, field.original_field, zone)
@@ -60,8 +64,8 @@ class DecomposeBase(Passthrough[F, S, Z, DecomposedField[F], S, Z]):
 
 
 class Decompose(DecomposeBase[F, S, Z]):
-    def fields(self) -> Iterator[DecomposedField[F]]:
-        for field in self.source.fields():
+    def fields(self, basis: api.Basis) -> Iterator[DecomposedField[F]]:
+        for field in self.source.fields(basis):
             yield DecomposedField(name=field.name, original_field=field, components=None, splittable=False)
             if field.is_scalar or not field.splittable:
                 continue
@@ -77,9 +81,9 @@ class Split(DecomposeBase[F, S, Z]):
         super().__init__(source)
         self.splits = splits
 
-    def fields(self) -> Iterator[DecomposedField[F]]:
+    def fields(self, basis: api.Basis) -> Iterator[DecomposedField[F]]:
         to_destroy = {split.source_name for split in self.splits if split.destroy}
-        fields = {field.name: field for field in self.source.fields()}
+        fields = {field.name: field for field in self.source.fields(basis)}
         for field in fields.values():
             if field.name not in to_destroy:
                 yield DecomposedField(

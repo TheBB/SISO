@@ -9,5 +9,6 @@ from . import api
 class Field(api.Field):
     name: str
     type: api.FieldType
+    basis: api.Basis
     cellwise: bool = False
     splittable: bool = True

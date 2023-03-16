@@ -7,7 +7,7 @@ from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, T
 
 from numpy import floating
 
-from ..api import Field, Source, SourceProperties, Step
+from ..api import Field, Source, SourceProperties, Step, Basis
 from ..topology import Topology
 from ..util import FieldData, bisect
 from ..zone import Point, Shape, Zone
@@ -39,8 +39,8 @@ class KeyZones(Passthrough[F, S, Z, F, S, Zone]):
         for zone in self.source.zones():
             yield self.manager.lookup(zone)
 
-    def topology(self, timestep: S, field: F, zone: Zone) -> Topology:
-        return self.source.topology(timestep, field, cast(Z, zone))
+    def topology(self, timestep: S, basis: Basis, zone: Zone) -> Topology:
+        return self.source.topology(timestep, basis, cast(Z, zone))
 
     def field_data(self, timestep: S, field: F, zone: Zone) -> FieldData[floating]:
         return self.source.field_data(timestep, field, cast(Z, zone))

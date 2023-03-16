@@ -6,7 +6,7 @@ from typing import Iterator, TypeVar, cast
 from numpy import floating
 
 from .. import util
-from ..api import Field, SourceProperties, Step
+from ..api import Field, SourceProperties, Step, Basis
 from ..topology import DiscreteTopology, UnstructuredTopology
 from ..util import FieldData
 from ..zone import Shape, Zone
@@ -46,10 +46,10 @@ class ZoneMerge(Passthrough[F, S, Z, F, S, Zone]):
                 global_key=0,
             )
 
-    def topology(self, timestep: S, field: F, zone: Zone) -> DiscreteTopology:
+    def topology(self, step: S, basis: Basis, zone: Zone) -> DiscreteTopology:
         return reduce(
             UnstructuredTopology.join,
-            (cast(DiscreteTopology, self.source.topology(timestep, field, z)) for z in self.source.zones()),
+            (cast(DiscreteTopology, self.source.topology(step, basis, z)) for z in self.source.zones()),
         )
 
     def field_data(self, timestep: S, field: F, zone: Zone) -> FieldData[floating]:

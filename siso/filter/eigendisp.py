@@ -18,6 +18,10 @@ class Field(api.Field, Generic[F]):
     original_field: F
 
     @property
+    def basis(self) -> api.Basis:
+        return self.original_field.basis
+
+    @property
     def name(self) -> str:
         return self.original_field.name
 
@@ -44,12 +48,12 @@ class EigenDisp(Passthrough[F, S, Z, Field[F], S, Z]):
     def use_geometry(self, geometry: Field[F]) -> None:
         return self.source.use_geometry(geometry.original_field)
 
-    def geometries(self) -> Iterator[Field[F]]:
-        for field in self.source.geometries():
+    def geometries(self, basis: api.Basis) -> Iterator[Field[F]]:
+        for field in self.source.geometries(basis):
             yield Field(field)
 
-    def fields(self) -> Iterator[Field[F]]:
-        for field in self.source.fields():
+    def fields(self, basis: api.Basis) -> Iterator[Field[F]]:
+        for field in self.source.fields(basis):
             yield Field(field)
 
     def field_data(self, timestep: S, field: Field[F], zone: Z) -> FieldData[floating]:

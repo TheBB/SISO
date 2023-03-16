@@ -266,19 +266,23 @@ class NetCdf(api.Source[Field, Step, Zone]):
             local_key="0",
         )
 
-    def geometries(self) -> Iterator[Field]:
-        yield Field("Generic", type=api.Geometry(ncomps=3, coords=Generic()))
+    def bases(self) -> Iterator[api.Basis]:
+        yield api.Basis('mesh')
+
+    def geometries(self, basis: api.Basis) -> Iterator[Field]:
+        yield Field("Generic", type=api.Geometry(ncomps=3, coords=Generic()), basis=basis)
         yield Field(
             "Geodetic",
             type=api.Geometry(ncomps=3, coords=Geodetic(SphericalEarth(semi_major_axis=6370000.0))),
+            basis=basis,
         )
 
-    def fields(self) -> Iterator[Field]:
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
         for variable in self.dataset.variables:
             if self.field_domain(variable) in self.valid_domains:
-                yield Field(variable, type=api.Scalar())
+                yield Field(variable, type=api.Scalar(), basis=basis)
 
-    def topology(self, timestep: Step, field: Field, zone: Zone) -> DiscreteTopology:
+    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> DiscreteTopology:
         if self.periodic:
             num_nodes = self.num_planar + 2
             if self.volumetric:
@@ -361,9 +365,9 @@ class Wrf(NetCdf):
             time = self.dataset["XTIME"][index] * 60
             yield Step(index=index, value=time)
 
-    def fields(self) -> Iterator[Field]:
-        yield from super().fields()
-        yield Field("WIND", type=api.Vector(3, api.VectorInterpretation.Flow), splittable=False)
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
+        yield from super().fields(basis)
+        yield Field("WIND", type=api.Vector(3, api.VectorInterpretation.Flow), splittable=False, basis=basis)
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if field.name == "WIND":

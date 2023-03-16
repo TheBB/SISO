@@ -51,7 +51,7 @@ class SimraWriter(Writer):
         timestep = next(source.steps())
         zone = next(source.zones())
 
-        topology = source.topology(timestep, geometry, zone)
+        topology = source.topology(timestep, geometry.basis, zone)
         assert isinstance(topology, StructuredTopology)
         data = source.field_data(timestep, geometry, zone)
 

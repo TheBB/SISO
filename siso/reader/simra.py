@@ -200,12 +200,15 @@ class SimraMeshBase(api.Source[Field, Step, Zone]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
-    def fields(self) -> Iterator[Field]:
+    def bases(self) -> Iterator[api.Basis]:
+        yield api.Basis('mesh')
+
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
         return
         yield
 
-    def geometries(self) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()))
+    def geometries(self, basis: api.Basis) -> Iterator[Field]:
+        yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()), basis=basis)
 
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
@@ -218,7 +221,7 @@ class SimraMeshBase(api.Source[Field, Step, Zone]):
             local_key="0",
         )
 
-    def topology(self, timestep: Step, field: Field, zone: Zone) -> StructuredTopology:
+    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
         return StructuredTopology(self.out_cellshape, celltype)
 
@@ -362,7 +365,44 @@ class Simra3dMesh(SimraMeshBase):
         return data + mesh_offset(self.filename, dim=3)
 
 
-class SimraBoundary(api.Source[Field, Step, Zone]):
+class SimraHasMesh(api.Source[Field, Step, Zone]):
+    mesh: Simra3dMesh
+
+
+    @staticmethod
+    def applicable(path: Path, settings: FindReaderSettings) -> bool:
+        return Simra3dMesh.applicable(settings.mesh_filename or path.with_name("mesh.dat"), settings)
+
+    def __init__(self, path: Path, settings: FindReaderSettings):
+        self.mesh = Simra3dMesh(settings.mesh_filename or path.with_name("mesh.dat"))
+
+    def __enter__(self) -> Self:
+        self.mesh.__enter__()
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.mesh.__exit__(*args)
+
+    def configure(self, settings: api.ReaderSettings) -> None:
+        self.mesh.configure(settings)
+
+    def use_geometry(self, geometry: Field) -> None:
+        return
+
+    def zones(self) -> Iterator[Zone]:
+        return self.mesh.zones()
+
+    def bases(self) -> Iterator[api.Basis]:
+        return self.mesh.bases()
+
+    def geometries(self, basis: api.Basis) -> Iterator[Field]:
+        return self.mesh.geometries(basis)
+
+    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> Topology:
+        return self.mesh.topology(timestep, basis, zone)
+
+
+class SimraBoundary(SimraHasMesh):
     filename: Path
     boundary: TextIO
 
@@ -371,31 +411,28 @@ class SimraBoundary(api.Source[Field, Step, Zone]):
         try:
             with open(path, "r") as f:
                 assert next(f).startswith("Boundary conditions")
-            assert Simra3dMesh.applicable(settings.mesh_filename or path.with_name("mesh.dat"), settings)
+            assert SimraHasMesh.applicable(path, settings)
             return True
         except (AssertionError, UnicodeDecodeError):
             return False
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, settings: FindReaderSettings):
+        super().__init__(path, settings)
         self.filename = path
-        self.mesh = Simra3dMesh(path.with_name("mesh.dat"))
 
     def __enter__(self) -> Self:
+        super().__enter__()
         self.boundary = open(self.filename, "r").__enter__()
-        self.mesh.__enter__()
         return self
 
     def __exit__(self, *args) -> None:
+        super().__exit__(*args)
         self.boundary.__exit__(*args)
-        self.mesh.__exit__(*args)
 
     @contextmanager
     def save_excursion(self):
         with util.save_excursion(self.boundary):
             yield
-
-    def configure(self, settings: api.ReaderSettings) -> None:
-        self.mesh.configure(settings)
 
     @property
     def properties(self) -> api.SourceProperties:
@@ -428,23 +465,11 @@ class SimraBoundary(api.Source[Field, Step, Zone]):
             split_fields=splits,
         )
 
-    def use_geometry(self, geometry: Field) -> None:
-        return
-
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
 
-    def zones(self) -> Iterator[Zone]:
-        yield from self.mesh.zones()
-
-    def geometries(self) -> Iterator[Field]:
-        yield from self.mesh.geometries()
-
-    def fields(self) -> Iterator[Field]:
-        yield Field("nodal", type=api.Vector(16), splittable=False)
-
-    def topology(self, timestep: Step, field: Field, zone: Zone) -> Topology:
-        return self.mesh.topology(timestep, field, zone)
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
+        yield Field("nodal", type=api.Vector(16), splittable=False, basis=basis)
 
     @lru_cache(maxsize=1)
     def data(self) -> FieldData[floating]:
@@ -522,10 +547,9 @@ class ExtraField(Enum):
     Unknown = auto()
 
 
-class SimraContinuation(api.Source[Field, Step, Zone]):
+class SimraContinuation(SimraHasMesh):
     filename: Path
     source: RandomAccessFortranFile
-    mesh: Simra3dMesh
 
     extra_field: ExtraField = ExtraField.Nothing
 
@@ -545,23 +569,23 @@ class SimraContinuation(api.Source[Field, Step, Zone]):
                     assert (size // u4_type.itemsize - 1) % 11 == 0
                 elif path.suffix.casefold() == ".dat":
                     assert (size // u4_type.itemsize) % 11 == 0
-            assert Simra3dMesh.applicable(settings.mesh_filename or path.with_name("mesh.dat"), settings)
+            assert SimraHasMesh.applicable(path, settings)
             return True
         except AssertionError:
             return False
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, settings: FindReaderSettings):
+        super().__init__(path, settings)
         self.filename = path
-        self.mesh = Simra3dMesh(path.with_name("mesh.dat"))
 
     @property
     def is_init(self) -> bool:
         return self.filename.suffix.casefold() == ".dat"
 
     def configure(self, settings: api.ReaderSettings) -> None:
+        super().configure(settings)
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
-        self.mesh.configure(settings)
 
     @property
     def properties(self) -> api.SourceProperties:
@@ -594,8 +618,8 @@ class SimraContinuation(api.Source[Field, Step, Zone]):
         )
 
     def __enter__(self) -> Self:
+        super().__enter__()
         self.source = RandomAccessFortranFile(self.filename, header_dtype=self.u4_type).__enter__()
-        self.mesh.__enter__()
 
         with self.source.leap(1) as f:
             try:
@@ -609,36 +633,24 @@ class SimraContinuation(api.Source[Field, Step, Zone]):
         return self
 
     def __exit__(self, *args) -> None:
+        super().__exit__(*args)
         self.source.__exit__(*args)
-        self.mesh.__exit__(*args)
 
-    def use_geometry(self, geometry: Field) -> None:
-        return
-
-    def geometries(self) -> Iterator[Field]:
-        yield from self.mesh.geometries()
-
-    def fields(self) -> Iterator[Field]:
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
         num_nodal = 11
         if self.extra_field == ExtraField.Stratification:
             num_nodal += 1
-        yield Field("nodal", type=api.Vector(num_nodal), splittable=False)
+        yield Field("nodal", type=api.Vector(num_nodal), splittable=False, basis=basis)
 
         if self.is_init:
-            yield Field("pressure", type=api.Scalar(), cellwise=True)
+            yield Field("pressure", type=api.Scalar(), cellwise=True, basis=basis)
         elif self.extra_field == ExtraField.Unknown:
-            yield Field("pressure?", type=api.Scalar(), cellwise=True)
+            yield Field("pressure?", type=api.Scalar(), cellwise=True, basis=basis)
 
     def steps(self) -> Iterator[Step]:
         with self.source.leap(0) as f:
             time = f.read_first(self.f4_type)
         yield Step(index=0, value=time)
-
-    def zones(self) -> Iterator[Zone]:
-        yield from self.mesh.zones()
-
-    def topology(self, timestep: Step, field: Field, zone: Zone) -> Topology:
-        return self.mesh.topology(timestep, field, zone)
 
     @lru_cache(maxsize=1)
     def data(self) -> Tuple[FieldData[floating], Optional[FieldData[floating]]]:
@@ -680,10 +692,9 @@ class SimraContinuation(api.Source[Field, Step, Zone]):
         return ndata
 
 
-class SimraHistory(api.Source[Field, Step, Zone]):
+class SimraHistory(SimraHasMesh):
     filename: Path
     source: RandomAccessFortranFile
-    mesh: Simra3dMesh
 
     f4_type: np.dtype
     u4_type: np.dtype
@@ -702,19 +713,19 @@ class SimraHistory(api.Source[Field, Step, Zone]):
                 assert size % u4_type.itemsize == 0
                 assert size > u4_type.itemsize
                 assert (size // u4_type.itemsize - 1) % 12 == 0
-            assert Simra3dMesh.applicable(settings.mesh_filename or path.with_name("mesh.dat"), settings)
+            assert SimraHasMesh.applicable(path, settings)
             return True
         except AssertionError:
             return False
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, settings: FindReaderSettings):
+        super().__init__(path, settings)
         self.filename = path
-        self.mesh = Simra3dMesh(path.with_name("mesh.dat"))
 
     def configure(self, settings: api.ReaderSettings) -> None:
+        super().configure(settings)
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
-        self.mesh.configure(settings)
 
     @property
     def properties(self) -> api.SourceProperties:
@@ -745,23 +756,17 @@ class SimraHistory(api.Source[Field, Step, Zone]):
         )
 
     def __enter__(self) -> Self:
+        super().__enter__()
         self.source = RandomAccessFortranFile(self.filename, header_dtype=self.u4_type).__enter__()
-        self.mesh.__enter__()
         return self
 
     def __exit__(self, *args) -> None:
+        super().__exit__(*args)
         self.source.__exit__(*args)
-        self.mesh.__exit__(*args)
 
-    def use_geometry(self, geometry: Field) -> None:
-        return
-
-    def geometries(self) -> Iterator[Field]:
-        yield from self.mesh.geometries()
-
-    def fields(self) -> Iterator[Field]:
-        yield Field("nodal", type=api.Vector(12), splittable=False)
-        yield Field("pressure", type=api.Scalar(), cellwise=True)
+    def fields(self, basis: api.Basis) -> Iterator[Field]:
+        yield Field("nodal", type=api.Vector(12), splittable=False, basis=basis)
+        yield Field("pressure", type=api.Scalar(), cellwise=True, basis=basis)
 
     def steps(self) -> Iterator[Step]:
         for ts_index, rec_index in enumerate(count(start=1, step=2)):
@@ -771,12 +776,6 @@ class SimraHistory(api.Source[Field, Step, Zone]):
             except util.NoSuchMarkError:
                 return
             yield Step(index=ts_index, value=time)
-
-    def zones(self) -> Iterator[Zone]:
-        yield from self.mesh.zones()
-
-    def topology(self, timestep: Step, field: Field, zone: Zone) -> Topology:
-        return self.mesh.topology(timestep, field, zone)
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if field.is_geometry:

@@ -323,13 +323,18 @@ def main(
 
         assert not (out_props.require_instantaneous and not source.properties.instantaneous)
 
-        for field in source.fields():
-            logging.debug(
-                f"Discovered field '{field.name}' with "
-                f"{util.pluralize(field.ncomps, 'component', 'components')}"
-            )
+        for basis in source.bases():
+            for field in source.fields(basis):
+                logging.debug(
+                    f"Discovered field '{field.name}' with "
+                    f"{util.pluralize(field.ncomps, 'component', 'components')}"
+                )
 
-        geometries = list(source.geometries())
+        geometries = [
+            geometry
+            for basis in source.bases()
+            for geometry in source.geometries(basis)
+        ]
 
         if in_coords:
             geometries = [geometry for geometry in geometries if geometry.fits_system_name(in_coords)]

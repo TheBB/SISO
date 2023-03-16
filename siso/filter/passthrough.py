@@ -46,11 +46,14 @@ class Passthrough(api.Source[OutF, OutS, OutZ], Generic[InF, InS, InZ, OutF, Out
     def use_geometry(self, geometry: OutF) -> None:
         self.source.use_geometry(cast(InF, geometry))
 
-    def geometries(self) -> Iterator[OutF]:
-        return cast(Iterator[OutF], self.source.geometries())
+    def bases(self) -> Iterator[api.Basis]:
+        return self.source.bases()
 
-    def fields(self) -> Iterator[OutF]:
-        return cast(Iterator[OutF], self.source.fields())
+    def geometries(self, basis: api.Basis) -> Iterator[OutF]:
+        return cast(Iterator[OutF], self.source.geometries(basis))
+
+    def fields(self, basis: api.Basis) -> Iterator[OutF]:
+        return cast(Iterator[OutF], self.source.fields(basis))
 
     def steps(self) -> Iterator[OutS]:
         return cast(Iterator[OutS], self.source.steps())
@@ -58,12 +61,15 @@ class Passthrough(api.Source[OutF, OutS, OutZ], Generic[InF, InS, InZ, OutF, Out
     def zones(self) -> Iterator[OutZ]:
         return cast(Iterator[OutZ], self.source.zones())
 
-    def topology(self, step: OutS, field: OutF, zone: OutZ) -> Topology:
+    def topology(self, step: OutS, basis: api.Basis, zone: OutZ) -> Topology:
         return self.source.topology(
             cast(InS, step),
-            cast(InF, field),
+            basis,
             cast(InZ, zone),
         )
+
+    def topology_updates(self, step: OutS, basis: api.Basis) -> bool:
+        return self.source.topology_updates(cast(InS, step), basis)
 
     def field_data(self, step: OutS, field: OutF, zone: OutZ) -> FieldData[floating]:
         return self.source.field_data(

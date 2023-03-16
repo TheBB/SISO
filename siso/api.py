@@ -231,6 +231,11 @@ class CoordinateSystem(ABC):
 FieldType = Union[Scalar, Vector, Geometry]
 
 
+@define
+class Basis:
+    name: str
+
+
 class Field(ABC):
     @property
     @abstractmethod
@@ -250,6 +255,11 @@ class Field(ABC):
     @property
     @abstractmethod
     def type(self) -> FieldType:
+        ...
+
+    @property
+    @abstractmethod
+    def basis(self) -> Basis:
         ...
 
     @property
@@ -336,11 +346,15 @@ class Source(ABC, Generic[F, S, Z]):
         return
 
     @abstractmethod
-    def fields(self) -> Iterator[F]:
+    def bases(self) -> Iterator[Basis]:
         ...
 
     @abstractmethod
-    def geometries(self) -> Iterator[F]:
+    def fields(self, basis: Basis) -> Iterator[F]:
+        ...
+
+    @abstractmethod
+    def geometries(self, basis: Basis) -> Iterator[F]:
         ...
 
     @abstractmethod
@@ -352,14 +366,17 @@ class Source(ABC, Generic[F, S, Z]):
         ...
 
     @abstractmethod
-    def topology(self, timestep: S, field: F, zone: Z) -> Topology:
+    def topology(self, step: S, basis: Basis, zone: Z) -> Topology:
         ...
+
+    def topology_updates(self, step: S, basis: Basis) -> bool:
+        return True
 
     @abstractmethod
-    def field_data(self, timestep: S, field: F, zone: Z) -> FieldData[floating]:
+    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
         ...
 
-    def field_updates(self, timestep: S, field: F) -> bool:
+    def field_updates(self, step: S, field: F) -> bool:
         return True
 
     def children(self) -> Iterator[Source]:

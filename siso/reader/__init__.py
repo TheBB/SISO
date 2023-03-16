@@ -93,7 +93,7 @@ def simra_boundary(path: Path, settings: FindReaderSettings) -> Optional[Source]
     from .simra import SimraBoundary
 
     if SimraBoundary.applicable(path, settings):
-        return SimraBoundary(path)
+        return SimraBoundary(path, settings)
     return None
 
 
@@ -102,7 +102,7 @@ def simra_cont(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import SimraContinuation
 
     if SimraContinuation.applicable(path, settings):
-        return SimraContinuation(path)
+        return SimraContinuation(path, settings)
     return None
 
 
@@ -111,7 +111,7 @@ def simra_hist(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import SimraHistory
 
     if SimraHistory.applicable(path, settings):
-        return SimraHistory(path)
+        return SimraHistory(path, settings)
     return None
 
 
