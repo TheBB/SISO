@@ -12,6 +12,7 @@ from ..topology import StructuredTopology
 from .api import Writer, WriterProperties, WriterSettings
 
 
+B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 T = TypeVar("T", bound=api.Step)
 Z = TypeVar("Z", bound=api.Zone)
@@ -47,11 +48,11 @@ class SimraWriter(Writer):
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
-    def consume(self, source: api.Source[F, T, Z], geometry: F):
+    def consume(self, source: api.Source[B, F, T, Z], geometry: F):
         timestep = next(source.steps())
         zone = next(source.zones())
 
-        topology = source.topology(timestep, geometry.basis, zone)
+        topology = source.topology(timestep, source.basis_of(geometry), zone)
         assert isinstance(topology, StructuredTopology)
         data = source.field_data(timestep, geometry, zone)
 

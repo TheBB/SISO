@@ -4,10 +4,9 @@ from attrs import define
 from numpy import floating
 from typing_extensions import Self
 
-from .api import Field, ReaderSettings, Source, SourceProperties, Step, Basis
+from .api import Basis, Field, ReaderSettings, Source, SourceProperties, Step, Zone
 from .topology import Topology
 from .util import FieldData, bisect
-from .zone import Zone
 
 
 @define
@@ -58,6 +57,9 @@ class MultiSource(Source):
 
     def bases(self) -> Iterator[Basis]:
         return self.sources[0].bases()
+
+    def basis_of(self, field: Field):
+        return self.sources[0].basis_of(field)
 
     def geometries(self, basis: Basis) -> Iterator[Field]:
         return self.sources[0].geometries(basis)

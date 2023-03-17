@@ -14,9 +14,8 @@ from splipy.io import G2
 from typing_extensions import Self
 
 from . import util
-from .api import CellType, DiscreteTopology, Field, Rationality, Tesselator, Topology
+from .api import CellType, Coords, DiscreteTopology, Field, Rationality, Tesselator, Topology
 from .util import FieldData
-from .zone import Coords
 
 
 class UnstructuredTopology:

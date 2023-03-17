@@ -8,16 +8,17 @@ from ..util import FieldData
 from .passthrough import Passthrough
 
 
+B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
-Z = TypeVar("Z", bound=api.Zone)
 S = TypeVar("S", bound=api.Step)
+Z = TypeVar("Z", bound=api.Zone)
 
 
-class CoordTransform(Passthrough[F, S, Z, F, S, Z]):
+class CoordTransform(Passthrough[B, F, S, Z, B, F, S, Z]):
     path: ConversionPath
     cache: Dict[str, FieldData[floating]]
 
-    def __init__(self, source: api.Source[F, S, Z], path: ConversionPath):
+    def __init__(self, source: api.Source[B, F, S, Z], path: ConversionPath):
         super().__init__(source)
         self.path = path
         self.cache = {}

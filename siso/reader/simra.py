@@ -31,12 +31,11 @@ from numpy import floating
 from typing_extensions import Self
 
 from .. import api, util
+from ..api import Coords, Shape, Zone
 from ..coord import Generic
-from ..field import Field
-from ..timestep import Step
+from ..impl import Basis, Field, Step
 from ..topology import CellType, StructuredTopology, Topology
 from ..util import FieldData
-from ..zone import Coords, Shape, Zone
 from . import FindReaderSettings
 
 
@@ -154,7 +153,7 @@ class SimraScales:
         )
 
 
-class SimraMeshBase(api.Source[Field, Step, Zone]):
+class SimraMeshBase(api.Source[Basis, Field, Step, Zone]):
     filename: Path
     simra_nodeshape: Tuple[int, ...]
 
@@ -200,15 +199,18 @@ class SimraMeshBase(api.Source[Field, Step, Zone]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
-    def bases(self) -> Iterator[api.Basis]:
-        yield api.Basis('mesh')
+    def bases(self) -> Iterator[Basis]:
+        yield Basis("mesh")
 
-    def fields(self, basis: api.Basis) -> Iterator[Field]:
+    def basis_of(self, field: Field) -> Basis:
+        return Basis("mesh")
+
+    def fields(self, basis: Basis) -> Iterator[Field]:
         return
         yield
 
-    def geometries(self, basis: api.Basis) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()), basis=basis)
+    def geometries(self, basis: Basis) -> Iterator[Field]:
+        yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()))
 
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
@@ -221,7 +223,7 @@ class SimraMeshBase(api.Source[Field, Step, Zone]):
             local_key="0",
         )
 
-    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> StructuredTopology:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
         return StructuredTopology(self.out_cellshape, celltype)
 
@@ -365,9 +367,8 @@ class Simra3dMesh(SimraMeshBase):
         return data + mesh_offset(self.filename, dim=3)
 
 
-class SimraHasMesh(api.Source[Field, Step, Zone]):
+class SimraHasMesh(api.Source[Basis, Field, Step, Zone]):
     mesh: Simra3dMesh
-
 
     @staticmethod
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
@@ -392,13 +393,16 @@ class SimraHasMesh(api.Source[Field, Step, Zone]):
     def zones(self) -> Iterator[Zone]:
         return self.mesh.zones()
 
-    def bases(self) -> Iterator[api.Basis]:
+    def bases(self) -> Iterator[Basis]:
         return self.mesh.bases()
 
-    def geometries(self, basis: api.Basis) -> Iterator[Field]:
+    def basis_of(self, field: Field) -> Basis:
+        return next(self.mesh.bases())
+
+    def geometries(self, basis: Basis) -> Iterator[Field]:
         return self.mesh.geometries(basis)
 
-    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> Topology:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> Topology:
         return self.mesh.topology(timestep, basis, zone)
 
 
@@ -468,8 +472,8 @@ class SimraBoundary(SimraHasMesh):
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
 
-    def fields(self, basis: api.Basis) -> Iterator[Field]:
-        yield Field("nodal", type=api.Vector(16), splittable=False, basis=basis)
+    def fields(self, basis: Basis) -> Iterator[Field]:
+        yield Field("nodal", type=api.Vector(16), splittable=False)
 
     @lru_cache(maxsize=1)
     def data(self) -> FieldData[floating]:
@@ -636,16 +640,16 @@ class SimraContinuation(SimraHasMesh):
         super().__exit__(*args)
         self.source.__exit__(*args)
 
-    def fields(self, basis: api.Basis) -> Iterator[Field]:
+    def fields(self, basis: Basis) -> Iterator[Field]:
         num_nodal = 11
         if self.extra_field == ExtraField.Stratification:
             num_nodal += 1
-        yield Field("nodal", type=api.Vector(num_nodal), splittable=False, basis=basis)
+        yield Field("nodal", type=api.Vector(num_nodal), splittable=False)
 
         if self.is_init:
-            yield Field("pressure", type=api.Scalar(), cellwise=True, basis=basis)
+            yield Field("pressure", type=api.Scalar(), cellwise=True)
         elif self.extra_field == ExtraField.Unknown:
-            yield Field("pressure?", type=api.Scalar(), cellwise=True, basis=basis)
+            yield Field("pressure?", type=api.Scalar(), cellwise=True)
 
     def steps(self) -> Iterator[Step]:
         with self.source.leap(0) as f:
@@ -764,9 +768,9 @@ class SimraHistory(SimraHasMesh):
         super().__exit__(*args)
         self.source.__exit__(*args)
 
-    def fields(self, basis: api.Basis) -> Iterator[Field]:
-        yield Field("nodal", type=api.Vector(12), splittable=False, basis=basis)
-        yield Field("pressure", type=api.Scalar(), cellwise=True, basis=basis)
+    def fields(self, basis: Basis) -> Iterator[Field]:
+        yield Field("nodal", type=api.Vector(12), splittable=False)
+        yield Field("pressure", type=api.Scalar(), cellwise=True)
 
     def steps(self) -> Iterator[Step]:
         for ts_index, rec_index in enumerate(count(start=1, step=2)):

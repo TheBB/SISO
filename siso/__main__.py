@@ -12,15 +12,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from . import coord, filter, util
-from .api import (
-    CoordinateSystem,
-    Dimensionality,
-    Endianness,
-    Rationality,
-    ReaderSettings,
-    Source,
-    Staggering,
-)
+from .api import CoordinateSystem, Dimensionality, Endianness, Rationality, ReaderSettings, Source, Staggering
 from .instrument import Instrumenter
 from .multisource import MultiSource
 from .reader import FindReaderSettings, find_reader
@@ -143,7 +135,9 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--decompose/--no-decompose", default=True)
 @optgroup.option("--eigenmodes-are-displacement", "--ead", "eigenmodes_are_displacement", is_flag=True)
 @optgroup.option(
-    "--mesh", "mesh_filename", type=click.Path(exists=True, file_okay=True, readable=True, path_type=Path),
+    "--mesh",
+    "mesh_filename",
+    type=click.Path(exists=True, file_okay=True, readable=True, path_type=Path),
 )
 @optgroup.option("--basis", "basis_name")
 
@@ -330,11 +324,7 @@ def main(
                     f"{util.pluralize(field.ncomps, 'component', 'components')}"
                 )
 
-        geometries = [
-            geometry
-            for basis in source.bases()
-            for geometry in source.geometries(basis)
-        ]
+        geometries = [geometry for basis in source.bases() for geometry in source.geometries(basis)]
 
         if in_coords:
             geometries = [geometry for geometry in geometries if geometry.fits_system_name(in_coords)]

@@ -23,8 +23,31 @@ from attrs import Factory, asdict, define
 from numpy import floating, integer
 from typing_extensions import Self
 
+from .typing import Coords, Key
 from .util import FieldData
-from .zone import Zone
+
+
+class Shape(Enum):
+    # 1D
+    Line = auto()
+
+    # 2D
+    Triangle = auto()
+    Quatrilateral = auto()
+
+    # 3D
+    Hexahedron = auto()
+
+    # Misc
+    Shapeless = auto()
+
+
+@define(eq=False)
+class Zone:
+    shape: Shape
+    coords: Coords
+    local_key: Key
+    global_key: Optional[int] = None
 
 
 class Endianness(Enum):
@@ -231,9 +254,11 @@ class CoordinateSystem(ABC):
 FieldType = Union[Scalar, Vector, Geometry]
 
 
-@define
-class Basis:
-    name: str
+class Basis(ABC):
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        ...
 
 
 class Field(ABC):
@@ -255,11 +280,6 @@ class Field(ABC):
     @property
     @abstractmethod
     def type(self) -> FieldType:
-        ...
-
-    @property
-    @abstractmethod
-    def basis(self) -> Basis:
         ...
 
     @property
@@ -322,12 +342,13 @@ class ReaderSettings:
     basis_name: Optional[str]
 
 
-Z = TypeVar("Z", bound=Zone)
+B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
 S = TypeVar("S", bound=Step)
+Z = TypeVar("Z", bound=Zone)
 
 
-class Source(ABC, Generic[F, S, Z]):
+class Source(ABC, Generic[B, F, S, Z]):
     def __enter__(self) -> Self:
         return self
 
@@ -346,15 +367,19 @@ class Source(ABC, Generic[F, S, Z]):
         return
 
     @abstractmethod
-    def bases(self) -> Iterator[Basis]:
+    def bases(self) -> Iterator[B]:
         ...
 
     @abstractmethod
-    def fields(self, basis: Basis) -> Iterator[F]:
+    def basis_of(self, field: F) -> B:
         ...
 
     @abstractmethod
-    def geometries(self, basis: Basis) -> Iterator[F]:
+    def fields(self, basis: B) -> Iterator[F]:
+        ...
+
+    @abstractmethod
+    def geometries(self, basis: B) -> Iterator[F]:
         ...
 
     @abstractmethod
@@ -366,10 +391,10 @@ class Source(ABC, Generic[F, S, Z]):
         ...
 
     @abstractmethod
-    def topology(self, step: S, basis: Basis, zone: Z) -> Topology:
+    def topology(self, step: S, basis: B, zone: Z) -> Topology:
         ...
 
-    def topology_updates(self, step: S, basis: Basis) -> bool:
+    def topology_updates(self, step: S, basis: B) -> bool:
         return True
 
     @abstractmethod

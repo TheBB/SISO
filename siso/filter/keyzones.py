@@ -7,19 +7,20 @@ from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, T
 
 from numpy import floating
 
-from ..api import Field, Source, SourceProperties, Step, Basis
+from ..api import Basis, Field, Shape, Source, SourceProperties, Step, Zone
 from ..topology import Topology
+from ..typing import Point
 from ..util import FieldData, bisect
-from ..zone import Point, Shape, Zone
 from .passthrough import Passthrough
 
 
+B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
 S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class KeyZones(Passthrough[F, S, Z, F, S, Zone]):
+class KeyZones(Passthrough[B, F, S, Z, B, F, S, Zone]):
     manager: ZoneManager
 
     def __init__(self, source: Source):
@@ -39,7 +40,7 @@ class KeyZones(Passthrough[F, S, Z, F, S, Zone]):
         for zone in self.source.zones():
             yield self.manager.lookup(zone)
 
-    def topology(self, timestep: S, basis: Basis, zone: Zone) -> Topology:
+    def topology(self, timestep: S, basis: B, zone: Zone) -> Topology:
         return self.source.topology(timestep, basis, cast(Z, zone))
 
     def field_data(self, timestep: S, field: F, zone: Zone) -> FieldData[floating]:

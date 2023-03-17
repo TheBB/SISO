@@ -4,16 +4,15 @@ from typing import Generic, Iterator, List, TypeVar
 from numpy import floating
 
 from .. import api, coord
-from ..field import Field
-from ..timestep import Step
+from ..api import Coords, Shape, Zone
+from ..impl import Basis, Field, Step
 from ..util import FieldData
-from ..zone import Coords, Shape, Zone
 
 
 T = TypeVar("T", bound=api.Topology)
 
 
-class PureGeometry(api.Source[Field, Step, Zone], Generic[T]):
+class PureGeometry(api.Source[Basis, Field, Step, Zone], Generic[T]):
     filename: Path
     corners: List[Coords]
     controlpoints: List[FieldData[floating]]
@@ -37,15 +36,18 @@ class PureGeometry(api.Source[Field, Step, Zone], Generic[T]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
-    def bases(self) -> Iterator[api.Basis]:
-        yield api.Basis('mesh')
+    def bases(self) -> Iterator[Basis]:
+        yield Basis("mesh")
 
-    def fields(self, basis: api.Basis) -> Iterator[Field]:
+    def basis_of(self, field: Field) -> Basis:
+        return Basis("mesh")
+
+    def fields(self, basis: Basis) -> Iterator[Field]:
         return
         yield
 
-    def geometries(self, basis: api.Basis) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()), basis=basis)
+    def geometries(self, basis: Basis) -> Iterator[Field]:
+        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()))
 
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
@@ -60,7 +62,7 @@ class PureGeometry(api.Source[Field, Step, Zone], Generic[T]):
                 global_key=None,
             )
 
-    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> T:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> T:
         return self.topologies[int(zone.local_key)]
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:

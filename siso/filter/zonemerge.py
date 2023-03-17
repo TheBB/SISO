@@ -6,19 +6,19 @@ from typing import Iterator, TypeVar, cast
 from numpy import floating
 
 from .. import util
-from ..api import Field, SourceProperties, Step, Basis
+from ..api import Basis, Field, Shape, SourceProperties, Step, Zone
 from ..topology import DiscreteTopology, UnstructuredTopology
 from ..util import FieldData
-from ..zone import Shape, Zone
 from .passthrough import Passthrough
 
 
-Z = TypeVar("Z", bound=Zone)
+B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
 S = TypeVar("S", bound=Step)
+Z = TypeVar("Z", bound=Zone)
 
 
-class ZoneMerge(Passthrough[F, S, Z, F, S, Zone]):
+class ZoneMerge(Passthrough[B, F, S, Z, B, F, S, Zone]):
     def validate_source(self) -> None:
         assert not self.source.properties.single_zoned
         assert self.source.properties.tesselated
@@ -46,7 +46,7 @@ class ZoneMerge(Passthrough[F, S, Z, F, S, Zone]):
                 global_key=0,
             )
 
-    def topology(self, step: S, basis: Basis, zone: Zone) -> DiscreteTopology:
+    def topology(self, step: S, basis: B, zone: Zone) -> DiscreteTopology:
         return reduce(
             UnstructuredTopology.join,
             (cast(DiscreteTopology, self.source.topology(step, basis, z)) for z in self.source.zones()),

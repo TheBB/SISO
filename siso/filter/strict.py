@@ -8,17 +8,18 @@ from ..util import FieldData
 from .passthrough import Passthrough
 
 
+B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
-Z = TypeVar("Z", bound=api.Zone)
 S = TypeVar("S", bound=api.Step)
+Z = TypeVar("Z", bound=api.Zone)
 
 
-class Strict(Passthrough[F, S, Z, F, S, Z]):
+class Strict(Passthrough[B, F, S, Z, B, F, S, Z]):
     field_specs: Dict[str, F]
     original_properties: api.SourceProperties
     geometry: F
 
-    def __init__(self, source: api.Source[F, S, Z]):
+    def __init__(self, source: api.Source[B, F, S, Z]):
         super().__init__(source)
         self.field_specs = {}
         self.original_properties = deepcopy(source.properties)
@@ -33,7 +34,7 @@ class Strict(Passthrough[F, S, Z, F, S, Z]):
         super().use_geometry(geometry)
         self.geometry = deepcopy(geometry)
 
-    def geometries(self, basis: api.Basis) -> Iterator[F]:
+    def geometries(self, basis: B) -> Iterator[F]:
         for field in self.source.geometries(basis):
             assert field.is_geometry
             if field.name not in self.field_specs:
@@ -46,7 +47,7 @@ class Strict(Passthrough[F, S, Z, F, S, Z]):
                 assert spec.type == field.type
             yield field
 
-    def fields(self, basis: api.Basis) -> Iterator[F]:
+    def fields(self, basis: B) -> Iterator[F]:
         for field in self.source.fields(basis):
             assert not field.is_geometry
             if field.name not in self.field_specs:

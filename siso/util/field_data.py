@@ -10,7 +10,7 @@ from numpy import floating, integer, number
 from numpy.typing import DTypeLike, NDArray
 from scipy.spatial.transform import Rotation
 
-from ..zone import Coords
+from ..typing import Coords
 
 
 try:

@@ -10,12 +10,11 @@ from scipy.spatial.transform import Rotation
 from typing_extensions import Self
 
 from .. import api, util
+from ..api import Shape, Zone
 from ..coord import Generic, Geodetic, SphericalEarth
-from ..field import Field
-from ..timestep import Step
+from ..impl import Basis, Field, Step
 from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
 from ..util import FieldData
-from ..zone import Shape, Zone
 
 
 class FieldDimensionality(Enum):
@@ -24,15 +23,15 @@ class FieldDimensionality(Enum):
     Unknown = auto()
 
 
-class NetCdf(api.Source[Field, Step, Zone]):
+class NetCdf(api.Source[Basis, Field, Step, Zone]):
     filename: Path
     dataset: Dataset
 
     volumetric: bool
     valid_domains: Tuple[FieldDimensionality, ...]
-    staggering: api.Staggering
     periodic: bool
     geodetic: bool
+    staggering: api.Staggering
 
     longitude_name: ClassVar[str]
     latitude_name: ClassVar[str]
@@ -266,23 +265,25 @@ class NetCdf(api.Source[Field, Step, Zone]):
             local_key="0",
         )
 
-    def bases(self) -> Iterator[api.Basis]:
-        yield api.Basis('mesh')
+    def bases(self) -> Iterator[Basis]:
+        yield Basis("mesh")
 
-    def geometries(self, basis: api.Basis) -> Iterator[Field]:
-        yield Field("Generic", type=api.Geometry(ncomps=3, coords=Generic()), basis=basis)
+    def basis_of(self, field: Field) -> Basis:
+        return Basis("mesh")
+
+    def geometries(self, basis: Basis) -> Iterator[Field]:
+        yield Field("Generic", type=api.Geometry(ncomps=3, coords=Generic()))
         yield Field(
             "Geodetic",
             type=api.Geometry(ncomps=3, coords=Geodetic(SphericalEarth(semi_major_axis=6370000.0))),
-            basis=basis,
         )
 
-    def fields(self, basis: api.Basis) -> Iterator[Field]:
+    def fields(self, basis: Basis) -> Iterator[Field]:
         for variable in self.dataset.variables:
             if self.field_domain(variable) in self.valid_domains:
-                yield Field(variable, type=api.Scalar(), basis=basis)
+                yield Field(variable, type=api.Scalar())
 
-    def topology(self, timestep: Step, basis: api.Basis, zone: Zone) -> DiscreteTopology:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> DiscreteTopology:
         if self.periodic:
             num_nodes = self.num_planar + 2
             if self.volumetric:
@@ -365,9 +366,9 @@ class Wrf(NetCdf):
             time = self.dataset["XTIME"][index] * 60
             yield Step(index=index, value=time)
 
-    def fields(self, basis: api.Basis) -> Iterator[Field]:
+    def fields(self, basis: Basis) -> Iterator[Field]:
         yield from super().fields(basis)
-        yield Field("WIND", type=api.Vector(3, api.VectorInterpretation.Flow), splittable=False, basis=basis)
+        yield Field("WIND", type=api.Vector(3, api.VectorInterpretation.Flow), splittable=False)
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if field.name == "WIND":

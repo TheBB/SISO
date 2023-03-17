@@ -58,9 +58,10 @@ def islice_group(it, *args):
             accum = []
 
 
+B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
-Z = TypeVar("Z", bound=api.Zone)
 S = TypeVar("S", bound=api.Step)
+Z = TypeVar("Z", bound=api.Zone)
 
 
 @define
@@ -73,11 +74,11 @@ class GroupedStep(Generic[S]):
         return self.steps[-1].value
 
 
-class GroupedTimeSource(Passthrough[F, S, Z, F, GroupedStep[S], Z]):
-    def topology(self, step: GroupedStep[S], basis: api.Basis, zone: Z) -> api.Topology:
+class GroupedTimeSource(Passthrough[B, F, S, Z, B, F, GroupedStep[S], Z]):
+    def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> api.Topology:
         return self.source.topology(step.steps[-1], basis, zone)
 
-    def topology_updates(self, step: GroupedStep[S], basis: api.Basis) -> bool:
+    def topology_updates(self, step: GroupedStep[S], basis: B) -> bool:
         return any(self.source.topology_updates(s, basis) for s in step.steps)
 
     def field_data(self, step: GroupedStep[S], field: F, zone: Z) -> util.FieldData[floating]:
@@ -87,10 +88,10 @@ class GroupedTimeSource(Passthrough[F, S, Z, F, GroupedStep[S], Z]):
         return any(self.source.field_updates(s, field) for s in step.steps)
 
 
-class StepSlice(GroupedTimeSource[F, S, Z]):
+class StepSlice(GroupedTimeSource[B, F, S, Z]):
     arguments: Tuple[Optional[int]]
 
-    def __init__(self, source: api.Source[F, S, Z], arguments: Tuple[Optional[int]]):
+    def __init__(self, source: api.Source[B, F, S, Z], arguments: Tuple[Optional[int]]):
         super().__init__(source)
         self.arguments = arguments
 
@@ -99,7 +100,7 @@ class StepSlice(GroupedTimeSource[F, S, Z]):
             yield GroupedStep(i, times)
 
 
-class LastTime(GroupedTimeSource[F, S, Z]):
+class LastTime(GroupedTimeSource[B, F, S, Z]):
     @property
     def properties(self) -> api.SourceProperties:
         return self.source.properties.update(instantaneous=True)

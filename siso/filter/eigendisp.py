@@ -1,4 +1,4 @@
-from typing import Generic, Iterator, TypeVar
+from typing import Iterator, TypeVar
 
 from attrs import define
 from numpy import floating
@@ -8,9 +8,10 @@ from ..util import FieldData
 from .passthrough import Passthrough, WrappedField
 
 
-Z = TypeVar("Z", bound=api.Zone)
+B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+Z = TypeVar("Z", bound=api.Zone)
 
 
 @define
@@ -28,15 +29,18 @@ class Wrapped(WrappedField[F]):
         )
 
 
-class EigenDisp(Passthrough[F, S, Z, Wrapped[F], S, Z]):
+class EigenDisp(Passthrough[B, F, S, Z, B, Wrapped[F], S, Z]):
     def use_geometry(self, geometry: Wrapped[F]) -> None:
         return self.source.use_geometry(geometry.original_field)
 
-    def geometries(self, basis: api.Basis) -> Iterator[Wrapped[F]]:
+    def basis_of(self, field: Wrapped[F]) -> B:
+        return self.source.basis_of(field.original_field)
+
+    def geometries(self, basis: B) -> Iterator[Wrapped[F]]:
         for field in self.source.geometries(basis):
             yield Wrapped(field)
 
-    def fields(self, basis: api.Basis) -> Iterator[Wrapped[F]]:
+    def fields(self, basis: B) -> Iterator[Wrapped[F]]:
         for field in self.source.fields(basis):
             yield Wrapped(field)
 

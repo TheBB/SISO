@@ -1,22 +1,23 @@
-from typing import TypeVar, Iterator, Set
+from typing import Iterator, Set, TypeVar
 
 from .. import api
 from .passthrough import Passthrough
 
 
+B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
-Z = TypeVar("Z", bound=api.Zone)
 S = TypeVar("S", bound=api.Step)
+Z = TypeVar("Z", bound=api.Zone)
 
 
-class FieldFilter(Passthrough[F, S, Z, F, S, Z]):
+class FieldFilter(Passthrough[B, F, S, Z, B, F, S, Z]):
     filters: Set[str]
 
-    def __init__(self, source: api.Source[F, S, Z], filters: Set[str]):
+    def __init__(self, source: api.Source[B, F, S, Z], filters: Set[str]):
         super().__init__(source)
         self.filters = filters
 
-    def fields(self, basis: api.Basis) -> Iterator[F]:
+    def fields(self, basis: B) -> Iterator[F]:
         for field in self.source.fields(basis):
             if field.name.casefold() in self.filters:
                 yield field
