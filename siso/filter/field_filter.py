@@ -1,7 +1,7 @@
 from typing import Iterator, Set, TypeVar
 
 from .. import api
-from .passthrough import Passthrough
+from .passthrough import PassthroughAll
 
 
 B = TypeVar("B", bound=api.Basis)
@@ -10,7 +10,7 @@ S = TypeVar("S", bound=api.Step)
 Z = TypeVar("Z", bound=api.Zone)
 
 
-class FieldFilter(Passthrough[B, F, S, Z, B, F, S, Z]):
+class FieldFilter(PassthroughAll[B, F, S, Z]):
     filters: Set[str]
 
     def __init__(self, source: api.Source[B, F, S, Z], filters: Set[str]):

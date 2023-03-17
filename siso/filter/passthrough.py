@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, Iterator, TypeVar, cast
+from typing import Generic, Iterator, TypeVar
 
 from numpy import floating
 from typing_extensions import Self
@@ -11,6 +11,10 @@ from ..topology import Topology
 from ..util import FieldData
 
 
+B = TypeVar("B", bound=api.Basis)
+F = TypeVar("F", bound=api.Field)
+S = TypeVar("S", bound=api.Step)
+Z = TypeVar("Z", bound=api.Zone)
 InB = TypeVar("InB", bound=api.Basis)
 InF = TypeVar("InF", bound=api.Field)
 InS = TypeVar("InS", bound=api.Step)
@@ -21,7 +25,7 @@ OutS = TypeVar("OutS", bound=api.Step)
 OutZ = TypeVar("OutZ", bound=api.Zone)
 
 
-class Passthrough(
+class PassthroughBase(
     api.Source[OutB, OutF, OutS, OutZ],
     Generic[InB, InF, InS, InZ, OutB, OutF, OutS, OutZ],
 ):
@@ -48,58 +52,132 @@ class Passthrough(
     def configure(self, settings: api.ReaderSettings) -> None:
         self.source.configure(settings)
 
-    def use_geometry(self, geometry: OutF) -> None:
-        self.source.use_geometry(cast(InF, geometry))
-
-    def bases(self) -> Iterator[OutB]:
-        return cast(Iterator[OutB], self.source.bases())
-
-    def basis_of(self, field: OutF) -> OutB:
-        return cast(OutB, self.source.basis_of(cast(InF, field)))
-
-    def geometries(self, basis: OutB) -> Iterator[OutF]:
-        return cast(Iterator[OutF], self.source.geometries(cast(InB, basis)))
-
-    def fields(self, basis: OutB) -> Iterator[OutF]:
-        return cast(Iterator[OutF], self.source.fields(cast(InB, basis)))
-
-    def steps(self) -> Iterator[OutS]:
-        return cast(Iterator[OutS], self.source.steps())
-
-    def zones(self) -> Iterator[OutZ]:
-        return cast(Iterator[OutZ], self.source.zones())
-
-    def topology(self, step: OutS, basis: OutB, zone: OutZ) -> Topology:
-        return self.source.topology(
-            cast(InS, step),
-            cast(InB, basis),
-            cast(InZ, zone),
-        )
-
-    def topology_updates(self, step: OutS, basis: OutB) -> bool:
-        return self.source.topology_updates(cast(InS, step), cast(InB, basis))
-
-    def field_data(self, step: OutS, field: OutF, zone: OutZ) -> FieldData[floating]:
-        return self.source.field_data(
-            cast(InS, step),
-            cast(InF, field),
-            cast(InZ, zone),
-        )
-
-    def field_updates(self, step: OutS, field: OutF) -> bool:
-        return self.source.field_updates(
-            cast(InS, step),
-            cast(InF, field),
-        )
-
     def children(self) -> Iterator[api.Source]:
         yield self.source
 
 
-class WrappedField(api.Field, Generic[InF]):
+class PassthroughSZ(
+    PassthroughBase[InB, InF, S, Z, OutB, OutF, S, Z],
+    Generic[S, Z, InB, OutB, InF, OutF],
+):
+    def steps(self) -> Iterator[S]:
+        return self.source.steps()
+
+    def zones(self) -> Iterator[Z]:
+        return self.source.zones()
+
+
+class PassthroughBFS(
+    PassthroughBase[B, F, S, InZ, B, F, S, OutZ],
+    Generic[B, F, S, InZ, OutZ],
+):
+    def use_geometry(self, geometry: F) -> None:
+        self.source.use_geometry(geometry)
+
+    def bases(self) -> Iterator[B]:
+        return self.source.bases()
+
+    def basis_of(self, field: F) -> B:
+        return self.source.basis_of(field)
+
+    def geometries(self, basis: B) -> Iterator[F]:
+        return self.source.geometries(basis)
+
+    def fields(self, basis: B) -> Iterator[F]:
+        return self.source.fields(basis)
+
+    def steps(self) -> Iterator[S]:
+        return self.source.steps()
+
+    def topology_updates(self, step: S, basis: B) -> bool:
+        return self.source.topology_updates(step, basis)
+
+    def field_updates(self, step: S, field: F) -> bool:
+        return self.source.field_updates(step, field)
+
+
+class PassthroughBFZ(
+    PassthroughBase[B, F, InS, Z, B, F, OutS, Z],
+    Generic[B, F, Z, InS, OutS],
+):
+    def use_geometry(self, geometry: F) -> None:
+        self.source.use_geometry(geometry)
+
+    def bases(self) -> Iterator[B]:
+        return self.source.bases()
+
+    def basis_of(self, field: F) -> B:
+        return self.source.basis_of(field)
+
+    def geometries(self, basis: B) -> Iterator[F]:
+        return self.source.geometries(basis)
+
+    def fields(self, basis: B) -> Iterator[F]:
+        return self.source.fields(basis)
+
+    def zones(self) -> Iterator[Z]:
+        return self.source.zones()
+
+
+class PassthroughBSZ(
+    PassthroughBase[B, InF, S, Z, B, OutF, S, Z],
+    Generic[B, S, Z, InF, OutF],
+):
+    def bases(self) -> Iterator[B]:
+        return self.source.bases()
+
+    def steps(self) -> Iterator[S]:
+        return self.source.steps()
+
+    def zones(self) -> Iterator[Z]:
+        return self.source.zones()
+
+    def topology(self, step: S, basis: B, zone: Z) -> Topology:
+        return self.source.topology(step, basis, zone)
+
+    def topology_updates(self, step: S, basis: B) -> bool:
+        return self.source.topology_updates(step, basis)
+
+
+class PassthroughAll(PassthroughBase[B, F, S, Z, B, F, S, Z], Generic[B, F, S, Z]):
+    def use_geometry(self, geometry: F) -> None:
+        self.source.use_geometry(geometry)
+
+    def bases(self) -> Iterator[B]:
+        return self.source.bases()
+
+    def basis_of(self, field: F) -> B:
+        return self.source.basis_of(field)
+
+    def geometries(self, basis: B) -> Iterator[F]:
+        return self.source.geometries(basis)
+
+    def fields(self, basis: B) -> Iterator[F]:
+        return self.source.fields(basis)
+
+    def steps(self) -> Iterator[S]:
+        return self.source.steps()
+
+    def zones(self) -> Iterator[Z]:
+        return self.source.zones()
+
+    def topology(self, step: S, basis: B, zone: Z) -> Topology:
+        return self.source.topology(step, basis, zone)
+
+    def topology_updates(self, step: S, basis: B) -> bool:
+        return self.source.topology_updates(step, basis)
+
+    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+        return self.source.field_data(step, field, zone)
+
+    def field_updates(self, step: S, field: F) -> bool:
+        return self.source.field_updates(step, field)
+
+
+class WrappedField(api.Field, Generic[F]):
     @property
     @abstractmethod
-    def original_field(self) -> InF:
+    def original_field(self) -> F:
         ...
 
     @property

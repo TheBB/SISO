@@ -2,7 +2,7 @@ from typing import TypeVar, cast
 
 from ..api import Basis, Field, Step, Zone
 from ..topology import DiscreteTopology, UnstructuredTopology
-from .passthrough import Passthrough
+from .passthrough import PassthroughAll
 
 
 B = TypeVar("B", bound=Basis)
@@ -11,7 +11,7 @@ S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class ForceUnstructured(Passthrough[B, F, S, Z, B, F, S, Z]):
+class ForceUnstructured(PassthroughAll[B, F, S, Z]):
     def validate_source(self) -> None:
         assert self.source.properties.tesselated
 

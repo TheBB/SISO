@@ -5,7 +5,7 @@ from numpy import floating
 from .. import api, util
 from ..coord import ConversionPath, convert_coords, convert_vectors
 from ..util import FieldData
-from .passthrough import Passthrough
+from .passthrough import PassthroughAll
 
 
 B = TypeVar("B", bound=api.Basis)
@@ -14,7 +14,7 @@ S = TypeVar("S", bound=api.Step)
 Z = TypeVar("Z", bound=api.Zone)
 
 
-class CoordTransform(Passthrough[B, F, S, Z, B, F, S, Z]):
+class CoordTransform(PassthroughAll[B, F, S, Z]):
     path: ConversionPath
     cache: Dict[str, FieldData[floating]]
 

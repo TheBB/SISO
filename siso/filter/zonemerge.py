@@ -9,7 +9,7 @@ from .. import util
 from ..api import Basis, Field, Shape, SourceProperties, Step, Zone
 from ..topology import DiscreteTopology, UnstructuredTopology
 from ..util import FieldData
-from .passthrough import Passthrough
+from .passthrough import PassthroughBFS
 
 
 B = TypeVar("B", bound=Basis)
@@ -18,7 +18,7 @@ S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class ZoneMerge(Passthrough[B, F, S, Z, B, F, S, Zone]):
+class ZoneMerge(PassthroughBFS[B, F, S, Z, Zone]):
     def validate_source(self) -> None:
         assert not self.source.properties.single_zoned
         assert self.source.properties.tesselated

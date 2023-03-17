@@ -6,7 +6,7 @@ from numpy import floating
 
 from .. import api
 from ..util import FieldData
-from .passthrough import Passthrough, WrappedField
+from .passthrough import PassthroughBSZ, WrappedField
 
 
 B = TypeVar("B", bound=api.Basis)
@@ -39,7 +39,7 @@ class RecombinedField(WrappedField[F]):
         return False
 
 
-class Recombine(Passthrough[B, F, S, Z, B, RecombinedField[F], S, Z]):
+class Recombine(PassthroughBSZ[B, S, Z, F, RecombinedField[F]]):
     recombinations: List[api.RecombineFieldSpec]
 
     def __init__(self, source: api.Source, recombinations: List[api.RecombineFieldSpec]):

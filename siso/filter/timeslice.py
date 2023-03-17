@@ -5,7 +5,7 @@ from attrs import define
 from numpy import floating
 
 from .. import api, util
-from .passthrough import Passthrough
+from .passthrough import PassthroughBFZ
 
 
 @overload
@@ -74,7 +74,7 @@ class GroupedStep(Generic[S]):
         return self.steps[-1].value
 
 
-class GroupedTimeSource(Passthrough[B, F, S, Z, B, F, GroupedStep[S], Z]):
+class GroupedTimeSource(PassthroughBFZ[B, F, Z, S, GroupedStep[S]], Generic[B, F, S, Z]):
     def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> api.Topology:
         return self.source.topology(step.steps[-1], basis, zone)
 

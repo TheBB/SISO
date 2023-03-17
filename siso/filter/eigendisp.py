@@ -5,7 +5,7 @@ from numpy import floating
 
 from .. import api
 from ..util import FieldData
-from .passthrough import Passthrough, WrappedField
+from .passthrough import PassthroughBSZ, WrappedField
 
 
 B = TypeVar("B", bound=api.Basis)
@@ -29,7 +29,7 @@ class Wrapped(WrappedField[F]):
         )
 
 
-class EigenDisp(Passthrough[B, F, S, Z, B, Wrapped[F], S, Z]):
+class EigenDisp(PassthroughBSZ[B, S, Z, F, Wrapped[F]]):
     def use_geometry(self, geometry: Wrapped[F]) -> None:
         return self.source.use_geometry(geometry.original_field)
 

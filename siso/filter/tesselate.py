@@ -7,7 +7,7 @@ from .. import api
 from ..impl import Basis
 from ..topology import Topology
 from ..util import FieldData
-from .passthrough import Passthrough, WrappedField
+from .passthrough import PassthroughSZ, WrappedField
 
 
 B = TypeVar("B", bound=Basis)
@@ -24,7 +24,7 @@ class Wrapped(WrappedField[F]):
     original_field: F
 
 
-class Tesselate(Passthrough[B, F, S, Z, Basis, Wrapped[F], S, Z]):
+class Tesselate(PassthroughSZ[S, Z, B, Basis, F, Wrapped[F]]):
     nvis: int
     master_basis: B
 

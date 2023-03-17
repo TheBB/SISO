@@ -1,12 +1,11 @@
-from typing import Iterator, List, Optional, TypeVar
+from typing import Generic, Iterator, List, Optional, TypeVar
 
 from attrs import define
 from numpy import floating
 
 from .. import api
-from ..topology import Topology
 from ..util import FieldData
-from .passthrough import Passthrough, WrappedField
+from .passthrough import PassthroughBSZ, WrappedField
 
 
 B = TypeVar("B", bound=api.Basis)
@@ -32,7 +31,7 @@ class DecomposedField(WrappedField[F]):
         return self.original_field.type
 
 
-class DecomposeBase(Passthrough[B, F, S, Z, B, DecomposedField[F], S, Z]):
+class DecomposeBase(PassthroughBSZ[B, S, Z, F, DecomposedField[F]], Generic[B, F, S, Z]):
     def use_geometry(self, geometry: DecomposedField[F]) -> None:
         return self.source.use_geometry(geometry.original_field)
 
@@ -42,9 +41,6 @@ class DecomposeBase(Passthrough[B, F, S, Z, B, DecomposedField[F], S, Z]):
     def geometries(self, basis: B) -> Iterator[DecomposedField[F]]:
         for field in self.source.geometries(basis):
             yield DecomposedField(name=field.name, original_field=field, components=None, splittable=False)
-
-    def topology(self, timestep: S, basis: B, zone: Z) -> Topology:
-        return self.source.topology(timestep, basis, zone)
 
     def field_data(self, timestep: S, field: DecomposedField, zone: Z) -> FieldData[floating]:
         data = self.source.field_data(timestep, field.original_field, zone)

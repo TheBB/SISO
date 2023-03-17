@@ -5,7 +5,7 @@ from numpy import floating
 
 from .. import api, util
 from ..util import FieldData
-from .passthrough import Passthrough
+from .passthrough import PassthroughAll
 
 
 B = TypeVar("B", bound=api.Basis)
@@ -14,7 +14,7 @@ S = TypeVar("S", bound=api.Step)
 Z = TypeVar("Z", bound=api.Zone)
 
 
-class Strict(Passthrough[B, F, S, Z, B, F, S, Z]):
+class Strict(PassthroughAll[B, F, S, Z]):
     field_specs: Dict[str, F]
     original_properties: api.SourceProperties
     geometry: F

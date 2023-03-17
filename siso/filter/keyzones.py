@@ -11,7 +11,7 @@ from ..api import Basis, Field, Shape, Source, SourceProperties, Step, Zone
 from ..topology import Topology
 from ..typing import Point
 from ..util import FieldData, bisect
-from .passthrough import Passthrough
+from .passthrough import PassthroughBFS
 
 
 B = TypeVar("B", bound=Basis)
@@ -20,7 +20,7 @@ S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class KeyZones(Passthrough[B, F, S, Z, B, F, S, Zone]):
+class KeyZones(PassthroughBFS[B, F, S, Z, Zone]):
     manager: ZoneManager
 
     def __init__(self, source: Source):
