@@ -339,7 +339,6 @@ class ReaderSettings:
     periodic: bool
     mesh_filename: Optional[Path]
     rationality: Optional[Rationality]
-    basis_name: Optional[str]
 
 
 B = TypeVar("B", bound=Basis)

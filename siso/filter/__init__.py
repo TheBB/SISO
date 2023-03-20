@@ -1,3 +1,4 @@
+from .basis_filter import BasisFilter
 from .coordtransform import CoordTransform
 from .decompose import Decompose, Split
 from .eigendisp import EigenDisp
@@ -12,6 +13,7 @@ from .zonemerge import ZoneMerge
 
 
 __all__ = [
+    "BasisFilter",
     "CoordTransform",
     "Decompose",
     "EigenDisp",

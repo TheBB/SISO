@@ -20,18 +20,18 @@ class FieldInfo:
 
 B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
-T = TypeVar("T", bound=Step)
+S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class VtfWriter(Writer[B, F, T, Z]):
+class VtfWriter(Writer[B, F, S, Z]):
     filename: Path
     out: vtf.File
     mode: OutputMode
 
     geometry_block: vtf.GeometryBlock
     geometry_blocks: List[Tuple[vtf.NodeBlock, vtf.ElementBlock]]
-    timesteps: List[T]
+    timesteps: List[S]
     field_info: Dict[str, FieldInfo]
     step_interpretation: StepInterpretation
 
@@ -82,7 +82,7 @@ class VtfWriter(Writer[B, F, T, Z]):
         self.out.__exit__(*args)
         logging.info(self.filename)
 
-    def update_geometry(self, timestep: T, source: Source[B, F, T, Z], geometry: F) -> None:
+    def update_geometry(self, timestep: S, source: Source[B, F, S, Z], geometry: F) -> None:
         for zone in source.zones():
             assert zone.global_key is not None
 
@@ -105,7 +105,7 @@ class VtfWriter(Writer[B, F, T, Z]):
 
         self.geometry_block.BindElementBlocks(*(e for _, e in self.geometry_blocks), step=timestep.index + 1)
 
-    def update_field(self, timestep: T, source: Source[B, F, T, Z], field: F) -> None:
+    def update_field(self, timestep: S, source: Source[B, F, S, Z], field: F) -> None:
         for zone in source.zones():
             assert zone.global_key is not None
 
@@ -129,7 +129,7 @@ class VtfWriter(Writer[B, F, T, Z]):
             steps = self.field_info[field.name].steps
             steps.setdefault(timestep.index + 1, []).append(result_block)
 
-    def consume_timestep(self, timestep: T, source: Source[B, F, T, Z], geometry: F) -> None:
+    def consume_timestep(self, timestep: S, source: Source[B, F, S, Z], geometry: F) -> None:
         if source.field_updates(timestep, geometry):
             self.update_geometry(timestep, source, geometry)
         for basis in source.bases():
@@ -137,7 +137,7 @@ class VtfWriter(Writer[B, F, T, Z]):
                 if source.field_updates(timestep, field):
                     self.update_field(timestep, source, field)
 
-    def consume(self, source: Source[B, F, T, Z], geometry: F):
+    def consume(self, source: Source[B, F, S, Z], geometry: F):
         self.step_interpretation = source.properties.step_interpretation
         for timestep in source.steps():
             self.timesteps.append(timestep)

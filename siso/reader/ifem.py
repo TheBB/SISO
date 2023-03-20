@@ -64,10 +64,12 @@ def is_legal_group_name(name: str) -> bool:
 class IfemBasis(Basis):
     num_patches: int
     locator: Locator
+    fields: List[IfemField]
 
     def __init__(self, name: str, locator: Locator, source: Ifem):
         super().__init__(name)
         self.locator = locator
+        self.fields = []
 
         i = 0
         for i in count():
@@ -177,6 +179,8 @@ class IfemStandardField(IfemField):
         basis: IfemBasis,
         source: Ifem,
     ):
+        basis.fields.append(self)
+
         # Hacky: set these first so that self.raw_ncomps will work
         self.name = name
         self.cellwise = cellwise
@@ -255,7 +259,6 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
     default_vector: ClassVar[api.VectorInterpretation] = api.VectorInterpretation.Generic
 
     rationality: Optional[api.Rationality] = None
-    basis_name: Optional[str] = None
 
     @staticmethod
     def applicable(path: Path) -> bool:
@@ -296,7 +299,6 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
 
     def configure(self, settings: api.ReaderSettings) -> None:
         self.rationality = settings.rationality
-        self.basis_name = settings.basis_name
 
     @property
     def nsteps(self) -> int:
@@ -311,9 +313,6 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
 
     def discover_bases(self) -> None:
         basis_names = set(chain.from_iterable(self.h5.values())) - {"timeinfo"}
-        if self.basis_name is not None:
-            prefix = self.basis_name.casefold()
-            basis_names = {name for name in basis_names if name.casefold().startswith(prefix)}
         bases = (self.make_basis(name) for name in basis_names)
         self._bases = {basis.name: basis for basis in bases if basis.num_patches > 0}
 
@@ -328,6 +327,8 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
                     zip(basis_grp.get("knotspan", ()), repeat(True)),
                 )
                 for field_name, cellwise in fields:
+                    if field_name in self._fields:
+                        continue
                     self._fields[field_name] = IfemStandardField(
                         name=field_name,
                         cellwise=cellwise,
@@ -383,10 +384,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
         yield IfemGeometryField(basis, self)
 
     def fields(self, basis: IfemBasis) -> Iterator[IfemField]:
-        for field in self._fields.values():
-            if field.basis != basis:
-                continue
-            yield field
+        return iter(basis.fields)
 
     def topology(self, timestep: Step, basis: Basis, zone: Zone) -> api.Topology:
         ibasis = self._bases[basis.name]

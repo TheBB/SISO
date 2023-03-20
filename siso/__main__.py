@@ -102,6 +102,8 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.group("Field filtering", cls=MutuallyExclusiveOptionGroup)
 @optgroup.option("--no-fields", is_flag=True)
 @optgroup.option("--filter", "-l", "field_filter", multiple=True, default=None)
+
+# Endianness
 @optgroup.group("Endianness")
 @optgroup.option("--in-endianness", type=Enum(Endianness), default="native")
 @optgroup.option("--out-endianness", type=Enum(Endianness), default="native")
@@ -139,7 +141,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     "mesh_filename",
     type=click.Path(exists=True, file_okay=True, readable=True, path_type=Path),
 )
-@optgroup.option("--basis", "basis_name")
+@optgroup.option("--basis", "-b", "basis_filter", multiple=True, default=None)
 
 # Verbosity options
 @optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
@@ -178,7 +180,7 @@ def main(
     only_final_timestep: bool,
     nvis: int,
     no_fields: bool,
-    field_filter,
+    field_filter: Tuple[str],
     # Writer options
     output_mode: Optional[OutputMode],
     out_endianness: Endianness,
@@ -188,7 +190,7 @@ def main(
     staggering: Staggering,
     rationality: Optional[Rationality],
     mesh_filename: Optional[Path],
-    basis_name: Optional[str],
+    basis_filter: Tuple[str],
     # Logging, verbosity and testing
     verify_strict: bool,
     instrument: bool,
@@ -248,7 +250,6 @@ def main(
             periodic=periodic,
             mesh_filename=mesh_filename,
             rationality=rationality,
-            basis_name=basis_name,
         )
     )
 
@@ -271,6 +272,12 @@ def main(
 
         if not in_props.globally_keyed:
             source = filter.KeyZones(source)
+
+        if basis_filter:
+            allowed_bases = set(
+                chain.from_iterable(map(str.casefold, basis_name.split(",")) for basis_name in basis_filter)
+            )
+            source = filter.BasisFilter(source, allowed_bases)
 
         if nvis > 1 or (
             not in_props.tesselated
