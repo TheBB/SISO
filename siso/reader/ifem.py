@@ -9,6 +9,7 @@ from typing import ClassVar, Dict, Iterator, List, Optional, Tuple
 
 import h5py
 import numpy as np
+from attrs import define, field
 from numpy import floating
 from typing_extensions import Self
 
@@ -61,32 +62,18 @@ def is_legal_group_name(name: str) -> bool:
         return name.casefold() in ("anasol", "log")
 
 
+@define(frozen=True)
 class IfemBasis(Basis):
-    num_patches: int
-    locator: Locator
-    fields: List[IfemField]
+    locator: Locator = field(eq=False, repr=False)
+    fields: List[IfemField] = field(factory=list, init=False, eq=False, repr=False)
 
-    def __init__(self, name: str, locator: Locator, source: Ifem):
-        super().__init__(name)
-        self.locator = locator
-        self.fields = []
-
+    @lru_cache(maxsize=1)
+    def num_patches(self, source: Ifem) -> int:
         i = 0
         for i in count():
             if self.patch_path(0, i) not in source.h5:
                 break
-        self.num_patches = i
-
-    def __repr__(self) -> str:
-        return f"Basis({self.name}, num_patches={self.num_patches})"
-
-    def __hash__(self) -> int:
-        return hash(self.name)
-
-    def __eq__(self, other) -> bool:
-        if isinstance(other, IfemBasis):
-            return self.name == other.name
-        return False
+        return i
 
     def updates_at(self, step: int, source: Ifem) -> bool:
         return self.locator.patch_root(self.name, step) in source.h5
@@ -123,8 +110,9 @@ class IfemBasis(Basis):
         return cps.ncomps
 
 
+@define(frozen=True)
 class IfemField(Field):
-    basis: IfemBasis
+    basis: IfemBasis = field(kw_only=True, eq=False)
 
     def splits(self) -> Iterator[api.SplitFieldSpec]:
         if not self.splittable or "&&" not in self.name:
@@ -158,8 +146,8 @@ class IfemGeometryField(IfemField):
             name=basis.name,
             type=api.Geometry(basis.ncomps(source), coords=Named(basis.name)),
             splittable=False,
+            basis=basis,
         )
-        self.basis = basis
 
     def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
         _, _, cps = self.basis.patch_at(step, patch, source)
@@ -170,8 +158,6 @@ class IfemGeometryField(IfemField):
 
 
 class IfemStandardField(IfemField):
-    components: List[Optional[List[int]]]
-
     def __init__(
         self,
         name: str,
@@ -179,24 +165,21 @@ class IfemStandardField(IfemField):
         basis: IfemBasis,
         source: Ifem,
     ):
-        basis.fields.append(self)
+        _, topology, _ = basis.patch_at(0, 0, source)
+        coeff_path = basis.locator.coeff_path(basis.name, name, 0, 0, cellwise)
+        cps = source.h5[coeff_path][:]
+        divisor = topology.num_cells if cellwise else topology.num_nodes
+        ncomps, remainder = divmod(len(cps), divisor)
+        assert remainder == 0
 
-        # Hacky: set these first so that self.raw_ncomps will work
-        self.name = name
-        self.cellwise = cellwise
-        self.basis = basis
-
-        ncomps = self.raw_ncomps(source)
         tp: api.FieldType
         if ncomps > 1:
             tp = api.Vector(ncomps=ncomps, interpretation=source.default_vector)
         else:
             tp = api.Scalar(interpretation=source.default_scalar)
-        super().__init__(
-            name=name,
-            type=tp,
-            cellwise=cellwise,
-        )
+
+        super().__init__(name, type=tp, cellwise=cellwise, basis=basis)
+        basis.fields.append(self)
 
     def __repr__(self) -> str:
         return f"Field({self.name}, {'cellwise' if self.cellwise else 'nodal'}, {self.basis.name})"
@@ -226,23 +209,23 @@ class IfemStandardField(IfemField):
             self.cellwise,
         )
 
-    @lru_cache(maxsize=1)
-    def raw_ncomps(self, source: Ifem) -> int:
-        _, topology, _ = self.basis.patch_at(0, 0, source)
-        my_cps = self.raw_cps_at(0, 0, source)
-        divisor = topology.num_cells if self.cellwise else topology.num_nodes
-        ncomps, remainder = divmod(len(my_cps), divisor)
-        assert remainder == 0
-        return ncomps
+    # @lru_cache(maxsize=1)
+    # def raw_ncomps(self, source: Ifem) -> int:
+    #     _, topology, _ = self.basis.patch_at(0, 0, source)
+    #     my_cps = self.raw_cps_at(0, 0, source)
+    #     divisor = topology.num_cells if self.cellwise else topology.num_nodes
+    #     ncomps, remainder = divmod(len(my_cps), divisor)
+    #     assert remainder == 0
+    #     return ncomps
 
     @lru_cache(maxsize=8)
     def raw_cps_at(self, step: int, patch: int, source: Ifem) -> np.ndarray:
         return source.h5[self.coeff_path(step, patch)][:]
 
     def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
-        ncomps = self.raw_ncomps(source)
+        # ncomps = self.raw_ncomps(source)
         cps = self.raw_cps_at(step, patch, source)
-        return FieldData(data=cps.reshape(-1, ncomps))
+        return FieldData(data=cps.reshape(-1, self.ncomps))
 
 
 class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
@@ -279,7 +262,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
         self.discover_bases()
         for basis in self._bases.values():
             logging.debug(
-                f"Basis {basis.name} with " f"{util.pluralize(basis.num_patches, 'patch', 'patches')}"
+                f"Basis {basis.name} with " f"{util.pluralize(basis.num_patches(self), 'patch', 'patches')}"
             )
 
         self.discover_fields()
@@ -309,12 +292,12 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
             yield self.h5[str(index)]
 
     def make_basis(self, name: str) -> IfemBasis:
-        return IfemBasis(name, self.locator, self)
+        return IfemBasis(name, self.locator)
 
     def discover_bases(self) -> None:
-        basis_names = set(chain.from_iterable(self.h5.values())) - {"timeinfo"}
+        basis_names = {name: None for name in chain.from_iterable(self.h5.values()) if name != "timeinfo"}
         bases = (self.make_basis(name) for name in basis_names)
-        self._bases = {basis.name: basis for basis in bases if basis.num_patches > 0}
+        self._bases = {basis.name: basis for basis in bases if basis.num_patches(self) > 0}
 
     def discover_fields(self) -> None:
         for step_grp in self.timestep_groups():
@@ -370,7 +353,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
             yield Step(index=i, value=time)
 
     def zones(self) -> Iterator[Zone]:
-        for patch in range(self.geometry.num_patches):
+        for patch in range(self.geometry.num_patches(self)):
             zone, _, _ = self.geometry.patch_at(0, patch, self)
             yield zone
 

@@ -1,21 +1,24 @@
 from .basis_filter import BasisFilter
+from .basismerge import BasisMerge
 from .coordtransform import CoordTransform
 from .decompose import Decompose, Split
+from .discretize import Discretize
 from .eigendisp import EigenDisp
 from .field_filter import FieldFilter
 from .force_unstructured import ForceUnstructured
 from .keyzones import KeyZones
 from .recombine import Recombine
 from .strict import Strict
-from .tesselate import Tesselate
 from .timeslice import LastTime, StepSlice
 from .zonemerge import ZoneMerge
 
 
 __all__ = [
     "BasisFilter",
+    "BasisMerge",
     "CoordTransform",
     "Decompose",
+    "Discretize",
     "EigenDisp",
     "FieldFilter",
     "ForceUnstructured",
@@ -24,7 +27,6 @@ __all__ = [
     "Recombine",
     "Split",
     "Strict",
-    "Tesselate",
     "StepSlice",
     "ZoneMerge",
 ]

@@ -40,7 +40,7 @@ class SimraWriter(Writer):
     def properties(self) -> WriterProperties:
         return WriterProperties(
             require_single_zone=True,
-            require_tesselated=True,
+            require_discrete_topology=True,
             require_instantaneous=True,
         )
 

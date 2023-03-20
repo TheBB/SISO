@@ -13,7 +13,7 @@ Z = TypeVar("Z", bound=Zone)
 
 class ForceUnstructured(PassthroughAll[B, F, S, Z]):
     def validate_source(self) -> None:
-        assert self.source.properties.tesselated
+        assert self.source.properties.discrete_topology
 
     def topology(self, timestep: S, basis: B, zone: Z) -> UnstructuredTopology:
         topology = cast(DiscreteTopology, self.source.topology(timestep, basis, zone))

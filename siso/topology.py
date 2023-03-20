@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import partial
 import logging
 from io import BytesIO, StringIO
 from typing import IO, Dict, Iterable, Iterator, List, Optional, Tuple, overload
@@ -11,10 +12,9 @@ from attrs import define
 from numpy import floating, integer
 from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
-from typing_extensions import Self
 
-from . import util
-from .api import CellType, Coords, DiscreteTopology, Field, Rationality, Tesselator, Topology
+from . import api, util
+from .api import CellType, Coords, DiscreteTopology, Field, FieldDataFilter, Rationality, Topology
 from .util import FieldData
 
 
@@ -100,9 +100,26 @@ class UnstructuredTopology:
     def num_cells(self) -> int:
         return self.cells.ndofs
 
-    def tesselator(self, nvis: int = 1) -> Tesselator:
+    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         assert nvis == 1
-        return NoopTesselator()
+        return self, lambda field, data: data
+
+    def create_merger(self) -> api.TopologyMerger:
+        return UnstructuredTopologyMerger(self.num_cells, self.num_nodes, self.celltype)
+
+
+@define
+class UnstructuredTopologyMerger:
+    num_cells: int
+    num_nodes: int
+    celltype: CellType
+
+    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+        assert isinstance(topology, UnstructuredTopology)
+        assert topology.num_cells == self.num_cells
+        assert topology.num_nodes == self.num_nodes
+        assert topology.celltype == self.celltype
+        return topology, lambda field, data: data
 
 
 class StructuredTopology:
@@ -133,9 +150,12 @@ class StructuredTopology:
     def nodeshape(self) -> Tuple[int, ...]:
         return tuple(n + 1 for n in self.cellshape)
 
-    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
+    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         assert nvis == 1
-        return NoopTesselator()
+        return self, lambda field, data: data
+
+    def create_merger(self) -> api.TopologyMerger:
+        return StructuredTopologyMerger(self.cellshape, self.celltype)
 
     def transpose(self, axes: Tuple[int, ...]) -> StructuredTopology:
         assert len(axes) == self.pardim
@@ -145,17 +165,16 @@ class StructuredTopology:
         )
 
 
-class NoopTesselator(Tesselator[DiscreteTopology]):
-    def tesselate_topology(self, topology: DiscreteTopology) -> DiscreteTopology:
-        return topology
+@define
+class StructuredTopologyMerger:
+    cellshape: Tuple[int, ...]
+    celltype: CellType
 
-    def tesselate_field(
-        self,
-        topology: DiscreteTopology,
-        field: Field,
-        field_data: FieldData[floating],
-    ) -> FieldData[floating]:
-        return field_data
+    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+        assert isinstance(topology, StructuredTopology)
+        assert topology.cellshape == self.cellshape
+        assert topology.celltype == self.celltype
+        return topology, lambda field, data: data
 
 
 class G2Object(G2):
@@ -210,11 +229,16 @@ class SplineTopology(Topology):
     def num_cells(self) -> int:
         return util.prod(len(basis.knot_spans()) - 1 for basis in self.bases)
 
-    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
-        return SplineTesselator(self, nvis)
+    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
+        tesselator = SplineTesselator(self, nvis)
+        discrete = tesselator.tesselate_topology(self)
+        return discrete, lambda field, data: tesselator.tesselate_field(self, field, data)
+
+    def create_merger(self) -> api.TopologyMerger:
+        return SplineTesselator(self, nvis=1)
 
 
-class SplineTesselator(Tesselator[SplineTopology]):
+class SplineTesselator:
     nodal_knots: List[np.ndarray]
     cellwise_knots: List[np.ndarray]
 
@@ -224,6 +248,12 @@ class SplineTesselator(Tesselator[SplineTopology]):
         self.cellwise_knots = [
             ((knots := np.array(basis.knot_spans()))[:-1] + knots[1:]) / 2 for basis in topology.bases
         ]
+
+    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+        assert isinstance(topology, SplineTopology)
+        discrete = self.tesselate_topology(topology)
+        mapper = partial(self.tesselate_field, topology)
+        return discrete, mapper
 
     def tesselate_topology(self, topology: SplineTopology) -> StructuredTopology:
         celltype = [CellType.Line, CellType.Quadrilateral, CellType.Hexahedron][len(self.nodal_knots) - 1]
@@ -250,7 +280,6 @@ class SplineTesselator(Tesselator[SplineTopology]):
             if topology.weights is not None:
                 coeffs = np.hstack((coeffs, util.flatten_2d(topology.weights)))
             rational = topology.weights is not None
-
         coeffs = splipy.utils.reshape(coeffs, shape, order="F")
         new_spline = SplineObject(bases, coeffs, rational=rational, raw=True)
         return FieldData(util.flatten_2d(new_spline(*knots)))
@@ -322,11 +351,16 @@ class LrTopology(Topology):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
-    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
-        return LrTesselator(self.obj, self.weights, nvis)
+    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
+        tesselator = LrTesselator(self.obj, self.weights, nvis)
+        discrete = tesselator.tesselate_topology(self)
+        return discrete, lambda field, data: tesselator.tesselate_field(self, field, data)
+
+    def create_merger(self) -> api.TopologyMerger:
+        return LrTesselator(self.obj, self.weights, nvis=1)
 
 
-class LrTesselator(Tesselator[LrTopology]):
+class LrTesselator:
     nodes: np.ndarray
     cells: FieldData[integer]
     weights: Optional[np.ndarray]
@@ -342,6 +376,12 @@ class LrTesselator(Tesselator[LrTopology]):
         self.cells = FieldData(np.array(cells, dtype=int))
         self.weights = weights
         self.nvis = nvis
+
+    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+        assert isinstance(topology, LrTopology)
+        discrete = self.tesselate_topology(topology)
+        mapper = partial(self.tesselate_field, topology)
+        return discrete, mapper
 
     def tesselate_topology(self, topology: LrTopology) -> DiscreteTopology:
         celltype = CellType.Hexahedron if topology.pardim == 3 else CellType.Quadrilateral

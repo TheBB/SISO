@@ -22,7 +22,8 @@ class WriterSettings:
 @define
 class WriterProperties:
     require_single_zone: bool = False
-    require_tesselated: bool = False
+    require_discrete_topology: bool = False
+    require_single_basis: bool = False
     require_instantaneous: bool = False
 
 

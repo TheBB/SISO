@@ -21,7 +21,7 @@ Z = TypeVar("Z", bound=Zone)
 class ZoneMerge(PassthroughBFS[B, F, S, Z, Zone]):
     def validate_source(self) -> None:
         assert not self.source.properties.single_zoned
-        assert self.source.properties.tesselated
+        assert self.source.properties.discrete_topology
 
     @property
     def properties(self) -> SourceProperties:

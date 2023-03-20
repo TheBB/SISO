@@ -183,6 +183,10 @@ class SimraMeshBase(api.Source[Basis, Field, Step, Zone]):
     def properties(self) -> api.SourceProperties:
         return api.SourceProperties(
             instantaneous=True,
+            discrete_topology=True,
+            single_basis=True,
+            single_zoned=True,
+            globally_keyed=True,
         )
 
     @abstractmethod
@@ -221,6 +225,7 @@ class SimraMeshBase(api.Source[Basis, Field, Step, Zone]):
             shape=shape,
             coords=self.corners(),
             local_key="0",
+            global_key=0,
         )
 
     def topology(self, timestep: Step, basis: Basis, zone: Zone) -> StructuredTopology:
@@ -464,8 +469,8 @@ class SimraBoundary(SimraHasMesh):
             )
             for name, components in fields
         ]
-        return api.SourceProperties(
-            instantaneous=True,
+
+        return self.mesh.properties.update(
             split_fields=splits,
         )
 
@@ -616,8 +621,8 @@ class SimraContinuation(SimraHasMesh):
             )
             for name, components in fields
         ]
-        return api.SourceProperties(
-            instantaneous=True,
+
+        return self.mesh.properties.update(
             split_fields=splits,
         )
 
@@ -754,9 +759,10 @@ class SimraHistory(SimraHasMesh):
             )
             for name, components in fields
         ]
-        return api.SourceProperties(
-            split_fields=splits,
+
+        return self.mesh.properties.update(
             instantaneous=False,
+            split_fields=splits,
         )
 
     def __enter__(self) -> Self:

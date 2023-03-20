@@ -264,63 +264,90 @@ def main(
     )
 
     with source:
-        in_props = source.properties
+        # in_props = source.properties
         out_props = sink.properties
 
         if verify_strict:
             source = filter.Strict(source)
+            logging.debug("Attaching Strict (--verify-strict)")
 
-        if not in_props.globally_keyed:
+        if not source.properties.globally_keyed:
+            logging.debug("Attaching KeyZones (source is not globally keyed)")
             source = filter.KeyZones(source)
 
         if basis_filter:
+            logging.debug("Attaching BasisFilter (--basis)")
             allowed_bases = set(
                 chain.from_iterable(map(str.casefold, basis_name.split(",")) for basis_name in basis_filter)
             )
             source = filter.BasisFilter(source, allowed_bases)
 
-        if nvis > 1 or (
-            not in_props.tesselated
-            and (out_props.require_tesselated or out_props.require_single_zone or require_unstructured)
-        ):
-            source = filter.Tesselate(source, nvis)
+        if nvis > 1:
+            logging.debug("Attaching Discretize (--nvis)")
+            source = filter.Discretize(source, nvis)
 
-        if not in_props.single_zoned:
-            if out_props.require_single_zone:
-                source = filter.ZoneMerge(source)
+        if out_props.require_single_basis and not source.properties.single_basis:
+            logging.debug("Attaching BasisMerge (sink requires single basis)")
+            source = filter.BasisMerge(source)
 
-        if in_props.split_fields:
-            source = filter.Split(source, in_props.split_fields)
+        if not source.properties.discrete_topology:
+            if out_props.require_discrete_topology:
+                logging.debug("Attaching Discretize (sink requires discrete)")
+                source = filter.Discretize(source, 1)
+            elif out_props.require_single_zone:
+                logging.debug("Attaching Discretize (sink requires single zone)")
+                source = filter.Discretize(source, 1)
+            elif require_unstructured:
+                logging.debug("Attaching Discretize (--unstructured)")
+                source = filter.Discretize(source, 1)
 
-        if in_props.recombine_fields:
-            source = filter.Recombine(source, in_props.recombine_fields)
+        if not source.properties.single_zoned and out_props.require_single_zone:
+            logging.debug("Attaching ZoneMerge (sink requires single zone)")
+            source = filter.ZoneMerge(source)
+
+        if source.properties.split_fields:
+            logging.debug("Attaching Split (source recommendation)")
+            source = filter.Split(source, source.properties.split_fields)
+
+        if source.properties.recombine_fields:
+            logging.debug("Attaching Recombine (source recommendation)")
+            source = filter.Recombine(source, source.properties.recombine_fields)
 
         if decompose:
+            logging.debug("Attaching Decompose (--decompose)")
             source = filter.Decompose(source)
 
         if require_unstructured:
+            logging.debug("Attaching ForceUnstructured (--unstructured)")
             source = filter.ForceUnstructured(source)
 
         if eigenmodes_are_displacement:
+            logging.debug("Attaching EigenDisp (--eigenmodes-are-displacement)")
             source = filter.EigenDisp(source)
 
-        if verify_strict:
-            source = filter.Strict(source)
-
         if timestep_slice is not None:
+            logging.debug("Attaching StepSlice (--times)")
             source = filter.StepSlice(source, timestep_slice)
         elif timestep_index is not None:
+            logging.debug("Attaching StepSlice (--time)")
             source = filter.StepSlice(source, (timestep_index, timestep_index + 1))
         elif only_final_timestep:
+            logging.debug("Attaching LastTime (--last)")
             source = filter.LastTime(source)
 
         if no_fields:
+            logging.debug("Attaching FieldFilter (--no-fields)")
             source = filter.FieldFilter(source, set())
         elif field_filter:
+            logging.debug("Attaching FieldFilter (--filter)")
             allowed_fields = set(
                 chain.from_iterable(map(str.casefold, field_name.split(",")) for field_name in field_filter)
             )
             source = filter.FieldFilter(source, allowed_fields)
+
+        if verify_strict:
+            logging.debug("Attaching Strict (--verify-strict)")
+            source = filter.Strict(source)
 
         assert not (out_props.require_instantaneous and not source.properties.instantaneous)
 
@@ -355,6 +382,7 @@ def main(
             logging.debug("Coordinate conversion path:")
             str_path = " -> ".join(str(system) for system in path)
             logging.debug(str_path)
+            logging.debug("Attaching CoordTransform")
             source = filter.CoordTransform(source, path)
 
         instrumenter: Optional[Instrumenter] = None

@@ -42,7 +42,7 @@ class Shape(Enum):
     Shapeless = auto()
 
 
-@define(eq=False)
+@define(frozen=True)
 class Zone:
     shape: Shape
     coords: Coords
@@ -131,7 +131,8 @@ class StepInterpretation(Enum):
 class SourceProperties:
     instantaneous: bool
     globally_keyed: bool = False
-    tesselated: bool = False
+    discrete_topology: bool = False
+    single_basis: bool = False
     single_zoned: bool = False
     step_interpretation: StepInterpretation = StepInterpretation.Time
 
@@ -171,7 +172,7 @@ class VectorInterpretation(Enum):
         return ScalarInterpretation.Generic
 
 
-@define
+@define(frozen=True)
 class Scalar:
     interpretation: ScalarInterpretation = ScalarInterpretation.Generic
 
@@ -187,7 +188,7 @@ class Scalar:
         return Vector(ncomps=other.ncomps + 1, interpretation=interpretation)
 
 
-@define
+@define(frozen=True)
 class Vector:
     ncomps: int
     interpretation: VectorInterpretation = VectorInterpretation.Generic
@@ -408,6 +409,16 @@ class Source(ABC, Generic[B, F, S, Z]):
         yield
 
 
+class FieldDataFilter(Protocol):
+    def __call__(self, field: Field, field_data: FieldData[floating]) -> FieldData[floating]:
+        ...
+
+
+class TopologyMerger(Protocol):
+    def __call__(self, topology: Topology) -> Tuple[Topology, FieldDataFilter]:
+        ...
+
+
 class CellType(Enum):
     Line = auto()
     Quadrilateral = auto()
@@ -427,8 +438,17 @@ class Topology(Protocol):
     def num_cells(self) -> int:
         ...
 
-    def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
+    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         ...
+
+    def create_merger(self) -> TopologyMerger:
+        ...
+
+    # def mapper(self) -> Mapper[Self]:
+    #     ...
+
+    # def tesselator(self, nvis: int = 1) -> Tesselator[Self]:
+    #     ...
 
 
 @runtime_checkable
@@ -445,11 +465,23 @@ class DiscreteTopology(Topology, Protocol):
 T = TypeVar("T", bound=Topology, contravariant=True)
 
 
-class Tesselator(Protocol[T]):
-    def tesselate_topology(self, topology: T) -> DiscreteTopology:
-        ...
+# class Discretizer(Protocol[T]):
+#     def discretize_topology(self, topology: T) -> DiscreteTopology:
+#         ...
 
-    def tesselate_field(
-        self, topology: T, field: Field, field_data: FieldData[floating]
-    ) -> FieldData[floating]:
-        ...
+#     def discretize_field(self, topology: T, field: Field, )
+
+
+# class TopologyMerger(Protocol):
+#     def merge_topology(self, topology: Topology) -> Tuple[Topology, FieldDataFilter]:
+#         ...
+
+
+# class Tesselator(Protocol[T]):
+#     def tesselate_topology(self, topology: T) -> DiscreteTopology:
+#         ...
+
+#     def tesselate_field(
+#         self, topology: T, field: Field, field_data: FieldData[floating]
+#     ) -> FieldData[floating]:
+#         ...

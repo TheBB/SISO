@@ -28,6 +28,8 @@ class PureGeometry(api.Source[Basis, Field, Step, Zone], Generic[T]):
     def properties(self) -> api.SourceProperties:
         return api.SourceProperties(
             instantaneous=True,
+            globally_keyed=True,
+            single_basis=True,
         )
 
     def configure(self, settings: api.ReaderSettings) -> None:
@@ -59,7 +61,7 @@ class PureGeometry(api.Source[Basis, Field, Step, Zone], Generic[T]):
                 shape=shape,
                 coords=corners,
                 local_key=str(i),
-                global_key=None,
+                global_key=i,
             )
 
     def topology(self, timestep: Step, basis: Basis, zone: Zone) -> T:

@@ -45,7 +45,8 @@ class VtfWriter(Writer[B, F, S, Z]):
     @property
     def properties(self) -> WriterProperties:
         return WriterProperties(
-            require_tesselated=True,
+            require_discrete_topology=True,
+            require_single_basis=True,
         )
 
     def configure(self, settings: WriterSettings):
@@ -132,10 +133,10 @@ class VtfWriter(Writer[B, F, S, Z]):
     def consume_timestep(self, timestep: S, source: Source[B, F, S, Z], geometry: F) -> None:
         if source.field_updates(timestep, geometry):
             self.update_geometry(timestep, source, geometry)
-        for basis in source.bases():
-            for field in source.fields(basis):
-                if source.field_updates(timestep, field):
-                    self.update_field(timestep, source, field)
+        basis = next(source.bases())
+        for field in source.fields(basis):
+            if source.field_updates(timestep, field):
+                self.update_field(timestep, source, field)
 
     def consume(self, source: Source[B, F, S, Z], geometry: F):
         self.step_interpretation = source.properties.step_interpretation

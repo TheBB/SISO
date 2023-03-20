@@ -56,17 +56,6 @@ class PassthroughBase(
         yield self.source
 
 
-class PassthroughSZ(
-    PassthroughBase[InB, InF, S, Z, OutB, OutF, S, Z],
-    Generic[S, Z, InB, OutB, InF, OutF],
-):
-    def steps(self) -> Iterator[S]:
-        return self.source.steps()
-
-    def zones(self) -> Iterator[Z]:
-        return self.source.zones()
-
-
 class PassthroughBFS(
     PassthroughBase[B, F, S, InZ, B, F, S, OutZ],
     Generic[B, F, S, InZ, OutZ],
@@ -137,6 +126,23 @@ class PassthroughBSZ(
 
     def topology_updates(self, step: S, basis: B) -> bool:
         return self.source.topology_updates(step, basis)
+
+
+class PassthroughFSZ(
+    PassthroughBase[InB, F, S, Z, OutB, F, S, Z],
+    Generic[F, S, Z, InB, OutB],
+):
+    def steps(self) -> Iterator[S]:
+        return self.source.steps()
+
+    def zones(self) -> Iterator[Z]:
+        return self.source.zones()
+
+    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+        return self.source.field_data(step, field, zone)
+
+    def field_updates(self, step: S, field: F) -> bool:
+        return self.source.field_updates(step, field)
 
 
 class PassthroughAll(PassthroughBase[B, F, S, Z, B, F, S, Z], Generic[B, F, S, Z]):

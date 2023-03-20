@@ -1,24 +1,24 @@
 from typing import Optional
 
-from attrs import define
+from attrs import define, field
 
 from . import api
 
 
-@define
+@define(frozen=True)
 class Basis(api.Basis):
     name: str
 
 
-@define(eq=False)
+@define(frozen=True)
 class Step(api.Step):
     index: int
     value: Optional[float] = None
 
 
-@define(eq=False)
+@define(frozen=True)
 class Field(api.Field):
     name: str
     type: api.FieldType
-    cellwise: bool = False
-    splittable: bool = True
+    cellwise: bool = field(default=False, kw_only=True)
+    splittable: bool = field(default=True, kw_only=True)
