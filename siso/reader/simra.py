@@ -8,26 +8,13 @@ from enum import Enum, auto
 from functools import lru_cache, partial
 from itertools import count
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Dict,
-    Iterator,
-    List,
-    Literal,
-    Optional,
-    TextIO,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Callable, ClassVar, Dict, Iterator, List, Literal, Optional, TextIO, Tuple, TypeVar, Union
 
 import f90nml
 import numpy as np
 import scipy.io
 from attrs import define
-from numpy import floating
+from numpy import floating, generic
 from typing_extensions import Self
 
 from .. import api, util
@@ -39,6 +26,9 @@ from ..util import FieldData
 from . import FindReaderSettings
 
 
+G = TypeVar("G", bound=generic)
+
+
 class FortranFile(scipy.io.FortranFile):
     def jump(self):
         return util.FileJump(self._fp)
@@ -48,7 +38,7 @@ class FortranFile(scipy.io.FortranFile):
         self._fp.seek(size, 1)
         assert self._read_size() == size
 
-    def read_first(self, dtype: np.dtype) -> Any:
+    def read_first(self, dtype: np.dtype[G]) -> G:
         size = self._read_size(eof_ok=True)
         retval = np.fromfile(self._fp, dtype=dtype, count=1)[0]
         self._fp.seek(size - dtype.itemsize, 1)
