@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from functools import partial
 import logging
+from functools import partial
 from io import BytesIO, StringIO
 from typing import IO, Dict, Iterable, Iterator, List, Optional, Tuple, overload
 

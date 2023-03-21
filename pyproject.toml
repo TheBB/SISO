@@ -20,13 +20,16 @@ pyerfa = "^2.0.0.1"
 attrs = "^22.2.0"
 click-option-group = "^0.5.5"
 
+[tool.poetry.extras]
+vtf = ["vtfwriter"]
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.1"
 mypy = "^1.0.0"
 typing-protocol-intersection = "^0.2.3"
-poethepoet = "^0.18.1"
 black = "^23.1.0"
 isort = "^5.12.0"
+ruff = "^0.0.257"
 
 [tool.poetry.scripts]
 siso = "siso.__main__:main"
@@ -48,15 +51,6 @@ known_vtk = ["vtkmodules", "vtk"]
 line_length = 110
 lines_after_imports = 2
 
-[tool.poe.tasks]
-test = "pytest"
-mypy = "mypy siso"
-lint = "ruff siso"
-check = ["mypy", "test", "lint"]
-black = "black siso"
-isort = "isort siso"
-fmt = ["black", "isort"]
-
 [tool.mypy]
 plugins = ["numpy.typing.mypy_plugin"]
 
@@ -70,6 +64,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "h5py.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "IPython.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

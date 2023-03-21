@@ -296,8 +296,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
 
     def discover_bases(self) -> None:
         basis_names = dict.fromkeys(
-            name for name in chain.from_iterable(self.h5.values())
-            if name != "timeinfo"
+            name for name in chain.from_iterable(self.h5.values()) if name != "timeinfo"
         )
         bases = (self.make_basis(name) for name in basis_names)
         self._bases = {basis.name: basis for basis in bases if basis.num_patches(self) > 0}
