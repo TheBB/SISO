@@ -202,6 +202,41 @@ pipfile-deprecated-finder = ["pip-shims (>=0.5.2)", "pipreqs", "requirementslib"
 plugins = ["setuptools"]
 
 [[package]]
+name = "jax"
+version = "0.4.6"
+description = "Differentiate, compile, and transform Numpy code."
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+numpy = ">=1.20"
+opt_einsum = "*"
+scipy = ">=1.5"
+
+[package.extras]
+australis = ["protobuf (>=3.13,<4)"]
+ci = ["jaxlib (==0.4.4)"]
+cpu = ["jaxlib (==0.4.6)"]
+cuda = ["jaxlib (==0.4.6+cuda11.cudnn86)"]
+cuda11_cudnn82 = ["jaxlib (==0.4.6+cuda11.cudnn82)"]
+cuda11_cudnn86 = ["jaxlib (==0.4.6+cuda11.cudnn86)"]
+minimum-jaxlib = ["jaxlib (==0.4.4)"]
+tpu = ["jaxlib (==0.4.6)", "libtpu-nightly (==0.1.dev20230309)", "requests"]
+
+[[package]]
+name = "jaxlib"
+version = "0.4.6"
+description = "XLA library for JAX"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+numpy = ">=1.20"
+scipy = ">=1.5"
+
+[[package]]
 name = "kiwisolver"
 version = "1.4.4"
 description = "A fast implementation of the Cassowary constraint solver"
@@ -316,6 +351,21 @@ description = "Fundamental package for array computing in Python"
 category = "main"
 optional = false
 python-versions = ">=3.8"
+
+[[package]]
+name = "opt-einsum"
+version = "3.3.0"
+description = "Optimizing numpys einsum function"
+category = "main"
+optional = false
+python-versions = ">=3.5"
+
+[package.dependencies]
+numpy = ">=1.7"
+
+[package.extras]
+docs = ["sphinx (==1.2.3)", "sphinxcontrib-napoleon", "sphinx-rtd-theme", "numpydoc"]
+tests = ["pytest", "pytest-cov", "pytest-pep8"]
 
 [[package]]
 name = "packaging"
@@ -590,7 +640,7 @@ vtf = []
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "0b9955f84c880b16ea7b6323217b605188593f8a97b521222615f0ec48c9886a"
+content-hash = "27d7cec5593e7db3a23b03b40141ed73195d4a1bcbadb7b8a1a7c1ad68ff1fa5"
 
 [metadata.files]
 attrs = []
@@ -611,6 +661,8 @@ h5py = []
 importlib-resources = []
 iniconfig = []
 isort = []
+jax = []
+jaxlib = []
 kiwisolver = []
 lrsplines = []
 markdown-it-py = []
@@ -620,6 +672,7 @@ mypy = []
 mypy-extensions = []
 netcdf4 = []
 numpy = []
+opt-einsum = []
 packaging = []
 pathspec = []
 pillow = []

@@ -19,6 +19,8 @@ netCDF4 = "^1.6.2"
 pyerfa = "^2.0.0.1"
 attrs = "^22.2.0"
 click-option-group = "^0.5.5"
+jax = "^0.4.6"
+jaxlib = "^0.4.6"
 
 [tool.poetry.extras]
 vtf = ["vtfwriter"]

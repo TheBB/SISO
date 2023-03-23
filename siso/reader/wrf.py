@@ -137,7 +137,7 @@ class NetCdf(api.Source[Basis, Field, Step, Zone]):
         assert time == "Time"
         assert len(dimensions) in (2, 3)
         dimensions = list(dimensions)
-        data = self.dataset[name][index, ...]
+        data = self.dataset[name][index, ...].filled()
 
         # Handle staggering
         for dim, dim_name in enumerate(dimensions):
