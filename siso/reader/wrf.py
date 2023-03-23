@@ -439,7 +439,7 @@ class WRFReader(NetCDFHelper):
             log.warning("Geocentric coordinates of WRF data is experimental, please do not use indiscriminately")
 
         config.ensure_limited(
-            ConfigTarget.Reader, 'volumetric', 'periodic',
+            ConfigTarget.Reader, 'volumetric', 'periodic', 'translate',
             reason="not supported by WRF"
         )
 

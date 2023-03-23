@@ -71,6 +71,7 @@ FORMATS = ['vtf', 'vtk', 'vtu', 'vts', 'pvd', 'nc', 'dat']
 @click.option('--fix-orientation/--no-fix-orientation', 'fix_orientation', default=True)
 @click.option('--lr-are-nurbs', 'lr_are_nurbs', flag_value='always', help='Always treat LR patches as NURBS.')
 @click.option('--lr-are-not-nurbs', 'lr_are_nurbs', flag_value='never', help='Never treat LR patches as NURBS.')
+@click.option('--translate', 'translate', nargs=3, type=float)
 
 @click.option('--endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')
 @click.option('--in-endianness', 'input_endianness', type=click.Choice(['native', 'little', 'big']), default='native')

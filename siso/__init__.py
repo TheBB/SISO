@@ -148,6 +148,9 @@ class Config(metaclass=ConfigMeta):
     # Whether to attempt to automatically resolve RHS/LHS systems
     fix_orientation = Setting(True, Reader, Writer, name='--(no-)fix-orientation')
 
+    # Translate on reader level
+    translate = Setting(None, Pipeline, name='--translate')
+
     def cname(self, key: str) -> str:
         """Get the canonical name of a setting."""
         return self._canonical_names[key]
