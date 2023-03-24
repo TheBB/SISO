@@ -205,7 +205,7 @@ testcase('hdf5/TestCell1D.hdf5', 1, formats)
 pr = '--periodic'
 pl = '--planar'
 ex = '--extrude'
-gl = ['--coords', 'geocentric']
+gl = ['--geocentric']
 for n in ['eastward', 'northward', 'outward']:
     formats = ['vtu', 'vts', 'pvd']
     testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, suffix='-volumetric')

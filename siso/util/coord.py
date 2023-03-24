@@ -72,12 +72,10 @@ class UtmConverter:
     def to_utm_vf(self, lon: Array, lat: Array, vx: Array, vy: Array) -> Tuple[Array, Array]:
         lonj, latj = jnp.array(lon), jnp.array(lat)
 
-        ef = lambda lon, lat: self._to_utm(lon, lat)[0]
-        de_dlon, de_dlat = jax.vmap(jax.grad(ef, (0, 1)))(lonj, latj)
+        de_dlon, de_dlat = jax.vmap(jax.grad(self._to_easting, (0, 1)))(lonj, latj)
         de_dlon, de_dlat = normalize_pair(de_dlon, de_dlat)
 
-        nf = lambda lon, lat: self._to_utm(lon, lat)[1]
-        dn_dlon, dn_dlat = jax.vmap(jax.grad(nf, (0, 1)))(lonj, latj)
+        dn_dlon, dn_dlat = jax.vmap(jax.grad(self._to_northing, (0, 1)))(lonj, latj)
         dn_dlon, dn_dlat = normalize_pair(dn_dlon, dn_dlat)
 
         return (
@@ -88,18 +86,24 @@ class UtmConverter:
     def to_lonlat_vf(self, e: Array, n: Array, vx: Array, vy: Array) -> Tuple[Array, Array]:
         ej, nj = jnp.array(e), jnp.array(n)
 
-        lonf = lambda x, y: self._to_lonlat(x, y)[0]
-        dlon_dx, dlon_dy = jax.vmap(jax.grad(lonf, (0, 1)))(ej, nj)
+        dlon_dx, dlon_dy = jax.vmap(jax.grad(self._to_lon, (0, 1)))(ej, nj)
         dlon_dx, dlon_dy = normalize_pair(dlon_dx, dlon_dy)
 
-        latf = lambda x, y: self._to_lonlat(x, y)[1]
-        dlat_dx, dlat_dy = jax.vmap(jax.grad(latf, (0, 1)))(ej, nj)
+        dlat_dx, dlat_dy = jax.vmap(jax.grad(self._to_lat, (0, 1)))(ej, nj)
         dlat_dx, dlat_dy = normalize_pair(dlat_dx, dlat_dy)
 
         return (
             np.array(dlon_dx) * vx + np.array(dlon_dy) * vy,
             np.array(dlat_dx) * vx + np.array(dlat_dy) * vy,
         )
+
+    def _to_easting(self, lon: JaxArray, lat: JaxArray) -> JaxArray:
+        easting, _ = self._to_utm(lon, lat)
+        return easting
+
+    def _to_northing(self, lon: JaxArray, lat: JaxArray) -> JaxArray:
+        _, northing = self._to_utm(lon, lat)
+        return northing
 
     def _to_utm(self, lon: JaxArray, lat: JaxArray) -> Tuple[JaxArray, JaxArray]:
         lon = jnp.deg2rad(lon)
@@ -127,6 +131,14 @@ class UtmConverter:
         )
 
         return easting, northing
+
+    def _to_lon(self, easting: JaxArray, northing: JaxArray) -> JaxArray:
+        lon, _ = self._to_lonlat(easting, northing)
+        return lon
+
+    def _to_lat(self, easting: JaxArray, northing: JaxArray) -> JaxArray:
+        _, lat = self._to_lonlat(easting, northing)
+        return lat
 
     def _to_lonlat(self, easting: JaxArray, northing: JaxArray) -> Tuple[JaxArray, JaxArray]:
         xi = (northing - self.N0) / self.k0 / self.A

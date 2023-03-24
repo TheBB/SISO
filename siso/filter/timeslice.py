@@ -90,10 +90,24 @@ class GroupedTimeSource(PassthroughBFZ[B, F, Z, S, GroupedStep[S]], Generic[B, F
 
 class StepSlice(GroupedTimeSource[B, F, S, Z]):
     arguments: Tuple[Optional[int]]
+    explicit_instantaneous: bool
 
-    def __init__(self, source: api.Source[B, F, S, Z], arguments: Tuple[Optional[int]]):
+    def __init__(
+        self,
+        source: api.Source[B, F, S, Z],
+        arguments: Tuple[Optional[int]],
+        explicit_instantaneous: bool = False,
+    ):
         super().__init__(source)
         self.arguments = arguments
+        self.explicit_instantaneous = explicit_instantaneous
+
+    @property
+    def properties(self) -> api.SourceProperties:
+        props = self.source.properties
+        if self.explicit_instantaneous:
+            return props.update(instantaneous=True)
+        return props
 
     def steps(self) -> Iterator[GroupedStep[S]]:
         for i, times in enumerate(islice_group(self.source.steps(), *self.arguments)):

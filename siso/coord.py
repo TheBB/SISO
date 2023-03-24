@@ -90,13 +90,21 @@ class Geodetic(api.CoordinateSystem):
     def parameters(self) -> Tuple[str, ...]:
         return (self.ellipsoid.name,)
 
+    @property
+    def semi_major_axis(self) -> float:
+        return self.ellipsoid.semi_major_axis
+
+    @property
+    def flattening(self) -> float:
+        return self.ellipsoid.flattening
+
 
 @systems.register
 @define
 class Utm(api.CoordinateSystem):
     name: ClassVar[str] = "UTM"
     zone_number: int
-    zone_letter: str
+    northern: bool
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Utm:
@@ -106,10 +114,12 @@ class Utm(api.CoordinateSystem):
         except StopIteration:
             raise ValueError(zone)
         zone_number = int(zone[:i])
-        zone_letter = zone[i:].upper()
-        if len(zone_letter) > 1:
-            zone_letter = "N" if zone_letter.startswith("N") else "M"
-        return cls(zone_number, zone_letter)
+        lat_band = zone[i:]
+        if len(lat_band) == 1:
+            northern = lat_band.casefold() >= "N"
+        else:
+            northern = not lat_band[0].casefold() == "S"
+        return cls(zone_number, northern)
 
     @classmethod
     def default(cls) -> Utm:
@@ -117,11 +127,7 @@ class Utm(api.CoordinateSystem):
 
     @property
     def parameters(self) -> Tuple[str, ...]:
-        return (str(self.zone_number), self.zone_letter)
-
-    @property
-    def northern(self) -> bool:
-        return self.zone_letter >= "N"
+        return (str(self.zone_number), "north" if self.northern else "south")
 
 
 @systems.register
@@ -319,7 +325,8 @@ def _(
 @register_coords(Geodetic, Utm)
 def _(src: Geodetic, tgt: Utm, data: FieldData[floating]) -> FieldData[floating]:
     lon, lat, *rest = data.components
-    x, y = coord.lonlat_to_utm(lon, lat, tgt.zone_number, tgt.zone_letter)
+    converter = coord.UtmConverter(src.semi_major_axis, src.flattening, tgt.zone_number, tgt.northern)
+    x, y = converter.to_utm(lon, lat)
     return FieldData.concat(x, y, *rest)
 
 
@@ -327,7 +334,8 @@ def _(src: Geodetic, tgt: Utm, data: FieldData[floating]) -> FieldData[floating]
 def _(src: Geodetic, tgt: Utm, data: FieldData[floating], coords: FieldData[floating]) -> FieldData[floating]:
     lon, lat, *_ = coords.components
     in_x, in_y, *rest = data.components
-    out_x, out_y = coord.lonlat_to_utm_vf(lon, lat, in_x, in_y, tgt.zone_number, tgt.zone_letter)
+    converter = coord.UtmConverter(src.semi_major_axis, src.flattening, tgt.zone_number, tgt.northern)
+    out_x, out_y = converter.to_utm_vf(lon, lat, in_x, in_y)
     return FieldData.concat(out_x, out_y, *rest)
 
 
@@ -335,7 +343,7 @@ def _(src: Geodetic, tgt: Utm, data: FieldData[floating], coords: FieldData[floa
 def _(src: Utm, tgt: Geodetic, data: FieldData[floating]) -> FieldData[floating]:
     x, y, *rest = data.components
     converter = coord.UtmConverter(tgt.semi_major_axis, tgt.flattening, src.zone_number, src.northern)
-    lon, lat = converter.to_lonlat(x, y, src.zone_number, src.zone_letter)
+    lon, lat = converter.to_lonlat(x, y)
     return FieldData.concat(lon, lat, *rest)
 
 
@@ -343,6 +351,6 @@ def _(src: Utm, tgt: Geodetic, data: FieldData[floating]) -> FieldData[floating]
 def _(src: Utm, tgt: Geodetic, data: FieldData[floating], coords: FieldData[floating]) -> FieldData[floating]:
     x, y, *_ = coords.components
     in_x, in_y, *rest = data.components
-    converter = coord.UtmConverter(src.semi_major_axis, src.flattening, tgt.zone_number, tgt.northern)
-    out_x, out_y = converter.to_lonlat_vf(x, y, in_x, in_y, src.zone_number, src.zone_letter)
+    converter = coord.UtmConverter(tgt.semi_major_axis, tgt.flattening, src.zone_number, src.northern)
+    out_x, out_y = converter.to_lonlat_vf(x, y, in_x, in_y)
     return FieldData.concat(out_x, out_y, *rest)
