@@ -70,6 +70,12 @@ class Split(DecomposeBase[B, F, S, Z]):
         super().__init__(source)
         self.splits = splits
 
+    @property
+    def properties(self) -> api.SourceProperties:
+        return self.source.properties.update(
+            split_fields=[],
+        )
+
     def fields(self, basis: B) -> Iterator[DecomposedField[F]]:
         to_destroy = {split.source_name for split in self.splits if split.destroy}
         fields = {field.name: field for field in self.source.fields(basis)}

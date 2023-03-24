@@ -46,6 +46,12 @@ class Recombine(PassthroughBSZ[B, S, Z, F, RecombinedField[F]]):
         super().__init__(source)
         self.recombinations = recombinations
 
+    @property
+    def properties(self) -> api.SourceProperties:
+        return self.source.properties.update(
+            recombine_fields=[],
+        )
+
     def use_geometry(self, geometry: RecombinedField[F]) -> None:
         self.source.use_geometry(geometry.original_field)
 

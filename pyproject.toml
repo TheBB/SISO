@@ -56,7 +56,6 @@ lines_after_imports = 2
 
 [tool.mypy]
 plugins = ["numpy.typing.mypy_plugin"]
-disallow_any_explicit = true
 
 [[tool.mypy.overrides]]
 module = "erfa"

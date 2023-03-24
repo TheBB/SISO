@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import enum
 import logging
 import sys
 from functools import partial, wraps
 from itertools import chain
 from pathlib import Path
-from typing import List, Literal, Optional, Sequence, Tuple
+from typing import Any, Callable, List, Literal, Optional, Sequence, Tuple, Type, TypeVar
 
 import click
 from click_option_group import MutuallyExclusiveOptionGroup, optgroup
@@ -21,25 +22,22 @@ from .writer import OutputFormat, find_writer
 from .writer.api import OutputMode, WriterSettings
 
 
-class Enum(click.Choice):
-    def __init__(self, enum, case_sensitive: bool = False):
-        self._enum = enum
-        super().__init__(choices=[item.value for item in enum], case_sensitive=case_sensitive)
-
-    def convert(self, value, param, ctx):
-        name = super().convert(value, param, ctx)
-        return self._enum(name)
+T = TypeVar("T")
 
 
-def store_coords(ctx, param, value):
-    if value is None:
-        return
-    system = coord.find_system(value)
-    ctx.params["out_coords"] = system
-    return system
+def coord_callback(
+    ctx: click.Context,
+    param: click.Parameter,
+    value: T,
+    constructor: Callable[[T], CoordinateSystem],
+):
+    """Callback used for converting a CLI argument to a coordinate system and
+    assigning it to the 'out_coords' parameter being passed to the main
+    function.
 
-
-def coord_callback(ctx, param, value, constructor):
+    This is used for the multiple different options for specifying out_coords in
+    slightly different ways.
+    """
     if not value:
         return
     system = constructor(value)
@@ -48,6 +46,13 @@ def coord_callback(ctx, param, value, constructor):
 
 
 def defaults(**def_kwargs):
+    """Utility decorator for assigning default values to the main function after
+    the CLI arguments have been processed but right before execution.
+
+    This is used to provide defaults for parameters which we can't do with
+    click, for whatever reason.
+    """
+
     def decorator(func):
         @wraps(func)
         def inner(**in_kwargs):
@@ -61,10 +66,26 @@ def defaults(**def_kwargs):
     return decorator
 
 
+class Enum(click.Choice):
+    """Parameter type for selecting one choice from an enum."""
+
+    _enum: Type[enum.Enum]
+
+    def __init__(self, enum: Type[enum.Enum], case_sensitive: bool = False):
+        self._enum = enum
+        super().__init__(choices=[item.value for item in enum], case_sensitive=case_sensitive)
+
+    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]):
+        name = super().convert(value, param, ctx)
+        return self._enum(name)
+
+
 class SliceType(click.ParamType):
+    """Parameter type for parsing a range using Python syntax."""
+
     name = "[START:]STOP[:STEP]"
 
-    def convert(self, value, param, ctx):
+    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]):
         if value is None or isinstance(value, tuple):
             return value
         try:
@@ -76,13 +97,17 @@ class SliceType(click.ParamType):
 
 
 def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
+    """Construct a suitable source object from one or more input paths."""
     if len(inpath) == 1:
+        # If there's only one input file, find a suitable reader for it.
         source = find_reader(inpath[0], settings)
         if not source:
             logging.critical(f"Unable to determine type of {inpath[0]}")
             sys.exit(2)
         return source
     else:
+        # If there's multiple input files, find readers for each and bundle them
+        # in a MultiSource object.
         sources: List[Source] = []
         for path in inpath:
             source = find_reader(path, settings)
@@ -93,12 +118,16 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
         return MultiSource(sources)
 
 
+# Main entry-point for the Siso application
+#
+# We use click to parse CLI arguments. Each option should be part of a group.
+# Some groups are mutually exclusive, others are just based on topic.
 @click.command(
     name="Siso",
     help="Convert between various scientific data formats.",
 )
 
-# Output
+# Output options
 @optgroup.group("Output")
 @optgroup.option(
     "-o",
@@ -125,12 +154,19 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 )
 
 # Output coordinate systems
+#
+# It's not possible to assign all of these options to the 'out_coords'
+# parameter. They would get in each other's way. Instead we use
+# expose_value=False to hide the parsed value from the main function, and
+# instead assign the value to the correct parameter using a callback function.
 @optgroup.group("Output coordinate systems", cls=MutuallyExclusiveOptionGroup)
+
+# This is the most general option
 @optgroup.option(
     "--out-coords",
     "--coords",
     expose_value=False,
-    callback=store_coords,
+    callback=partial(coord_callback, constructor=lambda x: coord.find_system(x)),
     help=(
         "Coordinate system of output. "
         "For simpler usage, use one of the quick options below instead. "
@@ -140,6 +176,9 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
         "Note: 'utm:33s' will be interpreted as zone 33S, which is north of the equator."
     ),
 )
+
+# Each of these options are quick and easy versions for various more specific
+# coordinate systems.
 @optgroup.option(
     "--geocentric",
     expose_value=False,
@@ -338,7 +377,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     ),
 )
 
-# Verbosity options
+# Verbosity
 @optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
 @optgroup.option("--debug", "verbosity", flag_value="debug", help="Print debug messages.")
 @optgroup.option("--info", "verbosity", flag_value="info", default=True, help="Print normal information.")
@@ -350,7 +389,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.group("Log formatting")
 @optgroup.option("--rich/--no-rich", default=True, help="Use rich output formatting.")
 
-# Debugging options
+# Debugging
 @optgroup.group("Debugging")
 @optgroup.option("--verify-strict", is_flag=True, help="Add extra assertions for debugging purposes.")
 @optgroup.option("--instrument", is_flag=True, help="Add instrumentation for profiling purposes.")
@@ -363,9 +402,13 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     required=True,
     metavar="INPUT...",
 )
+
+# Final step befor execution: apply defaults that are not provided by the click machinery.
 @defaults(
     out_coords=coord.Generic(),
 )
+
+# Main entry-point
 def main(
     # Pipeline options
     require_unstructured: bool,
@@ -415,10 +458,10 @@ def main(
         ],
     )
 
-    logging.info(out_coords)
-
     # Resolve potential mismatches between output and format
     if outpath and not fmt:
+        # Output path is given but format is not: use the output path suffix to
+        # determine the format.
         suffix = outpath.suffix[1:].casefold()
         if suffix == "dat":
             logging.warning("Interpreting .dat filetype as SIMRA Mesh file")
@@ -428,12 +471,16 @@ def main(
         else:
             fmt = OutputFormat(suffix)
     elif not outpath:
+        # Output path is not given. Set format to PVD if not explicitly
+        # provided, and use it to create a default output path.
         fmt = fmt or OutputFormat.Pvd
         outpath = Path(inpath[0].name).with_suffix(fmt.default_suffix())
+
+    # Hint to the type checker that these are non-null
     assert fmt
     assert outpath
 
-    # Construct source and sink objects
+    # Construct source object for reading input
     source = find_source(
         inpath,
         FindReaderSettings(
@@ -454,6 +501,7 @@ def main(
         )
     )
 
+    # Construct sink object for writing output
     sink = find_writer(fmt, outpath)
     if not sink:
         sys.exit(3)
@@ -464,18 +512,32 @@ def main(
         )
     )
 
+    # Apply filters according to the CLI options provided, as well as the known
+    # properties of the source and the sink. This produces a 'stack' of source
+    # objects, the bottom reading from the input on disk, and each successive
+    # one transforming the data from the stage below in some way.
+    #
+    # The sequence of filters can be crucial! Please read the documentation in
+    # siso.api for some of the terms used.
+    #
+    # In some cases the properties of the source are not fully known before
+    # opening the file, thus we trigger the __enter__ method already here.
     with source:
-        # in_props = source.properties
         out_props = sink.properties
 
+        # Debugging: if strict verification is required, add the filter as early
+        # as possible.
         if verify_strict:
             source = filter.Strict(source)
             logging.debug("Attaching Strict (--verify-strict)")
 
+        # If the source does not have zones with global keys, insert the
+        # KeyZones filter. Many operations later require this.
         if not source.properties.globally_keyed:
             logging.debug("Attaching KeyZones (source is not globally keyed)")
             source = filter.KeyZones(source)
 
+        # Filter out irrelevant bases if the --basis option is provided.
         if basis_filter:
             logging.debug("Attaching BasisFilter (--basis)")
             allowed_bases = set(
@@ -483,59 +545,88 @@ def main(
             )
             source = filter.BasisFilter(source, allowed_bases)
 
+        # Discretizing superlinear geometries happens before basis merging. This
+        # is because basis merging currently discretizes geometries anyway.
+        # There's no reason why it MUST do so. If we fix the BasisMerge filter
+        # so that it preserves superlinearity of bases, we should remove this
+        # step, and instead apply the nvis parameter after basis merging.
         if nvis > 1:
             logging.debug("Attaching Discretize (--nvis)")
             source = filter.Discretize(source, nvis)
 
+        # If the sink can only handle a single basis, we must merge the bases
+        # into one. This step also has the side-effect of discretizing the
+        # geometry, which is why it must come after handling of nvis.
         if out_props.require_single_basis and not source.properties.single_basis:
             logging.debug("Attaching BasisMerge (sink requires single basis)")
             source = filter.BasisMerge(source)
 
+        # Apply discretization for any number of other reasons except nvis,
+        # which has been handled earlier in the pipeline.
         if not source.properties.discrete_topology:
             if out_props.require_discrete_topology:
                 logging.debug("Attaching Discretize (sink requires discrete)")
                 source = filter.Discretize(source, 1)
             elif out_props.require_single_zone:
+                # The zone merge filter only works for discrete bases, so apply
+                # it automatically.
                 logging.debug("Attaching Discretize (sink requires single zone)")
                 source = filter.Discretize(source, 1)
             elif require_unstructured:
                 logging.debug("Attaching Discretize (--unstructured)")
                 source = filter.Discretize(source, 1)
 
+        # If the sink cannot handle more than one zone, apply the zone merge filter.
         if not source.properties.single_zoned and out_props.require_single_zone:
             logging.debug("Attaching ZoneMerge (sink requires single zone)")
             source = filter.ZoneMerge(source)
 
+        # If the source recommends splitting some fields, do that now.
         if source.properties.split_fields:
             logging.debug("Attaching Split (source recommendation)")
             source = filter.Split(source, source.properties.split_fields)
 
+        # If the source recommends recombining some fields, do that now.
         if source.properties.recombine_fields:
             logging.debug("Attaching Recombine (source recommendation)")
             source = filter.Recombine(source, source.properties.recombine_fields)
 
+        # Decompose vector fields into their scalar components.
         if decompose:
             logging.debug("Attaching Decompose (--decompose)")
             source = filter.Decompose(source)
 
+        # Force structured topologies to become unstructured. This requires
+        # discrete topologies.
         if require_unstructured:
             logging.debug("Attaching ForceUnstructured (--unstructured)")
             source = filter.ForceUnstructured(source)
 
+        # Convert eigenmode fields to displacements.
         if eigenmodes_are_displacement:
             logging.debug("Attaching EigenDisp (--eigenmodes-are-displacement)")
             source = filter.EigenDisp(source)
 
+        # Apply timestep slicing if necessary.
         if timestep_slice is not None:
             logging.debug("Attaching StepSlice (--times)")
             source = filter.StepSlice(source, timestep_slice)
         elif timestep_index is not None:
             logging.debug("Attaching StepSlice (--time)")
-            source = filter.StepSlice(source, (timestep_index, timestep_index + 1))
+            source = filter.StepSlice(
+                source,
+                (timestep_index, timestep_index + 1),
+                explicit_instantaneous=True,
+            )
         elif only_final_timestep:
             logging.debug("Attaching LastTime (--last)")
             source = filter.LastTime(source)
 
+        # At this point, abort execution if the source has (or may have)
+        # multiple steps, but the output requires only one.
+        assert not (out_props.require_instantaneous and not source.properties.instantaneous)
+
+        # Apply field filtering if necessary.
         if no_fields:
             logging.debug("Attaching FieldFilter (--no-fields)")
             source = filter.FieldFilter(source, set())
@@ -546,26 +637,33 @@ def main(
             )
             source = filter.FieldFilter(source, allowed_fields)
 
+        # Apply another strict verification filter.
         if verify_strict:
             logging.debug("Attaching Strict (--verify-strict)")
             source = filter.Strict(source)
 
-        assert not (out_props.require_instantaneous and not source.properties.instantaneous)
-
+        # Print the names of all the discovered fields to the debug log
         for basis in source.bases():
             for field in source.fields(basis):
                 logging.debug(
                     f"Discovered field '{field.name}' with "
-                    f"{util.pluralize(field.ncomps, 'component', 'components')}"
+                    f"{util.pluralize(field.ncomps, 'component', 'components')} "
+                    f"(basis '{basis.name}')"
                 )
 
+        # Choose a geometry to use. This requires filtering based on the
+        # coordinate system options. First, get a list of all available geometry
+        # fields.
         geometries = [geometry for basis in source.bases() for geometry in source.geometries(basis)]
 
+        # The --in-coords option filters the geometry list, so apply that here.
         if in_coords:
             geometries = [geometry for geometry in geometries if geometry.fits_system_name(in_coords)]
             names = ", ".join(f"'{geometry.name}'" for geometry in geometries)
             logging.debug(f"Retaining {names}")
 
+        # At this point, find the cheapest coordinate conversion path from a
+        # source geometry to the output coordinate system.
         result = coord.optimal_system([geometry.coords for geometry in geometries], out_coords)
         if result is None:
             logging.critical(f"Unable to determine a coordinate system conversion path to {out_coords}")
@@ -574,11 +672,13 @@ def main(
                 logging.critical(f"- {geometry.coords} (field '{geometry.name}')")
             sys.exit(3)
 
+        # Pick a geometry field and notify the source stack that we are about to use it.
         i, path = result
         geometry = geometries[i]
         logging.info(f"Using '{geometry.name}' as geometry")
         source.use_geometry(geometry)
 
+        # If the coordinate conversion path is nontrivial, apply it now.
         if path:
             logging.debug("Coordinate conversion path:")
             str_path = " -> ".join(str(system) for system in path)
@@ -586,13 +686,16 @@ def main(
             logging.debug("Attaching CoordTransform")
             source = filter.CoordTransform(source, path)
 
+        # Debugging option: apply an instrumentation object for profiling if required.
         instrumenter: Optional[Instrumenter] = None
         if instrument:
             instrumenter = Instrumenter(source)
 
+        # Open the sink object and ask it to consume data from the source stack.
         with sink:
             sink.consume(source, geometry)
 
+        # Print instrumentation data.
         if instrument:
             assert instrumenter
             instrumenter.report()
