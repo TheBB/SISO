@@ -49,7 +49,7 @@ class PureGeometry(api.Source[Basis, Field, Step, Zone], Generic[T]):
         yield
 
     def geometries(self, basis: Basis) -> Iterator[Field]:
-        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].ncomps, coords=coord.Generic()))
+        yield Field("Geometry", type=api.Geometry(self.controlpoints[0].num_comps, coords=coord.Generic()))
 
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)

@@ -71,11 +71,10 @@ class UnstructuredTopology(DiscreteTopology):
             cells[i] = list(map(int, next(io).split()))
 
         # IFEM uses a different cell numbering than we do, so renumber
-        cells[:, 6], cells[:, 7] = cells[:, 7].copy(), cells[:, 6].copy()
-        cells[:, 2], cells[:, 3] = cells[:, 3].copy(), cells[:, 2].copy()
+        cell_data = FieldData(cells).swap_components(6, 7).swap_components(2, 3)
 
         corners = (tuple(nodes[0]),)
-        topology = UnstructuredTopology(num_nodes, FieldData(cells), CellType.Hexahedron)
+        topology = UnstructuredTopology(num_nodes, cell_data, CellType.Hexahedron)
         return corners, topology, FieldData(nodes)
 
     @overload
@@ -133,7 +132,7 @@ class UnstructuredTopology(DiscreteTopology):
 
     @property
     def num_cells(self) -> int:
-        return self.cells.ndofs
+        return self.cells.num_dofs
 
     def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         # Discretizing an unstructured topology is a no-op.

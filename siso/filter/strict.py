@@ -77,5 +77,5 @@ class Strict(PassthroughAll[B, F, S, Z]):
         assert spec.splittable == field.splittable
         assert spec.name == field.name
         assert spec.type == field.type
-        assert data.ncomps == field.ncomps
+        assert data.num_comps == field.ncomps
         return data

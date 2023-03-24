@@ -107,7 +107,7 @@ class IfemBasis(Basis):
     @lru_cache(maxsize=1)
     def ncomps(self, source: Ifem) -> int:
         _, _, cps = self.patch_at(0, 0, source)
-        return cps.ncomps
+        return cps.num_comps
 
 
 @define(frozen=True)
