@@ -319,18 +319,17 @@ class SplineTesselator(api.TopologyMerger):
 
     `new_data` will be compatible with `new_topology`. Here, `self` is an
     instance of SplineTesselator.
+
+    Parameters:
+    - topology: the 'master' topology. This will be used to determine the
+        parametric evaluation points used to discretize other topologies.
+    - nvis: number of subdivions per element
     """
 
     nodal_knots: List[np.ndarray]
     cellwise_knots: List[np.ndarray]
 
     def __init__(self, topology: SplineTopology, nvis: int = 1):
-        """Parameters:
-        - topology: the 'master' topology. This will be used to determine the
-            parametric evaluation points used to discretize other topologies.
-        - nvis: number of subdivions per element
-        """
-
         # These are the parametric points that will be used to discretize nodal fields
         self.nodal_knots = [util.subdivide_linear(basis.knot_spans(), nvis) for basis in topology.bases]
 
@@ -492,6 +491,12 @@ class LrTesselator(api.TopologyMerger):
 
     `new_data` will be compatible with `new_topology`. Here, `self` is an
     instance of LrTesselator.
+
+    Parameters:
+    - obj: the 'master' LRSplineObject. This will be used to determine the
+        parametric evaluation points used to discretize other topologies.
+    - weights: weight array for rational evaluation
+    - nvis: number of subdivions per element
     """
 
     nodes: np.ndarray
@@ -500,13 +505,6 @@ class LrTesselator(api.TopologyMerger):
     nvis: int
 
     def __init__(self, obj: lr.LRSplineObject, weights: Optional[np.ndarray], nvis: int):
-        """Parameters:
-        - obj: the 'master' LRSplineObject. This will be used to determine the
-            parametric evaluation points used to discretize other topologies.
-        - weights: weight array for rational evaluation
-        - nvis: number of subdivions per element
-        """
-
         # Dictionary mapping parametric values to node index
         nodes: Dict[Tuple[float, ...], int] = {}
 

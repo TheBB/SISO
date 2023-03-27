@@ -11,6 +11,13 @@ Z = TypeVar("Z", bound=api.Zone)
 
 
 class BasisFilter(PassthroughAll[B, F, S, Z]):
+    """Source filter that removes some bases.
+
+    Parameters:
+    - source: data source to draw from.
+    - filters: set of basis names to allow through.
+    """
+
     filters: Set[str]
 
     def __init__(self, source: api.Source[B, F, S, Z], filters: Set[str]):

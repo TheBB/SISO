@@ -600,6 +600,11 @@ class Source(ABC, Generic[B, F, S, Z]):
     responsibility to ensure that any such object passed to a method of a source
     object was previously returned by a method of that same source object. In
     other words, don't mix and match such objects.
+
+    Sources are allowed to assume, and user code must guarantee that:
+    - timesteps are processed in turn,
+    - within each timestep, fields are processed by basis, and
+    - within each basis, the topology is processed before the field data.
     """
 
     def __enter__(self) -> Self:

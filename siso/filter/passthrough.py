@@ -1,3 +1,17 @@
+"""This module implements some base classes for filters. A filter is a Source
+object that takes another Source as a constructor argument, and which
+manipulates the data from it in some way.
+
+All filters inherit from one of the 'Passthrough' classes in this module. The
+classes are named according to which type parameters they leave unchanged. E.g.
+'PassthroughBFS' is a base class intended for filters that change the Zone type
+(Z), but leave the Basis (B), Field (F) and Step (S) type parameters unchanged.
+
+In general, every passthrough class has do-nothing ("passthrough")
+implementations for the methods that make sense. I.e. PassthroughBFS implements
+`bases()`, which only depends on B, but not `zones()`, which depends on Z.
+"""
+
 from __future__ import annotations
 
 from abc import abstractmethod
@@ -11,6 +25,15 @@ from ..topology import Topology
 from ..util import FieldData
 
 
+# Type variables for filter classes. In general a filter is parametrized on
+# eight types: the input and output B, F, S and Z, respectively.
+#
+# For the filters that leave any of the parameters unchanged, we use just
+# B, F, S or Z as a type variable. For those that are different, we use the
+# 'In' or 'Out' variants.
+#
+# Thus, for example, PassthroughBFS is parametrized on B, F and S (which are
+# unchanged), together with InZ and OutZ.
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
@@ -29,6 +52,13 @@ class PassthroughBase(
     api.Source[OutB, OutF, OutS, OutZ],
     Generic[InB, InF, InS, InZ, OutB, OutF, OutS, OutZ],
 ):
+    """Base class for all filters. Defines the source attribute,
+    together with default implementations for the Source API methods that don't
+    rely on implementation details of B, F, S and Z.
+
+    Implement validate_source() for runtime validation of source properties.
+    """
+
     source: api.Source[InB, InF, InS, InZ]
 
     def __init__(self, source: api.Source[InB, InF, InS, InZ]):
@@ -60,6 +90,8 @@ class PassthroughBFS(
     PassthroughBase[B, F, S, InZ, B, F, S, OutZ],
     Generic[B, F, S, InZ, OutZ],
 ):
+    """Base class for filters that change the Zone type."""
+
     def use_geometry(self, geometry: F) -> None:
         self.source.use_geometry(geometry)
 
@@ -89,6 +121,8 @@ class PassthroughBFZ(
     PassthroughBase[B, F, InS, Z, B, F, OutS, Z],
     Generic[B, F, Z, InS, OutS],
 ):
+    """Base class for filters that change the Step type."""
+
     def use_geometry(self, geometry: F) -> None:
         self.source.use_geometry(geometry)
 
@@ -112,6 +146,8 @@ class PassthroughBSZ(
     PassthroughBase[B, InF, S, Z, B, OutF, S, Z],
     Generic[B, S, Z, InF, OutF],
 ):
+    """Base class for filters that change the Field type."""
+
     def bases(self) -> Iterator[B]:
         return self.source.bases()
 
@@ -132,6 +168,8 @@ class PassthroughFSZ(
     PassthroughBase[InB, F, S, Z, OutB, F, S, Z],
     Generic[F, S, Z, InB, OutB],
 ):
+    """Base class for filters that change the Field type."""
+
     def steps(self) -> Iterator[S]:
         return self.source.steps()
 
@@ -146,6 +184,8 @@ class PassthroughFSZ(
 
 
 class PassthroughAll(PassthroughBase[B, F, S, Z, B, F, S, Z], Generic[B, F, S, Z]):
+    """Base class for filters that don't change any of the type parameters."""
+
     def use_geometry(self, geometry: F) -> None:
         self.source.use_geometry(geometry)
 
@@ -181,23 +221,31 @@ class PassthroughAll(PassthroughBase[B, F, S, Z, B, F, S, Z], Generic[B, F, S, Z
 
 
 class WrappedField(api.Field, Generic[F]):
+    """Base class for fields that wrap other field objects.
+
+    Useful in many filters, so we provide a bare-bones implementation here.
+
+    This passes all the attributes through from the `wrapped_field` attribute,
+    which should be implemented by subclasses.
+    """
+
     @property
     @abstractmethod
-    def original_field(self) -> F:
+    def wrapped_field(self) -> F:
         ...
 
     @property
     def cellwise(self) -> bool:
-        return self.original_field.cellwise
+        return self.wrapped_field.cellwise
 
     @property
     def splittable(self) -> bool:
-        return self.original_field.splittable
+        return self.wrapped_field.splittable
 
     @property
     def name(self) -> str:
-        return self.original_field.name
+        return self.wrapped_field.name
 
     @property
     def type(self) -> api.FieldType:
-        return self.original_field.type
+        return self.wrapped_field.type

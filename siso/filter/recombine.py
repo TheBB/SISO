@@ -25,7 +25,7 @@ class RecombinedField(WrappedField[F]):
         assert all(src.type == self.sources[0].type for src in self.sources)
 
     @property
-    def original_field(self) -> F:
+    def wrapped_field(self) -> F:
         return self.sources[0]
 
     @property
@@ -53,10 +53,10 @@ class Recombine(PassthroughBSZ[B, S, Z, F, RecombinedField[F]]):
         )
 
     def use_geometry(self, geometry: RecombinedField[F]) -> None:
-        self.source.use_geometry(geometry.original_field)
+        self.source.use_geometry(geometry.wrapped_field)
 
     def basis_of(self, field: RecombinedField[F]) -> B:
-        return self.source.basis_of(field.original_field)
+        return self.source.basis_of(field.wrapped_field)
 
     def geometries(self, basis: B) -> Iterator[RecombinedField]:
         for field in self.source.geometries(basis):
