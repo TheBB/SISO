@@ -114,7 +114,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
 
     @staticmethod
     def join(*other) -> UnstructuredTopology:
-        """Join two or more unstructered topologies together.
+        """Join two or more unstructured topologies together.
 
         This does not perform any actual 'joining': the nodes in each topology
         is considered distinct and the resulting topology will have disjoint
@@ -257,7 +257,7 @@ class UnstructuredTesselator:
         assert topology.num_cells == self.master.num_cells
         assert topology.num_nodes == self.master.num_nodes
         assert topology.celltype == self.master.celltype
-        assert topology.degree == self.master.degree
+        assert topology.degree == self.master.degree + 1
 
         return UnstructuredTopology(
             len(self.pick_indexes),

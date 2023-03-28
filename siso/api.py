@@ -6,7 +6,7 @@ should import as litte as possible, and be imported almost everywhere else.
 The most important classes defined here are:
 
 - Basis: a specific discretization of the spatial domain
-- Field: an evaluable quantity defined on a bases
+- Field: an evaluable quantity defined on a basis
 - Step: a single instance of what is usually (but not always) the time axis
 - Zone: a distinct and identified region of space
 - Topology: the specific discretization for a basis in a zone
@@ -121,7 +121,7 @@ class Endianness(Enum):
 
 
 class Dimensionality(Enum):
-    """Enumeration for dimensionality opitons."""
+    """Enumeration for dimensionality options."""
 
     Volumetric = "volumetric"
     Planar = "planer"
@@ -352,7 +352,7 @@ class Scalar(FieldType):
             # Joining two scalars: return a two-component vector type
             interpretation = self.interpretation.to_vector().join(other.interpretation.to_vector())
             return Vector(ncomps=2, interpretation=interpretation)
-        # Joininig a scalar to a vector: return an ncomps + 1 vector type
+        # Joining a scalar to a vector: return an ncomps + 1 vector type
         assert isinstance(other, Vector)
         interpretation = self.interpretation.to_vector().join(other.interpretation)
         return Vector(ncomps=other.ncomps + 1, interpretation=interpretation)
@@ -430,7 +430,7 @@ class CoordinateSystem(ABC):
     @classmethod
     @abstractmethod
     def default(cls) -> Self:
-        """Construct a parametrized instance of this coordinate system usind
+        """Construct a parametrized instance of this coordinate system using
         default parameter values.
         """
         ...
@@ -656,7 +656,7 @@ class Source(ABC, Generic[B, F, S, Z]):
 
     @abstractmethod
     def fields(self, basis: B) -> Iterator[F]:
-        """Return an iteroator of all the non-geometry fields associated with a
+        """Return an iterator of all the non-geometry fields associated with a
         basis.
         """
         ...
