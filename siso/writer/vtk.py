@@ -24,7 +24,7 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from .. import util
-from ..api import Basis, Source, Step, Zone
+from ..api import Basis, CellOrdering, Source, Step, Zone
 from ..topology import CellType, DiscreteTopology, StructuredTopology
 from ..util import FieldData
 from .api import Field, OutputMode, Writer, WriterProperties, WriterSettings
@@ -76,7 +76,7 @@ def get_grid(
     cells = (
         FieldData.concat(
             topology.cells.constant_like(topology.cells.num_comps, ncomps=1, dtype=int),
-            topology.cells,
+            topology.cells_as(CellOrdering.Vtk),
         )
         .numpy()
         .ravel()

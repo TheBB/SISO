@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Generic, Iterable, List, Optional, Tuple, TypeVar, Union, overload
+from typing import Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, overload
 
 import numpy as np
 from attrs import define
@@ -246,6 +246,9 @@ class FieldData(Generic[T]):
         """Swap two components by index."""
         self.data[:, i], self.data[:, j] = self.data[:, j].copy(), self.data[:, i].copy()
         return self
+
+    def permute_components(self, permutation: Sequence[int]) -> FieldData[T]:
+        return FieldData(self.data[:, permutation])
 
     @overload
     def constant_like(

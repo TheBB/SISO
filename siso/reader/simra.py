@@ -220,7 +220,7 @@ class SimraMeshBase(api.Source[Basis, Field, Step, Zone]):
 
     def topology(self, timestep: Step, basis: Basis, zone: Zone) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
-        return StructuredTopology(self.out_cellshape, celltype)
+        return StructuredTopology(self.out_cellshape, celltype, degree=1)
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         return self.nodes()

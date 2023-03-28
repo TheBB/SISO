@@ -25,6 +25,7 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     ClassVar,
     Generic,
     Iterator,
@@ -35,7 +36,6 @@ from typing import (
     Tuple,
     TypeVar,
     cast,
-    runtime_checkable,
 )
 
 import numpy as np
@@ -44,7 +44,10 @@ from numpy import floating, integer
 from typing_extensions import Self
 
 from .typing import Coords, Key
-from .util import FieldData
+
+
+if TYPE_CHECKING:
+    from .util import FieldData
 
 
 class Shape(Enum):
@@ -732,7 +735,7 @@ class TopologyMerger(Protocol):
         ...
 
 
-class Topology(Protocol):
+class Topology(ABC):
     """Abstract interface that must be implemented by topologies.
 
     A topology is a representation of a discretization local to a basis, step
@@ -744,11 +747,13 @@ class Topology(Protocol):
     """
 
     @property
+    @abstractmethod
     def pardim(self) -> int:
         """Number of parametric dimensions."""
         ...
 
     @property
+    @abstractmethod
     def num_nodes(self) -> int:
         """Number of nodes. Field data associated with this topology which
         aren't cellwise should have this many rows.
@@ -756,12 +761,14 @@ class Topology(Protocol):
         ...
 
     @property
+    @abstractmethod
     def num_cells(self) -> int:
         """Number of cells. Filed data associated with this topology which
         are cellwise should have this many rows.
         """
         ...
 
+    @abstractmethod
     def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         """Return a discrete version of this topology, along with a field data
         filter that can be used to convert associated field data to be
@@ -769,6 +776,7 @@ class Topology(Protocol):
         """
         ...
 
+    @abstractmethod
     def create_merger(self) -> TopologyMerger:
         """Return a topology merger object. This can be used to convert other
         compatible topologies at the same zone to a common 'merged' topology.
@@ -785,8 +793,14 @@ class CellType(Enum):
     Hexahedron = auto()
 
 
-@runtime_checkable
-class DiscreteTopology(Topology, Protocol):
+class CellOrdering(Enum):
+    Ifem = auto()
+    Simra = auto()
+    Siso = auto()
+    Vtk = auto()
+
+
+class DiscreteTopology(Topology):
     """A discrete topology consists of nodes connected by Lagriangian elements.
 
     This type of mesh is so common in many data formats that it requires special
@@ -794,11 +808,26 @@ class DiscreteTopology(Topology, Protocol):
     """
 
     @property
+    @abstractmethod
     def celltype(self) -> CellType:
         """Return the cell type of this topology."""
         ...
 
     @property
+    @abstractmethod
+    def degree(self) -> int:
+        """Return the polynomial degree of this topology."""
+        ...
+
+    @property
+    @abstractmethod
     def cells(self) -> FieldData[integer]:
         """Return a matrix describing the cells (as nodal indices)."""
+        ...
+
+    @abstractmethod
+    def cells_as(self, ordering: CellOrdering) -> FieldData[integer]:
+        """Return a matrix describing the cells, ordered according to a certain
+        convention.
+        """
         ...

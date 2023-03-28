@@ -289,15 +289,21 @@ class NetCdf(api.Source[Basis, Field, Step, Zone]):
             if self.volumetric:
                 num_nodes *= self.num_vertical
                 return UnstructuredTopology(
-                    num_nodes, self.periodic_volumetric_topology(), celltype=CellType.Hexahedron
+                    num_nodes,
+                    self.periodic_volumetric_topology(),
+                    celltype=CellType.Hexahedron,
+                    degree=1,
                 )
             else:
                 return UnstructuredTopology(
-                    num_nodes, self.periodic_planar_topology(), celltype=CellType.Quadrilateral
+                    num_nodes,
+                    self.periodic_planar_topology(),
+                    celltype=CellType.Quadrilateral,
+                    degree=1,
                 )
         else:
             celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
-            return StructuredTopology(self.wrf_cellshape, celltype)
+            return StructuredTopology(self.wrf_cellshape, celltype, degree=1)
 
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if not field.is_geometry and not field.is_vector:

@@ -254,7 +254,7 @@ def visit_face(
             sw, se, nw, ne = (lft, btm), (rgt, btm), (lft, top), (rgt, top)
             for pt in (sw, se, nw, ne):
                 nodes.setdefault(pt, len(nodes))
-            elements.append([nodes[sw], nodes[se], nodes[ne], nodes[nw]])
+            elements.append([nodes[sw], nodes[nw], nodes[se], nodes[ne]])
 
 
 def visit_volume(
@@ -276,13 +276,13 @@ def visit_volume(
                 elements.append(
                     [
                         nodes[bsw],
-                        nodes[bse],
-                        nodes[bne],
-                        nodes[bnw],
                         nodes[tsw],
-                        nodes[tse],
-                        nodes[tne],
+                        nodes[bnw],
                         nodes[tnw],
+                        nodes[bse],
+                        nodes[tse],
+                        nodes[bne],
+                        nodes[tne],
                     ]
                 )
 
@@ -318,19 +318,19 @@ def structured_cells(
     elif pardim == 2:
         i, j = nidxs
         eidxs[:, 0] = np.ravel_multi_index((i, j), nodeshape)
-        eidxs[:, 1] = np.ravel_multi_index((i + 1, j), nodeshape)
-        eidxs[:, 2] = np.ravel_multi_index((i + 1, j + 1), nodeshape)
-        eidxs[:, 3] = np.ravel_multi_index((i, j + 1), nodeshape)
+        eidxs[:, 1] = np.ravel_multi_index((i, j + 1), nodeshape)
+        eidxs[:, 2] = np.ravel_multi_index((i + 1, j), nodeshape)
+        eidxs[:, 3] = np.ravel_multi_index((i + 1, j + 1), nodeshape)
     elif pardim == 3:
         i, j, k = nidxs
         eidxs[:, 0] = np.ravel_multi_index((i, j, k), nodeshape)
-        eidxs[:, 1] = np.ravel_multi_index((i + 1, j, k), nodeshape)
-        eidxs[:, 2] = np.ravel_multi_index((i + 1, j + 1, k), nodeshape)
-        eidxs[:, 3] = np.ravel_multi_index((i, j + 1, k), nodeshape)
-        eidxs[:, 4] = np.ravel_multi_index((i, j, k + 1), nodeshape)
+        eidxs[:, 1] = np.ravel_multi_index((i, j, k + 1), nodeshape)
+        eidxs[:, 2] = np.ravel_multi_index((i, j + 1, k), nodeshape)
+        eidxs[:, 3] = np.ravel_multi_index((i, j + 1, k + 1), nodeshape)
+        eidxs[:, 4] = np.ravel_multi_index((i + 1, j, k), nodeshape)
         eidxs[:, 5] = np.ravel_multi_index((i + 1, j, k + 1), nodeshape)
-        eidxs[:, 6] = np.ravel_multi_index((i + 1, j + 1, k + 1), nodeshape)
-        eidxs[:, 7] = np.ravel_multi_index((i, j + 1, k + 1), nodeshape)
+        eidxs[:, 6] = np.ravel_multi_index((i + 1, j + 1, k), nodeshape)
+        eidxs[:, 7] = np.ravel_multi_index((i + 1, j + 1, k + 1), nodeshape)
 
     if nodemap is not None:
         eidxs = nodemap.flat[eidxs]

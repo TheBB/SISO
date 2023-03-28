@@ -22,5 +22,6 @@ class ForceUnstructured(PassthroughAll[B, F, S, Z]):
                 num_nodes=topology.num_nodes,
                 cells=topology.cells,
                 celltype=topology.celltype,
+                degree=topology.degree,
             )
         return topology

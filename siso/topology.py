@@ -18,12 +18,27 @@ from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
 
 from . import api, util
-from .api import CellType, Coords, DiscreteTopology, Field, FieldDataFilter, Rationality, Topology
-from .util import FieldData
+from .api import (
+    CellOrdering,
+    CellType,
+    Coords,
+    DiscreteTopology,
+    Field,
+    FieldDataFilter,
+    Rationality,
+    Topology,
+)
+from .util import FieldData, cell_numbering
+
+
+class DiscreteTopologyImpl(DiscreteTopology):
+    def cells_as(self, ordering: CellOrdering) -> FieldData[integer]:
+        permutation = cell_numbering.permute_to(self.celltype, self.degree, ordering)
+        return self.cells.permute_components(permutation)
 
 
 @define
-class UnstructuredTopology(DiscreteTopology):
+class UnstructuredTopology(DiscreteTopologyImpl):
     """The 'lowest common denominator' of topologies, the unstructured discrete
     topology is a collection of cells with a given type, each represented as an
     index into an array of nodes.
@@ -35,6 +50,7 @@ class UnstructuredTopology(DiscreteTopology):
     num_nodes: int
     cells: FieldData[integer]
     celltype: CellType
+    degree: int
 
     @staticmethod
     def from_ifem(data: bytes) -> Tuple[Coords, UnstructuredTopology, FieldData[floating]]:
@@ -57,24 +73,33 @@ class UnstructuredTopology(DiscreteTopology):
         assert typespec.startswith(b"type=")
         num_nodes = int(nodespec.split(b"=", 1)[1])
         num_cells = int(elemspec.split(b"=", 1)[1])
-        celltype = typespec.split(b"=", 1)[1]
-        assert celltype == b"hexahedron"
+        assert typespec.split(b"=", 1)[1] == b"hexahedron"
+        celltype = CellType.Hexahedron
 
         # Read nodal coordinates
         nodes = np.zeros((num_nodes, 3), dtype=float)
         for i in range(num_nodes):
             nodes[i] = list(map(float, next(io).split()))
 
-        # Read cell indices
-        cells = np.zeros((num_cells, 8), dtype=int)
-        for i in range(num_cells):
-            cells[i] = list(map(int, next(io).split()))
+        # Read the first line of cells
+        cell_ids = list(map(int, next(io).split()))
+        num_nodes_per_cell = len(cell_ids)
 
-        # IFEM uses a different cell numbering than we do, so renumber
-        cell_data = FieldData(cells).swap_components(6, 7).swap_components(2, 3)
+        # Read cell indices
+        cells = np.zeros((num_cells, num_nodes_per_cell), dtype=int)
+        cells[0] = cell_ids
+        for i in range(1, num_cells):
+            cells[i] = list(map(int, next(io).split()))
+        cell_data = FieldData(cells)
+
+        assert num_nodes_per_cell in (8, 27)
+        degree = {8: 1, 27: 2}[num_nodes_per_cell]
+
+        permutation = cell_numbering.permute_from(celltype, degree, cell_numbering.CellOrdering.Ifem)
+        cell_data = cell_data.permute_components(permutation)
 
         corners = (tuple(nodes[0]),)
-        topology = UnstructuredTopology(num_nodes, cell_data, CellType.Hexahedron)
+        topology = UnstructuredTopology(num_nodes, cell_data, celltype, degree)
         return corners, topology, FieldData(nodes)
 
     @overload
@@ -101,29 +126,35 @@ class UnstructuredTopology(DiscreteTopology):
         iterable: Iterable[DiscreteTopology] = other if isinstance(other[0], DiscreteTopology) else other[0]
         num_nodes = 0
         celltype: Optional[CellType] = None
+        degree: Optional[int] = None
 
         # Utility function for producing cell arrays. Keeps internal track of
         # the number of nodes seen so far, and adjusts the cell indices
         # accordingly. Crashes if cell types are incompatible.
         def consume() -> Iterable[FieldData[integer]]:
-            nonlocal num_nodes, celltype
+            nonlocal num_nodes, celltype, degree
             for topo in iterable:
                 if celltype is None:
                     celltype = topo.celltype
+                    degree = topo.degree
                 else:
                     assert celltype == topo.celltype
+                    assert degree == topo.degree
                 yield topo.cells + num_nodes
                 num_nodes += topo.num_nodes
 
         # This runs the consume iterator to the end, which should populate the
-        # local variables `num_nodes` and `celltype`.
+        # local variables `num_nodes`, `degree` and `celltype`.
         cells = FieldData.join(consume())
 
         assert celltype
+        assert degree is not None
+
         return UnstructuredTopology(
             num_nodes=num_nodes,
             cells=cells,
             celltype=celltype,
+            degree=degree,
         )
 
     @property
@@ -137,10 +168,11 @@ class UnstructuredTopology(DiscreteTopology):
     def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         # Discretizing an unstructured topology is a no-op.
         assert nvis == 1
+        assert self.degree == 1
         return self, lambda field, data: data
 
     def create_merger(self) -> api.TopologyMerger:
-        return UnstructuredTopologyMerger(self.num_cells, self.num_nodes, self.celltype)
+        return UnstructuredTopologyMerger(self.num_cells, self.num_nodes, self.celltype, self.degree)
 
 
 @define
@@ -148,6 +180,7 @@ class UnstructuredTopologyMerger:
     num_cells: int
     num_nodes: int
     celltype: CellType
+    degree: int
 
     def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
         # At the moment we do not support the merging of two incompatible
@@ -158,19 +191,18 @@ class UnstructuredTopologyMerger:
         assert topology.num_cells == self.num_cells
         assert topology.num_nodes == self.num_nodes
         assert topology.celltype == self.celltype
+        assert topology.degree == self.degree
         return topology, lambda field, data: data
 
 
-class StructuredTopology:
+@define
+class StructuredTopology(DiscreteTopologyImpl):
     """Structured topologies represent a Cartesian tensor product grid of
     cells."""
 
     cellshape: Tuple[int, ...]
     celltype: CellType
-
-    def __init__(self, cellshape: Tuple[int, ...], celltype: CellType):
-        self.cellshape = cellshape
-        self.celltype = celltype
+    degree: int
 
     @property
     def pardim(self) -> int:
@@ -196,10 +228,11 @@ class StructuredTopology:
     def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         """Discretizing a structured topology is a no-op."""
         assert nvis == 1
+        assert self.degree == 1
         return self, lambda field, data: data
 
     def create_merger(self) -> api.TopologyMerger:
-        return StructuredTopologyMerger(self.cellshape, self.celltype)
+        return StructuredTopologyMerger(self.cellshape, self.celltype, self.degree)
 
     def transpose(self, axes: Tuple[int, ...]) -> StructuredTopology:
         """Return a new structured topology with transposed axes."""
@@ -207,6 +240,7 @@ class StructuredTopology:
         return StructuredTopology(
             cellshape=tuple(self.cellshape[i] for i in axes),
             celltype=self.celltype,
+            degree=self.degree,
         )
 
 
@@ -214,6 +248,7 @@ class StructuredTopology:
 class StructuredTopologyMerger:
     cellshape: Tuple[int, ...]
     celltype: CellType
+    degree: int
 
     def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
         # At the moment we do not support the merging of two incompatible
@@ -223,6 +258,7 @@ class StructuredTopologyMerger:
         assert isinstance(topology, StructuredTopology)
         assert topology.cellshape == self.cellshape
         assert topology.celltype == self.celltype
+        assert topology.degree == self.degree
         return topology, lambda field, data: data
 
 
@@ -352,7 +388,7 @@ class SplineTesselator(api.TopologyMerger):
         """
         celltype = [CellType.Line, CellType.Quadrilateral, CellType.Hexahedron][len(self.nodal_knots) - 1]
         cellshape = tuple(len(knots) - 1 for knots in self.nodal_knots)
-        return StructuredTopology(cellshape, celltype)
+        return StructuredTopology(cellshape, celltype, degree=1)
 
     def tesselate_field(
         self,
@@ -534,7 +570,7 @@ class LrTesselator(api.TopologyMerger):
         topology with the appropriate cell type and shape.
         """
         celltype = CellType.Hexahedron if topology.pardim == 3 else CellType.Quadrilateral
-        return UnstructuredTopology(len(self.nodes), self.cells, celltype)
+        return UnstructuredTopology(len(self.nodes), self.cells, celltype, degree=1)
 
     def tesselate_field(
         self,

@@ -9,6 +9,7 @@ from typing_extensions import Self
 
 from .. import api, util
 from ..topology import StructuredTopology
+from ..util import cell_numbering
 from .api import Writer, WriterProperties, WriterSettings
 
 
@@ -69,13 +70,15 @@ class SimraWriter(Writer):
             topology = topology.transpose((1, 0, 2))
 
         nodes = nodes.astype(self.f4_type)
-        cells = topology.cells.swap_components(1, 3).swap_components(5, 7).numpy().astype(self.u4_type) + 1
+        cells = topology.cells_as(api.CellOrdering.Simra).numpy().astype(self.u4_type) + 1
 
         macro_shape = tuple(c - 1 for c in topology.cellshape)
+        permutation = cell_numbering.permute_to(
+            api.CellType.Hexahedron, degree=1, ordering=api.CellOrdering.Simra
+        )
         macro_cells = (
             util.structured_cells(macro_shape, topology.pardim)
-            .swap_components(1, 3)
-            .swap_components(5, 7)
+            .permute_components(permutation)
             .numpy(*macro_shape)[::2, ::2, ::2, :]
             .transpose((1, 0, 2, 3))
             .reshape(-1, 8)

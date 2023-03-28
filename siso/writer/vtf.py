@@ -8,7 +8,7 @@ import vtfwriter as vtf
 from attrs import define
 from typing_extensions import Self
 
-from ..api import Basis, DiscreteTopology, Field, Source, Step, StepInterpretation, Zone
+from ..api import Basis, CellOrdering, DiscreteTopology, Field, Source, Step, StepInterpretation, Zone
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
 
@@ -95,7 +95,9 @@ class VtfWriter(Writer[B, F, S, Z]):
                 node_block.SetNodes(nodes.numpy().flatten())
 
             with self.out.ElementBlock() as element_block:
-                element_block.AddElements(topology.cells.numpy().flatten(), topology.pardim)
+                element_block.AddElements(
+                    topology.cells_as(CellOrdering.Vtk).numpy().flatten(), topology.pardim
+                )
                 element_block.SetPartName(f"Patch {zone.global_key + 1}")
                 element_block.BindNodeBlock(node_block, zone.global_key + 1)
 
