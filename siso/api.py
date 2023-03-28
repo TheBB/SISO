@@ -792,8 +792,29 @@ class CellType(Enum):
     Quadrilateral = auto()
     Hexahedron = auto()
 
+    @property
+    def is_tensor(self) -> bool:
+        """Return true if this cell type is of tensor-product type (works in a
+        structured topology.)
+        """
+        return True
+
+    @property
+    def pardim(self) -> int:
+        """Return the number of parametric dimensions supported by this cell
+        type.
+        """
+        if self in {CellType.Line}:
+            return 1
+        elif self in {CellType.Quadrilateral}:
+            return 2
+        else:
+            return 3
+
 
 class CellOrdering(Enum):
+    """Enumerates the supported cell ordering schemes."""
+
     Ifem = auto()
     Simra = auto()
     Siso = auto()

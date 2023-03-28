@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 from io import BytesIO, StringIO
-from typing import IO, Dict, Iterable, Iterator, List, Optional, Tuple, overload
+from typing import IO, Dict, Iterable, Iterator, List, Optional, Set, Tuple, overload
 
 import lrspline as lr
 import numpy as np
@@ -166,33 +166,111 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         return self.cells.num_dofs
 
     def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
-        # Discretizing an unstructured topology is a no-op.
+        # Discretizing an unstructured linear topology with nvis=1 is a no-op
+        if nvis == 1 and self.degree == 1:
+            return self, lambda field, data: data
+
+        # So far we only support nvis=1 for this operation
         assert nvis == 1
-        assert self.degree == 1
-        return self, lambda field, data: data
+        tesselator = UnstructuredTesselator(self)
+        discrete = tesselator.tesselate_topology(self)
+        return discrete, lambda field, data: tesselator.tesselate_field(field, data)
 
     def create_merger(self) -> api.TopologyMerger:
-        return UnstructuredTopologyMerger(self.num_cells, self.num_nodes, self.celltype, self.degree)
+        def merger(topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+            # At the moment we do not support the merging of two incompatible
+            # unstructured topologies. Therefore assert (to the best of our
+            # abilities) that the topology is identical to the source topology, and
+            # return it unchanged.
+            assert isinstance(topology, UnstructuredTopology)
+            assert topology.num_cells == self.num_cells
+            assert topology.num_nodes == self.num_nodes
+            assert topology.celltype == self.celltype
+            assert topology.degree == self.degree
+            return topology, lambda field, data: data
+
+        return merger
 
 
-@define
-class UnstructuredTopologyMerger:
-    num_cells: int
-    num_nodes: int
-    celltype: CellType
-    degree: int
+class UnstructuredTesselator:
+    """This class handles discretization of unstructured topologies.
 
-    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
-        # At the moment we do not support the merging of two incompatible
-        # unstructured topologies. Therefore assert (to the best of our
-        # abilities) that the topology is identical to the source topology, and
-        # return it unchanged.
-        assert isinstance(topology, UnstructuredTopology)
-        assert topology.num_cells == self.num_cells
-        assert topology.num_nodes == self.num_nodes
-        assert topology.celltype == self.celltype
-        assert topology.degree == self.degree
-        return topology, lambda field, data: data
+    If `data` is associated with `topology` then after
+
+    ```
+    new_topology = self.tesselate_topology(topology)
+    new_data = self.tesselate_field(topology, field, field_data)
+    ```
+
+    `new_data` will be compatible with `new_topology`. Here, `self` is an
+    instance of UnstructuredTesselator.
+
+    Parameters:
+    - master: the 'master' unstructured topology. This will be used to determine
+        the parametric evaluation points used to discretize other topologies.
+    """
+
+    master: UnstructuredTopology
+
+    # Which nodal indexes to extract for nodal fields
+    pick_indexes: List[int]
+
+    # Cell array of new topology
+    new_cells: FieldData[integer]
+
+    def __init__(self, master: UnstructuredTopology):
+        self.master = master
+        assert master.celltype.is_tensor
+
+        # Numpy indexing expression to extract corners
+        index = np.ix_(*([(0, -1)] * master.celltype.pardim))
+
+        # Collection of nodal indices which should be retained
+        retain: Set[int] = set()
+
+        # New cells, in terms of old node indices
+        new_cells: List[List[int]] = []
+
+        # For each cell, extract its corners, mark them as retained, and create
+        # a new cell.
+        for cell in master.cells.vectors:
+            new_cell = cell.reshape(3, 3, 3)[index].flatten()
+            new_cells.append(list(new_cell))
+            retain.update(new_cell)
+
+        # Map old node numbers to new ones. Initialize to -1 to catch errors.
+        new_node_numbers = -np.ones((master.num_nodes,), dtype=int)
+
+        # The indices pick for nodal fields is the collection of retained nodes,
+        # in order of increasing (old) index.
+        self.pick_indexes = sorted(list(retain))
+
+        # Give the retained nodes new node numbers.
+        new_node_numbers[self.pick_indexes] = np.arange(len(retain))
+
+        # Extract the new node numbers for the cell array.
+        self.new_cells = FieldData(new_node_numbers[np.array(new_cells, dtype=int)])
+        assert (self.new_cells.data >= 0).all()
+
+    def tesselate_topology(self, topology: UnstructuredTopology) -> UnstructuredTopology:
+        # Assert, to the best of our ability, that the topologies are compatible.
+        assert topology.num_cells == self.master.num_cells
+        assert topology.num_nodes == self.master.num_nodes
+        assert topology.celltype == self.master.celltype
+        assert topology.degree == self.master.degree
+
+        return UnstructuredTopology(
+            len(self.pick_indexes),
+            self.new_cells,
+            CellType.Hexahedron,
+            degree=1,
+        )
+
+    def tesselate_field(self, field: Field, data: FieldData[floating]) -> FieldData[floating]:
+        # Cellwise fields: the new topology has the same cells as the master topology.
+        if field.cellwise:
+            return data
+        return FieldData(data.data[self.pick_indexes, :])
 
 
 @define
