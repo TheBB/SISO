@@ -50,6 +50,26 @@ if TYPE_CHECKING:
     from .util import FieldData
 
 
+@define
+class SisoError(Exception):
+    msg: str
+
+    def show(self) -> str:
+        return self.msg
+
+
+class Unsupported(SisoError):
+    ...
+
+
+class BadInput(SisoError):
+    ...
+
+
+class Unexpected(SisoError):
+    ...
+
+
 class Shape(Enum):
     """The shape of a zone."""
 

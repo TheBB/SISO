@@ -23,7 +23,7 @@ from vtkmodules.vtkCommonDataModel import (
 from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUnstructuredGridWriter
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
-from .. import util
+from .. import api, util
 from ..api import Basis, CellOrdering, Source, Step, Zone
 from ..topology import CellType, DiscreteTopology, StructuredTopology
 from ..util import FieldData
@@ -69,8 +69,10 @@ def get_grid(
         else:
             return sgrid, vtkXMLStructuredGridWriter()
 
-    assert behavior != Behavior.OnlyStructured
-    assert topology.celltype in (CellType.Line, CellType.Quadrilateral, CellType.Hexahedron)
+    if behavior == Behavior.OnlyStructured:
+        raise api.Unexpected("Unstructured topology passed to structured-only context")
+    if topology.celltype not in (CellType.Line, CellType.Quadrilateral, CellType.Hexahedron):
+        raise api.Unsupported("VTK writer only supports lines, quadrilaterals and hexahedra")
 
     ugrid = vtkUnstructuredGrid()
     cells = (
@@ -136,7 +138,8 @@ class VtkWriterBase(ABC, Writer):
 
     def configure(self, settings: WriterSettings) -> None:
         if settings.output_mode is not None:
-            assert settings.output_mode in (OutputMode.Binary, OutputMode.Ascii)
+            if settings.output_mode not in (OutputMode.Binary, OutputMode.Ascii):
+                raise api.Unsupported(f"Unsupported output mode for VTK: {settings.output_mode}")
             self.output_mode = settings.output_mode
 
     @abstractmethod

@@ -64,16 +64,22 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         io = BytesIO(data)
 
         first_line = next(io)
-        assert first_line.startswith(b"# LAGRANGIAN")
+        if not first_line.startswith(b"# LAGRANGIAN"):
+            raise api.BadInput("Expected '# LAGRANGIAN'")
         _, _, nodespec, elemspec, typespec = first_line.split()
 
         # Read number of nodes, cells and cell type
-        assert nodespec.startswith(b"nodes=")
-        assert elemspec.startswith(b"elements=")
-        assert typespec.startswith(b"type=")
+        if not nodespec.startswith(b"nodes="):
+            raise api.BadInput("Expected 'nodes='")
+        if not elemspec.startswith(b"elements="):
+            raise api.BadInput("Expected 'elements='")
+        if not typespec.startswith(b"type="):
+            raise api.BadInput("Expected 'type='")
         num_nodes = int(nodespec.split(b"=", 1)[1])
         num_cells = int(elemspec.split(b"=", 1)[1])
-        assert typespec.split(b"=", 1)[1] == b"hexahedron"
+        celltype_id = typespec.split(b"=", 1)[1]
+        if not celltype_id == b"hexahedron":
+            raise api.Unsupported(f"IFEM cell type '{celltype_id.decode()}'")
         celltype = CellType.Hexahedron
 
         # Read nodal coordinates
@@ -92,7 +98,8 @@ class UnstructuredTopology(DiscreteTopologyImpl):
             cells[i] = list(map(int, next(io).split()))
         cell_data = FieldData(cells)
 
-        assert num_nodes_per_cell in (8, 27)
+        if num_nodes_per_cell not in (8, 27):
+            raise api.Unsupported(f"Hexahedral cells with {num_nodes_per_cell} nodes")
         degree = {8: 1, 27: 2}[num_nodes_per_cell]
 
         permutation = cell_numbering.permute_from(celltype, degree, cell_numbering.CellOrdering.Ifem)
@@ -137,9 +144,8 @@ class UnstructuredTopology(DiscreteTopologyImpl):
                 if celltype is None:
                     celltype = topo.celltype
                     degree = topo.degree
-                else:
-                    assert celltype == topo.celltype
-                    assert degree == topo.degree
+                elif celltype != topo.celltype or degree != topo.degree:
+                    raise api.Unsupported("Joining incompatible unstructured topologoies")
                 yield topo.cells + num_nodes
                 num_nodes += topo.num_nodes
 
@@ -147,8 +153,8 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         # local variables `num_nodes`, `degree` and `celltype`.
         cells = FieldData.join(consume())
 
-        assert celltype
-        assert degree is not None
+        if not celltype or degree is None:
+            raise api.Unexpected("Joining of zero discrete topologies")
 
         return UnstructuredTopology(
             num_nodes=num_nodes,
@@ -171,7 +177,8 @@ class UnstructuredTopology(DiscreteTopologyImpl):
             return self, lambda field, data: data
 
         # So far we only support nvis=1 for this operation
-        assert nvis == 1
+        if nvis != 1:
+            raise api.Unsupported("discretization of unstructured topologies with nvis > 1")
         tesselator = UnstructuredTesselator(self)
         discrete = tesselator.tesselate_topology(self)
         return discrete, lambda field, data: tesselator.tesselate_field(field, data)
@@ -182,11 +189,14 @@ class UnstructuredTopology(DiscreteTopologyImpl):
             # unstructured topologies. Therefore assert (to the best of our
             # abilities) that the topology is identical to the source topology, and
             # return it unchanged.
-            assert isinstance(topology, UnstructuredTopology)
-            assert topology.num_cells == self.num_cells
-            assert topology.num_nodes == self.num_nodes
-            assert topology.celltype == self.celltype
-            assert topology.degree == self.degree
+            if (
+                not isinstance(topology, UnstructuredTopology)
+                or topology.num_cells != self.num_cells
+                or topology.num_nodes != self.num_nodes
+                or topology.celltype != self.celltype
+                or topology.degree != self.degree
+            ):
+                raise api.Unsupported("Merging incompatible unstructured topologies")
             return topology, lambda field, data: data
 
         return merger
@@ -220,7 +230,8 @@ class UnstructuredTesselator:
 
     def __init__(self, master: UnstructuredTopology):
         self.master = master
-        assert master.celltype.is_tensor
+        if not master.celltype.is_tensor:
+            raise api.Unsupported("Discretizing unstructured topologies with non-tensor cell type")
 
         # Numpy indexing expression to extract corners
         index = np.ix_(*([(0, -1)] * master.celltype.pardim))
@@ -250,14 +261,18 @@ class UnstructuredTesselator:
 
         # Extract the new node numbers for the cell array.
         self.new_cells = FieldData(new_node_numbers[np.array(new_cells, dtype=int)])
-        assert (self.new_cells.data >= 0).all()
+        if (self.new_cells.data < 0).any():
+            raise api.Unexpected("Nodes that shouldn't be picked were picked")
 
     def tesselate_topology(self, topology: UnstructuredTopology) -> UnstructuredTopology:
         # Assert, to the best of our ability, that the topologies are compatible.
-        assert topology.num_cells == self.master.num_cells
-        assert topology.num_nodes == self.master.num_nodes
-        assert topology.celltype == self.master.celltype
-        assert topology.degree == self.master.degree + 1
+        if (
+            topology.num_cells != self.master.num_cells
+            or topology.num_nodes != self.master.num_nodes
+            or topology.celltype != self.master.celltype
+            or topology.degree != self.master.degree
+        ):
+            raise api.Unsupported("Discretizing incompatible unstructured topologies")
 
         return UnstructuredTopology(
             len(self.pick_indexes),
@@ -305,8 +320,10 @@ class StructuredTopology(DiscreteTopologyImpl):
 
     def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
         """Discretizing a structured topology is a no-op."""
-        assert nvis == 1
-        assert self.degree == 1
+        if nvis != 1:
+            raise api.Unsupported("Discretizing structured topologies with nvis > 1")
+        if self.degree != 1:
+            raise api.Unsupported("Discretizing superlinear structured topologies")
         return self, lambda field, data: data
 
     def create_merger(self) -> api.TopologyMerger:
@@ -314,7 +331,10 @@ class StructuredTopology(DiscreteTopologyImpl):
 
     def transpose(self, axes: Tuple[int, ...]) -> StructuredTopology:
         """Return a new structured topology with transposed axes."""
-        assert len(axes) == self.pardim
+        if len(axes) != self.pardim:
+            raise api.Unexpected(
+                "Transposition of structured topology: number of axes must match parametric dimension"
+            )
         return StructuredTopology(
             cellshape=tuple(self.cellshape[i] for i in axes),
             celltype=self.celltype,
@@ -333,10 +353,13 @@ class StructuredTopologyMerger:
         # structured topologies. Therefore assert (to the best of our abilities)
         # that the topology is identical to the source topology, and return it
         # unchanged.
-        assert isinstance(topology, StructuredTopology)
-        assert topology.cellshape == self.cellshape
-        assert topology.celltype == self.celltype
-        assert topology.degree == self.degree
+        if (
+            not isinstance(topology, StructuredTopology)
+            or topology.cellshape != self.cellshape
+            or topology.celltype != self.celltype
+            or topology.degree != self.degree
+        ):
+            raise api.Unsupported("Merging incompatible structured topologies")
         return topology, lambda field, data: data
 
 
@@ -455,7 +478,8 @@ class SplineTesselator(api.TopologyMerger):
 
     # This method implements the interface for TopologyMerger
     def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
-        assert isinstance(topology, SplineTopology)
+        if not isinstance(topology, SplineTopology):
+            raise api.Unsupported("Merging non-spline topology with spline topology")
         discrete = self.tesselate_topology(topology)
         mapper = partial(self.tesselate_field, topology)
         return discrete, mapper
@@ -638,7 +662,8 @@ class LrTesselator(api.TopologyMerger):
 
     # This method implements the interface for TopologyMerger
     def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
-        assert isinstance(topology, LrTopology)
+        if not isinstance(topology, LrTopology):
+            raise api.Unsupported("Merging non-LR topology with LR topology")
         discrete = self.tesselate_topology(topology)
         mapper = partial(self.tesselate_field, topology)
         return discrete, mapper

@@ -8,6 +8,7 @@ import vtfwriter as vtf
 from attrs import define
 from typing_extensions import Self
 
+from .. import api
 from ..api import Basis, CellOrdering, DiscreteTopology, Field, Source, Step, StepInterpretation, Zone
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
@@ -51,7 +52,8 @@ class VtfWriter(Writer[B, F, S, Z]):
 
     def configure(self, settings: WriterSettings):
         if settings.output_mode is not None:
-            assert settings.output_mode in (OutputMode.Ascii, OutputMode.Binary)
+            if settings.output_mode not in (OutputMode.Binary, OutputMode.Ascii):
+                raise api.Unsupported(f"Unsupported output mode for VTF: {settings.output_mode}")
             self.mode = settings.output_mode
         else:
             self.mode = OutputMode.Binary

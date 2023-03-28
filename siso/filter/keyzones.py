@@ -7,6 +7,7 @@ from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, T
 
 from numpy import floating
 
+from .. import api
 from ..api import Basis, Field, Shape, Source, SourceProperties, Step, Zone
 from ..topology import Topology
 from ..typing import Point
@@ -28,7 +29,8 @@ class KeyZones(PassthroughBFS[B, F, S, Z, Zone]):
         self.manager = ZoneManager()
 
     def validate_source(self) -> None:
-        assert not self.source.properties.globally_keyed
+        if self.source.properties.globally_keyed:
+            raise api.Unexpected("KeyZones filter applied to globally keyed source")
 
     @property
     def properties(self) -> SourceProperties:
@@ -57,18 +59,22 @@ class ZoneManager:
 
     def lookup(self, zone: Zone) -> Zone:
         if zone.global_key is not None:
-            assert self.shapes[zone.global_key] == zone.shape
-            return cast(Zone, zone)
+            if self.shapes[zone.global_key] != zone.shape:
+                raise api.Unexpected("Differing zone shapes for same global key")
+            return zone
 
         keys = reduce(lambda x, y: x & y, (self.lut.get(pt, set()) for pt in zone.coords))
-        assert len(keys) < 2
+        if len(keys) >= 2:
+            raise api.Unexpected("Multiple zone candidates found")
 
         if keys:
             key = next(iter(keys))
-            assert self.shapes[key] == zone.shape
+            if self.shapes[key] != zone.shape:
+                raise api.Unexpected("Differing zone shapes for same global key")
         else:
             key = len(self.shapes)
-            assert key not in self.shapes
+            if key in self.shapes:
+                raise api.Unexpected("New global zone key seen before")
             self.shapes[key] = zone.shape
             for pt in zone.coords:
                 self.lut.setdefault(pt, set()).add(key)

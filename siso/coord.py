@@ -32,7 +32,8 @@ class Generic(api.CoordinateSystem):
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Generic:
-        assert not params
+        if params:
+            raise api.BadInput("Generic coordinate system does not accept parameters")
         return cls()
 
     @classmethod
@@ -52,12 +53,14 @@ class Named(api.CoordinateSystem):
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Named:
+        if len(params) != 1:
+            raise api.BadInput("Named coordinate system requires one parameter")
         (name,) = params
         return cls(name)
 
     @classmethod
     def default(cls) -> Named:
-        assert False
+        raise api.Unsupported("There is no default named coordinate system")
 
     @property
     def parameters(self) -> Tuple[str, ...]:
@@ -77,7 +80,8 @@ class Geodetic(api.CoordinateSystem):
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Geodetic:
-        assert len(params) < 2
+        if len(params) >= 2:
+            raise api.BadInput("Geodetic coordinate system only accepts one optional parameter")
         if params:
             return cls(ellpsoids[params[0]]())
         return cls(Wgs84())
@@ -123,7 +127,7 @@ class Utm(api.CoordinateSystem):
 
     @classmethod
     def default(cls) -> Utm:
-        assert False
+        raise api.Unsupported("There is no default UTM coordinate system")
 
     @property
     def parameters(self) -> Tuple[str, ...]:
@@ -137,7 +141,8 @@ class Geocentric(api.CoordinateSystem):
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Self:
-        assert not params
+        if params:
+            raise api.BadInput("Geocentric coordinate system does not accept parameters")
         return cls()
 
     @classmethod

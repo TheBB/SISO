@@ -13,7 +13,7 @@ from click_option_group import MutuallyExclusiveOptionGroup, optgroup
 from rich.console import Console
 from rich.logging import RichHandler
 
-from . import coord, filter, util
+from . import api, coord, filter, util
 from .api import CoordinateSystem, Dimensionality, Endianness, Rationality, ReaderSettings, Source, Staggering
 from .instrument import Instrumenter
 from .multisource import MultiSource
@@ -64,6 +64,24 @@ def defaults(**def_kwargs):
         return inner
 
     return decorator
+
+
+def catch(func):
+    @wraps(func)
+    def inner(**kwargs):
+        try:
+            return func(**kwargs)
+        except api.BadInput as e:
+            logging.critical(f"Bad input: {e.show()}")
+            sys.exit(5)
+        except api.Unexpected as e:
+            logging.critical(f"Unexpected: {e.show()}")
+            sys.exit(6)
+        except api.Unsupported as e:
+            logging.critical(f"Unsupported: {e.show()}")
+            sys.exit(7)
+
+    return inner
 
 
 class Enum(click.Choice):
@@ -407,6 +425,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @defaults(
     out_coords=coord.Generic(),
 )
+@catch
 
 # Main entry-point
 def main(
@@ -670,7 +689,7 @@ def main(
             logging.critical("These source coordinate systems were considered:")
             for geometry in geometries:
                 logging.critical(f"- {geometry.coords} (field '{geometry.name}')")
-            sys.exit(3)
+            sys.exit(4)
 
         # Pick a geometry field and notify the source stack that we are about to use it.
         i, path = result

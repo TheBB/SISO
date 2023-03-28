@@ -29,6 +29,7 @@ import numpy as np
 from numpy import integer
 from typing_extensions import Self
 
+from .. import api
 from .field_data import FieldData
 
 
@@ -92,6 +93,8 @@ class RandomAccessFile(Generic[W, M]):
 
     @contextmanager
     def borrow_fp(self) -> Generator[IO, None, None]:
+        if self.fp_borrowed:
+            raise api.Unexpected("Borrowing already borrowed file pointer")
         assert not self.fp_borrowed
         self.fp_borrowed = True
         try:
@@ -156,7 +159,8 @@ class RandomAccessTracker(Generic[W, M]):
 
 @contextmanager
 def save_excursion(fp: IO):
-    assert fp.seekable()
+    if not fp.seekable():
+        raise api.Unsupported("Siso requires seekable file handles")
     ptr = fp.tell()
     try:
         yield
