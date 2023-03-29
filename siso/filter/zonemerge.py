@@ -18,7 +18,7 @@ S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class ZoneMerge(PassthroughBFS[B, F, S, Z, Zone]):
+class ZoneMerge(PassthroughBFS[B, F, S, Z, Zone[int]]):
     def validate_source(self) -> None:
         assert not self.source.properties.single_zoned
         assert self.source.properties.discrete_topology
@@ -29,28 +29,26 @@ class ZoneMerge(PassthroughBFS[B, F, S, Z, Zone]):
             single_zoned=True,
         )
 
-    def zones(self) -> Iterator[Zone]:
+    def zones(self) -> Iterator[Zone[int]]:
         zone, multi_zone = util.first_and_has_more(self.source.zones())
         if multi_zone:
             yield Zone(
                 shape=Shape.Shapeless,
                 coords=(),
-                local_key="superzone",
-                global_key=0,
+                key=0,
             )
         else:
             yield Zone(
                 shape=zone.shape,
                 coords=zone.coords,
-                local_key="superzone",
-                global_key=0,
+                key=0,
             )
 
-    def topology(self, step: S, basis: B, zone: Zone) -> DiscreteTopology:
+    def topology(self, step: S, basis: B, zone: Zone[int]) -> DiscreteTopology:
         return reduce(
             UnstructuredTopology.join,
             (cast(DiscreteTopology, self.source.topology(step, basis, z)) for z in self.source.zones()),
         )
 
-    def field_data(self, timestep: S, field: F, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: S, field: F, zone: Zone[int]) -> FieldData[floating]:
         return FieldData.join(*(self.source.field_data(timestep, field, z) for z in self.source.zones()))

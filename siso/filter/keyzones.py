@@ -21,12 +21,14 @@ S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class KeyZones(PassthroughBFS[B, F, S, Z, Zone]):
+class KeyZones(PassthroughBFS[B, F, S, Z, Zone[int]]):
     manager: ZoneManager
+    mapping: Dict[Zone[int], Z]
 
     def __init__(self, source: Source):
         super().__init__(source)
         self.manager = ZoneManager()
+        self.mapping = {}
 
     def validate_source(self) -> None:
         if self.source.properties.globally_keyed:
@@ -38,15 +40,17 @@ class KeyZones(PassthroughBFS[B, F, S, Z, Zone]):
             globally_keyed=True,
         )
 
-    def zones(self) -> Iterator[Zone]:
+    def zones(self) -> Iterator[Zone[int]]:
         for zone in self.source.zones():
-            yield self.manager.lookup(zone)
+            new_zone = self.manager.lookup(zone)
+            self.mapping[new_zone] = zone
+            yield new_zone
 
-    def topology(self, timestep: S, basis: B, zone: Zone) -> Topology:
-        return self.source.topology(timestep, basis, cast(Z, zone))
+    def topology(self, timestep: S, basis: B, zone: Zone[int]) -> Topology:
+        return self.source.topology(timestep, basis, self.mapping[zone])
 
-    def field_data(self, timestep: S, field: F, zone: Zone) -> FieldData[floating]:
-        return self.source.field_data(timestep, field, cast(Z, zone))
+    def field_data(self, timestep: S, field: F, zone: Zone[int]) -> FieldData[floating]:
+        return self.source.field_data(timestep, field, self.mapping[zone])
 
 
 class ZoneManager:
@@ -57,12 +61,7 @@ class ZoneManager:
         self.lut = VertexDict()
         self.shapes = dict()
 
-    def lookup(self, zone: Zone) -> Zone:
-        if zone.global_key is not None:
-            if self.shapes[zone.global_key] != zone.shape:
-                raise api.Unexpected("Differing zone shapes for same global key")
-            return zone
-
+    def lookup(self, zone: Zone) -> Zone[int]:
         keys = reduce(lambda x, y: x & y, (self.lut.get(pt, set()) for pt in zone.coords))
         if len(keys) >= 2:
             raise api.Unexpected("Multiple zone candidates found")
@@ -78,13 +77,12 @@ class ZoneManager:
             self.shapes[key] = zone.shape
             for pt in zone.coords:
                 self.lut.setdefault(pt, set()).add(key)
-            logging.debug(f"Local zone '{zone.local_key}' associated with new global zone {key}")
+            logging.debug(f"Local zone '{zone.key}' associated with new global zone {key}")
 
         return Zone(
             shape=zone.shape,
             coords=zone.coords,
-            local_key=zone.local_key,
-            global_key=key,
+            key=key,
         )
 
 

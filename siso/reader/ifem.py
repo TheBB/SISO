@@ -21,6 +21,13 @@ from ..topology import LrTopology, SplineTopology, UnstructuredTopology
 from ..util import FieldData
 
 
+@define(frozen=True)
+class ZoneKey:
+    name: str
+    step: int
+    patch: int
+
+
 class Locator(ABC):
     @abstractmethod
     def patch_root(self, name: str, step: int) -> str:
@@ -87,7 +94,9 @@ class IfemBasis(Basis):
         return self.locator.patch_path(self.name, step, patch)
 
     @lru_cache(maxsize=128)
-    def patch_at(self, step: int, patch: int, source: Ifem) -> Tuple[Zone, api.Topology, FieldData[floating]]:
+    def patch_at(
+        self, step: int, patch: int, source: Ifem
+    ) -> Tuple[Zone[ZoneKey], api.Topology, FieldData[floating]]:
         step = self.last_update_before(step, source)
         topology: api.Topology
         patchdata = source.h5[self.patch_path(step, patch)][:]
@@ -101,7 +110,7 @@ class IfemBasis(Basis):
             corners, topology, cps = next(SplineTopology.from_bytes(raw_data))
         shape = [Shape.Line, Shape.Quatrilateral, Shape.Hexahedron][topology.pardim - 1]
 
-        zone = Zone(shape=shape, coords=corners, local_key=f"{self.name}/{step}/{patch}")
+        zone = Zone(shape=shape, coords=corners, key=ZoneKey(self.name, step, patch))
         return zone, topology, cps
 
     @lru_cache(maxsize=1)
@@ -371,20 +380,18 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
     def fields(self, basis: IfemBasis) -> Iterator[IfemField]:
         return iter(basis.fields)
 
-    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> api.Topology:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone[ZoneKey]) -> api.Topology:
         ibasis = self._bases[basis.name]
-        patch = int(zone.local_key.split("/")[-1])
-        _, topology, _ = ibasis.patch_at(timestep.index, patch, self)
+        _, topology, _ = ibasis.patch_at(timestep.index, zone.key.patch, self)
         return topology
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
-        patch = int(zone.local_key.split("/")[-1])
+    def field_data(self, timestep: Step, field: Field, zone: Zone[ZoneKey]) -> FieldData[floating]:
         if field.is_geometry:
             basis = self._bases[field.name]
-            _, _, coeffs = basis.patch_at(timestep.index, patch, self)
+            _, _, coeffs = basis.patch_at(timestep.index, zone.key.patch, self)
             return coeffs
         ifield = self._fields[field.name]
-        coeffs = ifield.cps_at(timestep.index, patch, self)
+        coeffs = ifield.cps_at(timestep.index, zone.key.patch, self)
         return coeffs
 
     def field_updates(self, timestep: Step, field: Field) -> bool:

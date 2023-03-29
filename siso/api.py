@@ -43,7 +43,7 @@ from attrs import Factory, asdict, define
 from numpy import floating, integer
 from typing_extensions import Self
 
-from .typing import Coords, Key
+from .typing import Coords
 
 
 if TYPE_CHECKING:
@@ -87,8 +87,11 @@ class Shape(Enum):
     Shapeless = auto()
 
 
+K = TypeVar("K")
+
+
 @define(frozen=True)
-class Zone:
+class Zone(Generic[K]):
     """A zone is a distinct and identified region of the spatial domain.
 
     Most sources provide only one zone (a single grid for the entire domain),
@@ -98,16 +101,12 @@ class Zone:
     Attributes:
     - shape: the shape of the zone
     - coords: a sequence of points locating the corners of the zone
-    - local_key: a string identifying the zone - can be used internally by
-        the source object that creates the zone object to keep information,
-        but shouldn't be used by consuming code for anything
-    - global_key: a globally unique integer identifier
+    - key: any object identfying the zone
     """
 
     shape: Shape
     coords: Coords
-    local_key: Key
-    global_key: Optional[int] = None
+    key: K
 
 
 class Endianness(Enum):

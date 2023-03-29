@@ -23,7 +23,7 @@ class FieldDimensionality(Enum):
     Unknown = auto()
 
 
-class NetCdf(api.Source[Basis, Field, Step, Zone]):
+class NetCdf(api.Source[Basis, Field, Step, Zone[int]]):
     filename: Path
     dataset: Dataset
 
@@ -262,7 +262,7 @@ class NetCdf(api.Source[Basis, Field, Step, Zone]):
         yield Zone(
             shape=Shape.Hexahedron,
             coords=corners,
-            local_key="0",
+            key=0,
         )
 
     def bases(self) -> Iterator[Basis]:
@@ -355,6 +355,9 @@ class Wrf(NetCdf):
     def properties(self) -> api.SourceProperties:
         return api.SourceProperties(
             instantaneous=False,
+            globally_keyed=True,
+            discrete_topology=True,
+            single_zoned=True,
         )
 
     def configure(self, settings: api.ReaderSettings) -> None:
@@ -447,6 +450,9 @@ class GeoGrid(NetCdf):
     def properties(self) -> api.SourceProperties:
         return api.SourceProperties(
             instantaneous=True,
+            globally_keyed=True,
+            discrete_topology=True,
+            single_zoned=True,
         )
 
     def configure(self, settings: api.ReaderSettings) -> None:

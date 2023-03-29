@@ -143,7 +143,7 @@ class SimraScales:
         )
 
 
-class SimraMeshBase(api.Source[Basis, Field, Step, Zone]):
+class SimraMeshBase(api.Source[Basis, Field, Step, Zone[int]]):
     filename: Path
     simra_nodeshape: Tuple[int, ...]
 
@@ -209,20 +209,19 @@ class SimraMeshBase(api.Source[Basis, Field, Step, Zone]):
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
 
-    def zones(self) -> Iterator[Zone]:
+    def zones(self) -> Iterator[Zone[int]]:
         shape = Shape.Hexahedron if self.pardim == 3 else Shape.Quatrilateral
         yield Zone(
             shape=shape,
             coords=self.corners(),
-            local_key="0",
-            global_key=0,
+            key=0,
         )
 
-    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> StructuredTopology:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
         return StructuredTopology(self.out_cellshape, celltype, degree=1)
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
         return self.nodes()
 
 
@@ -362,7 +361,7 @@ class Simra3dMesh(SimraMeshBase):
         return data + mesh_offset(self.filename, dim=3)
 
 
-class SimraHasMesh(api.Source[Basis, Field, Step, Zone]):
+class SimraHasMesh(api.Source[Basis, Field, Step, Zone[int]]):
     mesh: Simra3dMesh
 
     @staticmethod
@@ -385,7 +384,7 @@ class SimraHasMesh(api.Source[Basis, Field, Step, Zone]):
     def use_geometry(self, geometry: Field) -> None:
         return
 
-    def zones(self) -> Iterator[Zone]:
+    def zones(self) -> Iterator[Zone[int]]:
         return self.mesh.zones()
 
     def bases(self) -> Iterator[Basis]:
@@ -397,7 +396,7 @@ class SimraHasMesh(api.Source[Basis, Field, Step, Zone]):
     def geometries(self, basis: Basis) -> Iterator[Field]:
         return self.mesh.geometries(basis)
 
-    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> Topology:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> Topology:
         return self.mesh.topology(timestep, basis, zone)
 
 
@@ -534,7 +533,7 @@ class SimraBoundary(SimraHasMesh):
 
         return FieldData(transpose(data, self.mesh.simra_nodeshape)).ensure_native()
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         return self.data()
@@ -681,7 +680,7 @@ class SimraContinuation(SimraHasMesh):
             cdata = None
         return ndata, cdata
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data()
@@ -777,7 +776,7 @@ class SimraHistory(SimraHasMesh):
                 return
             yield Step(index=ts_index, value=time)
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data(timestep.index)

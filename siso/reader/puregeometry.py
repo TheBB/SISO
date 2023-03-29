@@ -12,7 +12,7 @@ from ..util import FieldData
 T = TypeVar("T", bound=api.Topology)
 
 
-class PureGeometry(api.Source[Basis, Field, Step, Zone], Generic[T]):
+class PureGeometry(api.Source[Basis, Field, Step, Zone[int]], Generic[T]):
     filename: Path
     corners: List[Coords]
     controlpoints: List[FieldData[floating]]
@@ -54,18 +54,17 @@ class PureGeometry(api.Source[Basis, Field, Step, Zone], Generic[T]):
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
 
-    def zones(self) -> Iterator[Zone]:
+    def zones(self) -> Iterator[Zone[int]]:
         for i, (corners, topology) in enumerate(zip(self.corners, self.topologies)):
             shape = [Shape.Line, Shape.Quatrilateral, Shape.Hexahedron][topology.pardim - 1]
             yield Zone(
                 shape=shape,
                 coords=corners,
-                local_key=str(i),
-                global_key=i,
+                key=i,
             )
 
-    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> T:
-        return self.topologies[int(zone.local_key)]
+    def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> T:
+        return self.topologies[zone.key]
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
-        return self.controlpoints[int(zone.local_key)]
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
+        return self.controlpoints[zone.key]

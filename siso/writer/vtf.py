@@ -9,7 +9,7 @@ from attrs import define
 from typing_extensions import Self
 
 from .. import api
-from ..api import Basis, CellOrdering, DiscreteTopology, Field, Source, Step, StepInterpretation, Zone
+from ..api import Basis, CellOrdering, DiscreteTopology, Field, Step, StepInterpretation, Zone
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
 
@@ -22,10 +22,11 @@ class FieldInfo:
 B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
 S = TypeVar("S", bound=Step)
-Z = TypeVar("Z", bound=Zone)
+
+Source = api.Source[B, F, S, Zone[int]]
 
 
-class VtfWriter(Writer[B, F, S, Z]):
+class VtfWriter(Writer[B, F, S, Zone[int]]):
     filename: Path
     out: vtf.File
     mode: OutputMode
@@ -85,10 +86,8 @@ class VtfWriter(Writer[B, F, S, Z]):
         self.out.__exit__(*args)
         logging.info(self.filename)
 
-    def update_geometry(self, timestep: S, source: Source[B, F, S, Z], geometry: F) -> None:
+    def update_geometry(self, timestep: S, source: Source, geometry: F) -> None:
         for zone in source.zones():
-            assert zone.global_key is not None
-
             topology = source.topology(timestep, source.basis_of(geometry), zone)
             nodes = source.field_data(timestep, geometry, zone).ensure_ncomps(3)
             assert isinstance(topology, DiscreteTopology)
@@ -100,23 +99,21 @@ class VtfWriter(Writer[B, F, S, Z]):
                 element_block.AddElements(
                     topology.cells_as(CellOrdering.Vtk).numpy().flatten(), topology.pardim
                 )
-                element_block.SetPartName(f"Patch {zone.global_key + 1}")
-                element_block.BindNodeBlock(node_block, zone.global_key + 1)
+                element_block.SetPartName(f"Patch {zone.key + 1}")
+                element_block.BindNodeBlock(node_block, zone.key + 1)
 
-            if len(self.geometry_blocks) <= zone.global_key:
+            if len(self.geometry_blocks) <= zone.key:
                 self.geometry_blocks.append((node_block, element_block))
             else:
-                self.geometry_blocks[zone.global_key] = (node_block, element_block)
+                self.geometry_blocks[zone.key] = (node_block, element_block)
 
         self.geometry_block.BindElementBlocks(*(e for _, e in self.geometry_blocks), step=timestep.index + 1)
 
-    def update_field(self, timestep: S, source: Source[B, F, S, Z], field: F) -> None:
+    def update_field(self, timestep: S, source: Source, field: F) -> None:
         for zone in source.zones():
-            assert zone.global_key is not None
-
             data = source.field_data(timestep, field, zone)
             data = data.ensure_ncomps(3, allow_scalar=field.is_scalar, pad_right=not field.is_displacement)
-            node_block, element_block = self.geometry_blocks[zone.global_key]
+            node_block, element_block = self.geometry_blocks[zone.key]
 
             with self.out.ResultBlock(cells=field.cellwise, vector=field.is_vector) as result_block:
                 result_block.SetResults(data.numpy().flatten())
@@ -134,7 +131,7 @@ class VtfWriter(Writer[B, F, S, Z]):
             steps = self.field_info[field.name].steps
             steps.setdefault(timestep.index + 1, []).append(result_block)
 
-    def consume_timestep(self, timestep: S, source: Source[B, F, S, Z], geometry: F) -> None:
+    def consume_timestep(self, timestep: S, source: Source, geometry: F) -> None:
         if source.field_updates(timestep, geometry):
             self.update_geometry(timestep, source, geometry)
         basis = next(source.bases())
@@ -142,7 +139,7 @@ class VtfWriter(Writer[B, F, S, Z]):
             if source.field_updates(timestep, field):
                 self.update_field(timestep, source, field)
 
-    def consume(self, source: Source[B, F, S, Z], geometry: F):
+    def consume(self, source: Source, geometry: F):
         self.step_interpretation = source.properties.step_interpretation
         for timestep in source.steps():
             self.timesteps.append(timestep)
