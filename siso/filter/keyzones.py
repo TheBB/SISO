@@ -8,17 +8,9 @@ from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, T
 from numpy import floating
 
 from .. import api
-from ..api import Basis, Field, Shape, Source, SourceProperties, Step, Topology, Zone
-from ..typing import Point
+from ..api import B, F, Point, S, Shape, Source, SourceProperties, T, Z, Zone
 from ..util import FieldData, bisect
 from .passthrough import PassthroughBFST
-
-
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-T = TypeVar("T", bound=Topology)
-Z = TypeVar("Z", bound=Zone)
 
 
 class KeyZones(PassthroughBFST[B, F, S, T, Z, Zone[int]]):

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Type, TypeVar
+from typing import Dict, List, Tuple, Type
 
 import vtfwriter as vtf
 from attrs import define
 from typing_extensions import Self
 
 from .. import api
-from ..api import Basis, CellOrdering, DiscreteTopology, Field, Step, StepInterpretation, Zone
+from ..api import B, CellOrdering, DiscreteTopology, F, S, StepInterpretation, Zone
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
 
@@ -18,10 +18,6 @@ class FieldInfo:
     blocktype: Type[vtf.Block]
     steps: Dict[int, List[vtf.ResultBlock]]
 
-
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
 
 Source = api.Source[B, F, S, DiscreteTopology, Zone[int]]
 

@@ -15,41 +15,25 @@ implementations for the methods that make sense. I.e. PassthroughBFS implements
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, Iterator, TypeVar
+from typing import Generic, Iterator
 
 from numpy import floating
 from typing_extensions import Self
 
 from .. import api
+from ..api import B, F, InB, InF, InS, InT, InZ, OutB, OutF, OutS, OutT, OutZ, S, T, Z
 from ..util import FieldData
 
 
-# Type variables for filter classes. In general a filter is parametrized on
-# eight types: the input and output B, F, S and Z, respectively.
+# In general a filter is parametrized on ten types: the input and output B, F, S
+# T and Z, respectively.
 #
-# For the filters that leave any of the parameters unchanged, we use just
-# B, F, S or Z as a type variable. For those that are different, we use the
-# 'In' or 'Out' variants.
+# For the filters that leave any of the parameters unchanged, we use just B, F,
+# S, T or Z as a type variable. For those that are different, we use the 'In' or
+# 'Out' variants.
 #
-# Thus, for example, PassthroughBFS is parametrized on B, F and S (which are
-# unchanged), together with InZ and OutZ.
-B = TypeVar("B", bound=api.Basis)
-F = TypeVar("F", bound=api.Field)
-S = TypeVar("S", bound=api.Step)
-T = TypeVar("T", bound=api.Topology)
-Z = TypeVar("Z", bound=api.Zone)
-InB = TypeVar("InB", bound=api.Basis)
-InF = TypeVar("InF", bound=api.Field)
-InS = TypeVar("InS", bound=api.Step)
-InT = TypeVar("InT", bound=api.Topology)
-InZ = TypeVar("InZ", bound=api.Zone)
-OutB = TypeVar("OutB", bound=api.Basis)
-OutF = TypeVar("OutF", bound=api.Field)
-OutS = TypeVar("OutS", bound=api.Step)
-OutT = TypeVar("OutT", bound=api.Topology)
-OutZ = TypeVar("OutZ", bound=api.Zone)
-
-
+# Thus, for example, PassthroughBFS is parametrized on B, F and S and T (which
+# are unchanged), together with InZ and OutZ.
 class PassthroughBase(
     api.Source[OutB, OutF, OutS, OutT, OutZ],
     Generic[InB, InF, InS, InT, InZ, OutB, OutF, OutS, OutT, OutZ],

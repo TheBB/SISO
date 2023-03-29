@@ -1,18 +1,12 @@
-from typing import Generic, Iterator, List, Optional, TypeVar
+from typing import Generic, Iterator, List, Optional
 
 from attrs import define
 from numpy import floating
 
 from .. import api
+from ..api import B, F, S, T, Z
 from ..util import FieldData
 from .passthrough import PassthroughBSTZ, WrappedField
-
-
-B = TypeVar("B", bound=api.Basis)
-F = TypeVar("F", bound=api.Field)
-S = TypeVar("S", bound=api.Step)
-T = TypeVar("T", bound=api.Topology)
-Z = TypeVar("Z", bound=api.Zone)
 
 
 @define

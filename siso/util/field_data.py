@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, overload
 
 import numpy as np
 from attrs import define
@@ -23,7 +23,9 @@ from scipy.spatial.transform import Rotation
 from vtkmodules.util.numpy_support import numpy_to_vtk
 from vtkmodules.vtkCommonCore import vtkDataArray
 
-from ..typing import Coords
+
+if TYPE_CHECKING:
+    from ..api import Coords
 
 
 T = TypeVar("T", bound=number)

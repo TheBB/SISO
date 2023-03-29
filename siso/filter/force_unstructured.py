@@ -1,14 +1,6 @@
-from typing import TypeVar
-
-from ..api import Basis, Field, Step, Zone
+from ..api import B, F, S, Z
 from ..topology import DiscreteTopology, UnstructuredTopology
 from .passthrough import PassthroughBFSZ
-
-
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-Z = TypeVar("Z", bound=Zone)
 
 
 class ForceUnstructured(PassthroughBFSZ[B, F, S, Z, DiscreteTopology, UnstructuredTopology]):

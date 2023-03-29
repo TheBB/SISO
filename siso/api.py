@@ -43,11 +43,13 @@ from attrs import Factory, asdict, define
 from numpy import floating, integer
 from typing_extensions import Self
 
-from .typing import Coords
-
 
 if TYPE_CHECKING:
     from .util import FieldData
+
+
+Point = Tuple[float, ...]
+Coords = Tuple[Point, ...]
 
 
 @define
@@ -740,11 +742,22 @@ class DiscreteTopology(Topology):
         ...
 
 
+# Some of these typevars are used in this file. All are for export.
 B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
 S = TypeVar("S", bound=Step)
 T = TypeVar("T", bound=Topology)
 Z = TypeVar("Z", bound=Zone)
+InB = TypeVar("InB", bound=Basis)
+InF = TypeVar("InF", bound=Field)
+InS = TypeVar("InS", bound=Step)
+InT = TypeVar("InT", bound=Topology)
+InZ = TypeVar("InZ", bound=Zone)
+OutB = TypeVar("OutB", bound=Basis)
+OutF = TypeVar("OutF", bound=Field)
+OutS = TypeVar("OutS", bound=Step)
+OutT = TypeVar("OutT", bound=Topology)
+OutZ = TypeVar("OutZ", bound=Zone)
 
 
 class Source(ABC, Generic[B, F, S, T, Z]):

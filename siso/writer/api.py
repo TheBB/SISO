@@ -1,10 +1,10 @@
 from enum import Enum
-from typing import Optional, Protocol, TypeVar
+from typing import Optional, Protocol
 
 from attrs import define
 from typing_extensions import Self
 
-from ..api import Basis, Endianness, Field, Source, Step, Topology, Zone
+from ..api import B, Endianness, F, S, Source, T, Z
 
 
 class OutputMode(Enum):
@@ -25,13 +25,6 @@ class WriterProperties:
     require_discrete_topology: bool = False
     require_single_basis: bool = False
     require_instantaneous: bool = False
-
-
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-T = TypeVar("T", bound=Topology)
-Z = TypeVar("Z", bound=Zone)
 
 
 class Writer(Protocol[B, F, S, T, Z]):

@@ -1,18 +1,12 @@
-from typing import Dict, Iterator, TypeVar
+from typing import Dict, Iterator
 
 from numpy import floating
 
 from .. import api
+from ..api import F, InB, S, T, Z
 from ..impl import Basis
 from ..util import FieldData
 from .passthrough import PassthroughFSZ
-
-
-InB = TypeVar("InB", bound=api.Basis)
-F = TypeVar("F", bound=api.Field)
-S = TypeVar("S", bound=api.Step)
-T = TypeVar("T", bound=api.Topology)
-Z = TypeVar("Z", bound=api.Zone)
 
 
 # The singleton basis object to yield.
@@ -44,9 +38,6 @@ class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, T, api.Topology]):
     def properties(self) -> api.SourceProperties:
         return self.source.properties.update(
             single_basis=True,
-            # Note: although currently this filter guarantees discrete topology
-            # output, we shouldn't rely on it in the future.
-            # discrete_topology=True,
         )
 
     def bases(self) -> Iterator[Basis]:

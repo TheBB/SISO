@@ -1,6 +1,5 @@
 import logging
 from pathlib import Path
-from typing import TypeVar
 
 import numpy as np
 from numpy.linalg import norm
@@ -8,15 +7,10 @@ from scipy.io import FortranFile
 from typing_extensions import Self
 
 from .. import api, util
+from ..api import B, F, S, Z
 from ..topology import DiscreteTopology, StructuredTopology
 from ..util import cell_numbering
 from .api import Writer, WriterProperties, WriterSettings
-
-
-B = TypeVar("B", bound=api.Basis)
-F = TypeVar("F", bound=api.Field)
-S = TypeVar("S", bound=api.Step)
-Z = TypeVar("Z", bound=api.Zone)
 
 
 class SimraWriter(Writer):

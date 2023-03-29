@@ -1,21 +1,15 @@
 from __future__ import annotations
 
 from functools import reduce
-from typing import Iterator, TypeVar
+from typing import Iterator
 
 from numpy import floating
 
 from .. import util
-from ..api import Basis, Field, Shape, SourceProperties, Step, Zone
+from ..api import B, F, S, Shape, SourceProperties, Z, Zone
 from ..topology import DiscreteTopology, UnstructuredTopology
 from ..util import FieldData
 from .passthrough import PassthroughBFST
-
-
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-Z = TypeVar("Z", bound=Zone)
 
 
 class ZoneMerge(PassthroughBFST[B, F, S, DiscreteTopology, Z, Zone[int]]):

@@ -5,6 +5,7 @@ from attrs import define
 from numpy import floating
 
 from .. import api, util
+from ..api import B, F, S, T, Z
 from .passthrough import PassthroughBFTZ
 
 
@@ -56,13 +57,6 @@ def islice_group(it, *args):
         if flag:
             yield accum
             accum = []
-
-
-B = TypeVar("B", bound=api.Basis)
-F = TypeVar("F", bound=api.Field)
-S = TypeVar("S", bound=api.Step)
-T = TypeVar("T", bound=api.Topology)
-Z = TypeVar("Z", bound=api.Zone)
 
 
 @define

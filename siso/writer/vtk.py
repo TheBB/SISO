@@ -24,10 +24,10 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from .. import api, util
-from ..api import Basis, CellOrdering, DiscreteTopology, Source, Step, Zone
+from ..api import B, CellOrdering, DiscreteTopology, F, S, Source, Z
 from ..topology import CellType, StructuredTopology
 from ..util import FieldData
-from .api import Field, OutputMode, Writer, WriterProperties, WriterSettings
+from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
 
 class Behavior(Enum):
@@ -36,12 +36,7 @@ class Behavior(Enum):
     Whatever = auto()
 
 
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-Z = TypeVar("Z", bound=Zone)
 Sc = TypeVar("Sc", bound=number)
-
 BackendWriter = Union[vtkXMLWriter, vtkDataWriter]
 
 

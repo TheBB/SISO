@@ -1,14 +1,8 @@
-from typing import Iterator, Set, TypeVar
+from typing import Iterator, Set
 
 from .. import api
+from ..api import B, F, S, T, Z
 from .passthrough import PassthroughAll
-
-
-B = TypeVar("B", bound=api.Basis)
-F = TypeVar("F", bound=api.Field)
-S = TypeVar("S", bound=api.Step)
-T = TypeVar("T", bound=api.Topology)
-Z = TypeVar("Z", bound=api.Zone)
 
 
 class FieldFilter(PassthroughAll[B, F, S, T, Z]):

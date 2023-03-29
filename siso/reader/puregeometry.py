@@ -1,15 +1,12 @@
 from pathlib import Path
-from typing import Generic, Iterator, List, TypeVar
+from typing import Generic, Iterator, List
 
 from numpy import floating
 
 from .. import api, coord
-from ..api import Coords, Shape, Zone
+from ..api import Coords, Shape, T, Zone
 from ..impl import Basis, Field, Step
 from ..util import FieldData
-
-
-T = TypeVar("T", bound=api.Topology)
 
 
 class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
