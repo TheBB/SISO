@@ -18,6 +18,9 @@ class Discretize(PassthroughBFSZ[B, F, S, Z, T, DiscreteTopology]):
         self.nvis = nvis
         self.mappers = {}
 
+    def validate_source(self) -> None:
+        assert not self.source.properties.discrete_topology
+
     @property
     def properties(self) -> api.SourceProperties:
         return self.source.properties.update(

@@ -9,7 +9,7 @@ from attrs import define
 from typing_extensions import Self
 
 from .. import api
-from ..api import B, CellOrdering, DiscreteTopology, F, S, StepInterpretation, Zone
+from ..api import B, CellOrdering, DiscreteTopology, F, S, Step, StepInterpretation, T, Z, Zone
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
 
@@ -19,17 +19,14 @@ class FieldInfo:
     steps: Dict[int, List[vtf.ResultBlock]]
 
 
-Source = api.Source[B, F, S, DiscreteTopology, Zone[int]]
-
-
-class VtfWriter(Writer[B, F, S, DiscreteTopology, Zone[int]]):
+class VtfWriter(Writer):
     filename: Path
     out: vtf.File
     mode: OutputMode
 
     geometry_block: vtf.GeometryBlock
     geometry_blocks: List[Tuple[vtf.NodeBlock, vtf.ElementBlock]]
-    timesteps: List[S]
+    timesteps: List[Step]
     field_info: Dict[str, FieldInfo]
     step_interpretation: StepInterpretation
 
@@ -82,11 +79,12 @@ class VtfWriter(Writer[B, F, S, DiscreteTopology, Zone[int]]):
         self.out.__exit__(*args)
         logging.info(self.filename)
 
-    def update_geometry(self, timestep: S, source: Source, geometry: F) -> None:
+    def update_geometry(
+        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
+    ) -> None:
         for zone in source.zones():
             topology = source.topology(timestep, source.basis_of(geometry), zone)
             nodes = source.field_data(timestep, geometry, zone).ensure_ncomps(3)
-            assert isinstance(topology, DiscreteTopology)
 
             with self.out.NodeBlock() as node_block:
                 node_block.SetNodes(nodes.numpy().flatten())
@@ -105,7 +103,9 @@ class VtfWriter(Writer[B, F, S, DiscreteTopology, Zone[int]]):
 
         self.geometry_block.BindElementBlocks(*(e for _, e in self.geometry_blocks), step=timestep.index + 1)
 
-    def update_field(self, timestep: S, source: Source, field: F) -> None:
+    def update_field(
+        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], field: F
+    ) -> None:
         for zone in source.zones():
             data = source.field_data(timestep, field, zone)
             data = data.ensure_ncomps(3, allow_scalar=field.is_scalar, pad_right=not field.is_displacement)
@@ -127,16 +127,18 @@ class VtfWriter(Writer[B, F, S, DiscreteTopology, Zone[int]]):
             steps = self.field_info[field.name].steps
             steps.setdefault(timestep.index + 1, []).append(result_block)
 
-    def consume_timestep(self, timestep: S, source: Source, geometry: F) -> None:
+    def consume_timestep(
+        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
+    ) -> None:
         if source.field_updates(timestep, geometry):
             self.update_geometry(timestep, source, geometry)
-        basis = next(source.bases())
-        for field in source.fields(basis):
+        for field in source.fields(source.single_basis()):
             if source.field_updates(timestep, field):
                 self.update_field(timestep, source, field)
 
-    def consume(self, source: Source, geometry: F):
+    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F):
+        casted = source.cast_discrete_topology().cast_globally_keyed()
         self.step_interpretation = source.properties.step_interpretation
-        for timestep in source.steps():
-            self.timesteps.append(timestep)
-            self.consume_timestep(timestep, source, geometry)
+        for step in casted.steps():
+            self.timesteps.append(step)
+            self.consume_timestep(step, casted, geometry)

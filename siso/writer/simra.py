@@ -7,8 +7,8 @@ from scipy.io import FortranFile
 from typing_extensions import Self
 
 from .. import api, util
-from ..api import B, F, S, Z
-from ..topology import DiscreteTopology, StructuredTopology
+from ..api import B, F, S, T, Z
+from ..topology import StructuredTopology
 from ..util import cell_numbering
 from .api import Writer, WriterProperties, WriterSettings
 
@@ -43,13 +43,14 @@ class SimraWriter(Writer):
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
-    def consume(self, source: api.Source[B, F, S, DiscreteTopology, Z], geometry: F):
-        timestep = next(source.steps())
-        zone = next(source.zones())
+    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F):
+        casted = source.cast_discrete_topology()
+        step = casted.single_step()
+        zone = casted.single_zone()
 
-        topology = source.topology(timestep, source.basis_of(geometry), zone)
+        topology = casted.topology(step, casted.basis_of(geometry), zone)
         assert isinstance(topology, StructuredTopology)
-        data = source.field_data(timestep, geometry, zone)
+        data = casted.field_data(step, geometry, zone)
 
         nodes = data.numpy(*topology.nodeshape)
         a = nodes[1, 0, 0] - nodes[0, 0, 0]

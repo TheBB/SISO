@@ -27,7 +27,7 @@ class WriterProperties:
     require_instantaneous: bool = False
 
 
-class Writer(Protocol[B, F, S, T, Z]):
+class Writer(Protocol):
     def __enter__(self) -> Self:
         ...
 

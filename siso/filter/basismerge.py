@@ -3,7 +3,7 @@ from typing import Dict, Iterator
 from numpy import floating
 
 from .. import api
-from ..api import F, InB, S, T, Z
+from ..api import F, InB, InT, S, Z
 from ..impl import Basis
 from ..util import FieldData
 from .passthrough import PassthroughFSZ
@@ -13,7 +13,7 @@ from .passthrough import PassthroughFSZ
 BASIS = Basis("mesh")
 
 
-class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, T, api.Topology]):
+class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, InT, api.Topology]):
     """Source filter that merges bases.
 
     This filter will attempt (potentially unsuccessfully) to map all the fields
@@ -30,7 +30,7 @@ class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, T, api.Topology]):
     # Keep a mapping of the merger object associated with each zone.
     mergers: Dict[Z, api.TopologyMerger]
 
-    def __init__(self, source: api.Source[InB, F, S, T, Z]):
+    def __init__(self, source: api.Source[InB, F, S, InT, Z]):
         super().__init__(source)
         self.mergers = {}
 

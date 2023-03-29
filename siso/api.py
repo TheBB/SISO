@@ -885,3 +885,33 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         """
         return
         yield
+
+    def cast_globally_keyed(self) -> Source[B, F, S, T, Zone[int]]:
+        """Cast the Z type to Zone[int] based on runtime check."""
+        if not self.properties.globally_keyed:
+            raise Unexpected("Source is not globally keyed")
+        return cast(Source[B, F, S, T, Zone[int]], self)
+
+    def cast_discrete_topology(self) -> Source[B, F, S, DiscreteTopology, Z]:
+        """Cast the T type to DiscreteTopology based on runtime check."""
+        if not self.properties.discrete_topology:
+            raise Unexpected("Source does not guarantee discrete topologies")
+        return cast(Source[B, F, S, DiscreteTopology, Z], self)
+
+    def single_basis(self) -> B:
+        """Singleton version of `basis()`."""
+        if not self.properties.single_basis:
+            raise Unexpected("Source does not guarantee single basis")
+        return next(self.bases())
+
+    def single_zone(self) -> Z:
+        """Singleton version of `zone()`."""
+        if not self.properties.single_zoned:
+            raise Unexpected("Source does not guarantee single zone")
+        return next(self.zones())
+
+    def single_step(self) -> S:
+        """Singleton version of `steps()`."""
+        if not self.properties.instantaneous:
+            raise Unexpected("Source does not guarantee single step")
+        return next(self.steps())

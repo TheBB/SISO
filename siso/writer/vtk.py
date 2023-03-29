@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
-from typing import IO, Tuple, TypeVar, Union, cast
+from typing import IO, Tuple, TypeVar, Union
 
 from numpy import number
 from typing_extensions import Self
@@ -24,7 +24,7 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from .. import api, util
-from ..api import B, CellOrdering, DiscreteTopology, F, S, Source, Z
+from ..api import B, CellOrdering, DiscreteTopology, F, S, Source, T, Z
 from ..topology import CellType, StructuredTopology
 from ..util import FieldData
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
@@ -142,15 +142,15 @@ class VtkWriterBase(ABC, Writer):
         ...
 
     def consume_timestep(
-        self, timestep: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F
+        self, step: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F
     ) -> None:
-        zone = next(source.zones())
-        topology = cast(DiscreteTopology, source.topology(timestep, source.basis_of(geometry), zone))
+        zone = source.single_zone()
+        topology = source.topology(step, source.basis_of(geometry), zone)
 
         grid, writer = self.grid_and_writer(topology)
         apply_output_mode(writer, self.output_mode)
 
-        data = source.field_data(timestep, geometry, zone)
+        data = source.field_data(step, geometry, zone)
         data = transpose(data, grid, geometry.cellwise)
 
         points = vtkPoints()
@@ -158,12 +158,11 @@ class VtkWriterBase(ABC, Writer):
         points.SetData(p.vtk())
         grid.SetPoints(points)
 
-        basis = next(source.bases())
-        for field in source.fields(basis):
+        for field in source.fields(source.single_basis()):
             if field.is_geometry:
                 continue
             target = grid.GetCellData() if field.cellwise else grid.GetPointData()
-            data = source.field_data(timestep, field, zone)
+            data = source.field_data(step, field, zone)
             if field.is_displacement:
                 data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
             else:
@@ -181,10 +180,11 @@ class VtkWriterBase(ABC, Writer):
 
         logging.info(filename)
 
-    def consume(self, source: Source[B, F, S, DiscreteTopology, Z], geometry: F) -> None:
+    def consume(self, source: Source[B, F, S, T, Z], geometry: F) -> None:
+        casted = source.cast_discrete_topology()
         filenames = util.filename_generator(self.filename, source.properties.instantaneous)
-        for timestep, filename in zip(source.steps(), filenames):
-            self.consume_timestep(timestep, filename, source, geometry)
+        for step, filename in zip(casted.steps(), filenames):
+            self.consume_timestep(step, filename, casted, geometry)
 
 
 class VtkWriter(VtkWriterBase):
