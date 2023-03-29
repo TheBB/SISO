@@ -5,13 +5,14 @@ from numpy import floating
 
 from .. import api
 from ..util import FieldData
-from .passthrough import PassthroughBSZ, WrappedField
+from .passthrough import PassthroughBSTZ, WrappedField
 
 
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
-Z = TypeVar("Z", bound=api.Zone)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
+Z = TypeVar("Z", bound=api.Zone)
 
 
 @define
@@ -31,7 +32,7 @@ class DecomposedField(WrappedField[F]):
         return self.wrapped_field.type
 
 
-class DecomposeBase(PassthroughBSZ[B, S, Z, F, DecomposedField[F]], Generic[B, F, S, Z]):
+class DecomposeBase(PassthroughBSTZ[B, S, T, Z, F, DecomposedField[F]], Generic[B, F, S, T, Z]):
     def use_geometry(self, geometry: DecomposedField[F]) -> None:
         return self.source.use_geometry(geometry.wrapped_field)
 
@@ -52,7 +53,7 @@ class DecomposeBase(PassthroughBSZ[B, S, Z, F, DecomposedField[F]], Generic[B, F
         return self.source.field_updates(timestep, field.wrapped_field)
 
 
-class Decompose(DecomposeBase[B, F, S, Z]):
+class Decompose(DecomposeBase[B, F, S, T, Z]):
     def fields(self, basis: B) -> Iterator[DecomposedField[F]]:
         for field in self.source.fields(basis):
             yield DecomposedField(name=field.name, wrapped_field=field, components=None, splittable=False)
@@ -63,7 +64,7 @@ class Decompose(DecomposeBase[B, F, S, Z]):
                 yield DecomposedField(name=name, wrapped_field=field, components=[i], splittable=False)
 
 
-class Split(DecomposeBase[B, F, S, Z]):
+class Split(DecomposeBase[B, F, S, T, Z]):
     splits: List[api.SplitFieldSpec]
 
     def __init__(self, source: api.Source, splits: List[api.SplitFieldSpec]):

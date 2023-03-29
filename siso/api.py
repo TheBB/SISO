@@ -605,139 +605,6 @@ class ReaderSettings:
     rationality: Optional[Rationality]
 
 
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-Z = TypeVar("Z", bound=Zone)
-
-
-class Source(ABC, Generic[B, F, S, Z]):
-    """The primary object for representing a data source.
-
-    This type is parametrized on the type of basis, field, step and zone, but
-    not on topology. This may change in the future.
-
-    The source object have methods that return bases, fields, steps and zones,
-    as well as methods that consume these objects. It is the user's
-    responsibility to ensure that any such object passed to a method of a source
-    object was previously returned by a method of that same source object. In
-    other words, don't mix and match such objects.
-
-    Sources are allowed to assume, and user code must guarantee that:
-    - timesteps are processed in turn,
-    - within each timestep, fields are processed by basis, and
-    - within each basis, the topology is processed before the field data.
-    """
-
-    def __enter__(self) -> Self:
-        """Open the source data on disk."""
-        return self
-
-    def __exit__(self, *args) -> None:
-        """Close the source data on disk."""
-        return
-
-    @property
-    @abstractmethod
-    def properties(self) -> SourceProperties:
-        """Return an object that describes the properties of this source.
-
-        See SourceProperties for more information.
-        """
-        ...
-
-    def configure(self, settings: ReaderSettings) -> None:
-        """Advise the source to honor the provided settings as best as able.
-
-        See ReaderSettings for more information.
-        """
-        return
-
-    def use_geometry(self, geometry: F) -> None:
-        """Instruct the source of the geometry field that the pipeline intends
-        to use.
-        """
-        return
-
-    @abstractmethod
-    def bases(self) -> Iterator[B]:
-        """Return an iterator of all the bases available in the source.
-
-        If self.properties.single_basis is true, this iterator has length
-        one.
-        """
-        ...
-
-    @abstractmethod
-    def basis_of(self, field: F) -> B:
-        """Return the basis associated with a certain field."""
-        ...
-
-    @abstractmethod
-    def fields(self, basis: B) -> Iterator[F]:
-        """Return an iterator of all the non-geometry fields associated with a
-        basis.
-        """
-        ...
-
-    @abstractmethod
-    def geometries(self, basis: B) -> Iterator[F]:
-        """Return an iterator of all the geometry fields associated with a
-        basis.
-        """
-        ...
-
-    @abstractmethod
-    def steps(self) -> Iterator[S]:
-        """Return an iterator of all the steps in the source.
-
-        If self.properties.instantaneous is true, this iterator has length
-        one."""
-        ...
-
-    @abstractmethod
-    def zones(self) -> Iterator[Z]:
-        """Return an iterator of all the zones in the source.
-
-        If self.properties.single_zoned is true, this iterator has length
-        one. If self.properties.globally_keyed is true, the zone objects
-        have the `global_key` attribute set.
-        """
-        ...
-
-    @abstractmethod
-    def topology(self, step: S, basis: B, zone: Z) -> Topology:
-        """Return the topology associated with a step, basis and zone."""
-        ...
-
-    def topology_updates(self, step: S, basis: B) -> bool:
-        """Return true if the topologies associated with a given basis
-        change at a given step. If false, the user may assume that the
-        topologies from the previous timestep can be re-used.
-        """
-        return True
-
-    @abstractmethod
-    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
-        """Return the data of a field at a certain step and zone."""
-        ...
-
-    def field_updates(self, step: S, field: F) -> bool:
-        """Return true if the data of a field changes at a given step.
-        If false, the user may assume that the data from the previous timestep
-        can be re-used."""
-        return True
-
-    def children(self) -> Iterator[Source]:
-        """Return an iterator over all sub-sources for this source.
-
-        This is useful for traversing a tree of 'filters": sources whose input
-        data are other sources.
-        """
-        return
-        yield
-
-
 class FieldDataFilter(Protocol):
     """Callable that modifies field data."""
 
@@ -871,3 +738,137 @@ class DiscreteTopology(Topology):
         convention.
         """
         ...
+
+
+B = TypeVar("B", bound=Basis)
+F = TypeVar("F", bound=Field)
+S = TypeVar("S", bound=Step)
+T = TypeVar("T", bound=Topology)
+Z = TypeVar("Z", bound=Zone)
+
+
+class Source(ABC, Generic[B, F, S, T, Z]):
+    """The primary object for representing a data source.
+
+    This type is parametrized on the type of basis, field, step, topology and
+    zone.
+
+    The source object have methods that return bases, fields, steps and zones,
+    as well as methods that consume these objects. It is the user's
+    responsibility to ensure that any such object passed to a method of a source
+    object was previously returned by a method of that same source object. In
+    other words, don't mix and match such objects.
+
+    Sources are allowed to assume, and user code must guarantee that:
+    - timesteps are processed in turn,
+    - within each timestep, fields are processed by basis, and
+    - within each basis, the topology is processed before the field data.
+    """
+
+    def __enter__(self) -> Self:
+        """Open the source data on disk."""
+        return self
+
+    def __exit__(self, *args) -> None:
+        """Close the source data on disk."""
+        return
+
+    @property
+    @abstractmethod
+    def properties(self) -> SourceProperties:
+        """Return an object that describes the properties of this source.
+
+        See SourceProperties for more information.
+        """
+        ...
+
+    def configure(self, settings: ReaderSettings) -> None:
+        """Advise the source to honor the provided settings as best as able.
+
+        See ReaderSettings for more information.
+        """
+        return
+
+    def use_geometry(self, geometry: F) -> None:
+        """Instruct the source of the geometry field that the pipeline intends
+        to use.
+        """
+        return
+
+    @abstractmethod
+    def bases(self) -> Iterator[B]:
+        """Return an iterator of all the bases available in the source.
+
+        If self.properties.single_basis is true, this iterator has length
+        one.
+        """
+        ...
+
+    @abstractmethod
+    def basis_of(self, field: F) -> B:
+        """Return the basis associated with a certain field."""
+        ...
+
+    @abstractmethod
+    def fields(self, basis: B) -> Iterator[F]:
+        """Return an iterator of all the non-geometry fields associated with a
+        basis.
+        """
+        ...
+
+    @abstractmethod
+    def geometries(self, basis: B) -> Iterator[F]:
+        """Return an iterator of all the geometry fields associated with a
+        basis.
+        """
+        ...
+
+    @abstractmethod
+    def steps(self) -> Iterator[S]:
+        """Return an iterator of all the steps in the source.
+
+        If self.properties.instantaneous is true, this iterator has length
+        one."""
+        ...
+
+    @abstractmethod
+    def zones(self) -> Iterator[Z]:
+        """Return an iterator of all the zones in the source.
+
+        If self.properties.single_zoned is true, this iterator has length
+        one. If self.properties.globally_keyed is true, the zone objects
+        have the `global_key` attribute set.
+        """
+        ...
+
+    @abstractmethod
+    def topology(self, step: S, basis: B, zone: Z) -> T:
+        """Return the topology associated with a step, basis and zone."""
+        ...
+
+    def topology_updates(self, step: S, basis: B) -> bool:
+        """Return true if the topologies associated with a given basis
+        change at a given step. If false, the user may assume that the
+        topologies from the previous timestep can be re-used.
+        """
+        return True
+
+    @abstractmethod
+    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+        """Return the data of a field at a certain step and zone."""
+        ...
+
+    def field_updates(self, step: S, field: F) -> bool:
+        """Return true if the data of a field changes at a given step.
+        If false, the user may assume that the data from the previous timestep
+        can be re-used."""
+        return True
+
+    def children(self) -> Iterator[Source]:
+        """Return an iterator over all sub-sources for this source.
+
+        This is useful for traversing a tree of 'filters": sources whose input
+        data are other sources.
+        """
+        return
+        yield

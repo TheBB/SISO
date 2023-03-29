@@ -24,8 +24,8 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from .. import api, util
-from ..api import Basis, CellOrdering, Source, Step, Zone
-from ..topology import CellType, DiscreteTopology, StructuredTopology
+from ..api import Basis, CellOrdering, DiscreteTopology, Source, Step, Zone
+from ..topology import CellType, StructuredTopology
 from ..util import FieldData
 from .api import Field, OutputMode, Writer, WriterProperties, WriterSettings
 
@@ -38,14 +38,14 @@ class Behavior(Enum):
 
 B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
-T = TypeVar("T", bound=Step)
+S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
-S = TypeVar("S", bound=number)
+Sc = TypeVar("Sc", bound=number)
 
 BackendWriter = Union[vtkXMLWriter, vtkDataWriter]
 
 
-def transpose(data: FieldData[S], grid: vtkPointSet, cellwise: bool = False) -> FieldData[S]:
+def transpose(data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) -> FieldData[Sc]:
     if not isinstance(grid, vtkStructuredGrid):
         return data
     shape = grid.GetDimensions()
@@ -146,7 +146,9 @@ class VtkWriterBase(ABC, Writer):
     def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
         ...
 
-    def consume_timestep(self, timestep: T, filename: Path, source: Source[B, F, T, Z], geometry: F) -> None:
+    def consume_timestep(
+        self, timestep: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F
+    ) -> None:
         zone = next(source.zones())
         topology = cast(DiscreteTopology, source.topology(timestep, source.basis_of(geometry), zone))
 
@@ -184,7 +186,7 @@ class VtkWriterBase(ABC, Writer):
 
         logging.info(filename)
 
-    def consume(self, source: Source[B, F, T, Z], geometry: F) -> None:
+    def consume(self, source: Source[B, F, S, DiscreteTopology, Z], geometry: F) -> None:
         filenames = util.filename_generator(self.filename, source.properties.instantaneous)
         for timestep, filename in zip(source.steps(), filenames):
             self.consume_timestep(timestep, filename, source, geometry)
@@ -244,7 +246,9 @@ class PvdWriter(VtuWriter):
         self.pvd.__exit__(*args)
         logging.info(self.pvd_filename)
 
-    def consume_timestep(self, timestep: T, filename: Path, source: Source[B, F, T, Z], geometry: F) -> None:
+    def consume_timestep(
+        self, timestep: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F
+    ) -> None:
         super().consume_timestep(timestep, filename, source, geometry)
         relative_filename = filename.relative_to(self.pvd_filename.parent)
         if timestep.value is not None:

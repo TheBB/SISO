@@ -11,10 +11,11 @@ from .passthrough import PassthroughAll
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 
 
-class CoordTransform(PassthroughAll[B, F, S, Z]):
+class CoordTransform(PassthroughAll[B, F, S, T, Z]):
     """Coordinate transform filter.
 
     This filter converts geometries and vector fields from one coordinate system
@@ -33,7 +34,7 @@ class CoordTransform(PassthroughAll[B, F, S, Z]):
     # them in this dict, mapping coordinate system name and zone to nodes.
     cache: Dict[Tuple[str, Z], FieldData[floating]]
 
-    def __init__(self, source: api.Source[B, F, S, Z], path: ConversionPath):
+    def __init__(self, source: api.Source[B, F, S, T, Z], path: ConversionPath):
         super().__init__(source)
         self.path = path
         self.cache = {}

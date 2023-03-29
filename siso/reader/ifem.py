@@ -14,7 +14,7 @@ from numpy import floating
 from typing_extensions import Self
 
 from .. import api, util
-from ..api import Shape, Zone
+from ..api import Shape, Topology, Zone
 from ..coord import Named
 from ..impl import Basis, Field, Step
 from ..topology import LrTopology, SplineTopology, UnstructuredTopology
@@ -218,26 +218,16 @@ class IfemStandardField(IfemField):
             self.cellwise,
         )
 
-    # @lru_cache(maxsize=1)
-    # def raw_ncomps(self, source: Ifem) -> int:
-    #     _, topology, _ = self.basis.patch_at(0, 0, source)
-    #     my_cps = self.raw_cps_at(0, 0, source)
-    #     divisor = topology.num_cells if self.cellwise else topology.num_nodes
-    #     ncomps, remainder = divmod(len(my_cps), divisor)
-    #     assert remainder == 0
-    #     return ncomps
-
     @lru_cache(maxsize=8)
     def raw_cps_at(self, step: int, patch: int, source: Ifem) -> np.ndarray:
         return source.h5[self.coeff_path(step, patch)][:]
 
     def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
-        # ncomps = self.raw_ncomps(source)
         cps = self.raw_cps_at(step, patch, source)
         return FieldData(data=cps.reshape(-1, self.ncomps))
 
 
-class Ifem(api.Source[IfemBasis, IfemField, Step, Zone]):
+class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     filename: Path
     h5: h5py.File
 

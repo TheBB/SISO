@@ -11,15 +11,16 @@ from .passthrough import PassthroughAll
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 
 
-class Strict(PassthroughAll[B, F, S, Z]):
+class Strict(PassthroughAll[B, F, S, T, Z]):
     field_specs: Dict[str, F]
     original_properties: api.SourceProperties
     geometry: F
 
-    def __init__(self, source: api.Source[B, F, S, Z]):
+    def __init__(self, source: api.Source[B, F, S, T, Z]):
         super().__init__(source)
         self.field_specs = {}
         self.original_properties = deepcopy(source.properties)

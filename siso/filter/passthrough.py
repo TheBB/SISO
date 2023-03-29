@@ -21,7 +21,6 @@ from numpy import floating
 from typing_extensions import Self
 
 from .. import api
-from ..topology import Topology
 from ..util import FieldData
 
 
@@ -37,20 +36,23 @@ from ..util import FieldData
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 InB = TypeVar("InB", bound=api.Basis)
 InF = TypeVar("InF", bound=api.Field)
 InS = TypeVar("InS", bound=api.Step)
+InT = TypeVar("InT", bound=api.Topology)
 InZ = TypeVar("InZ", bound=api.Zone)
 OutB = TypeVar("OutB", bound=api.Basis)
 OutF = TypeVar("OutF", bound=api.Field)
 OutS = TypeVar("OutS", bound=api.Step)
+OutT = TypeVar("OutT", bound=api.Topology)
 OutZ = TypeVar("OutZ", bound=api.Zone)
 
 
 class PassthroughBase(
-    api.Source[OutB, OutF, OutS, OutZ],
-    Generic[InB, InF, InS, InZ, OutB, OutF, OutS, OutZ],
+    api.Source[OutB, OutF, OutS, OutT, OutZ],
+    Generic[InB, InF, InS, InT, InZ, OutB, OutF, OutS, OutT, OutZ],
 ):
     """Base class for all filters. Defines the source attribute,
     together with default implementations for the Source API methods that don't
@@ -59,9 +61,9 @@ class PassthroughBase(
     Implement validate_source() for runtime validation of source properties.
     """
 
-    source: api.Source[InB, InF, InS, InZ]
+    source: api.Source[InB, InF, InS, InT, InZ]
 
-    def __init__(self, source: api.Source[InB, InF, InS, InZ]):
+    def __init__(self, source: api.Source[InB, InF, InS, InT, InZ]):
         self.source = source
         self.validate_source()
 
@@ -86,9 +88,9 @@ class PassthroughBase(
         yield self.source
 
 
-class PassthroughBFS(
-    PassthroughBase[B, F, S, InZ, B, F, S, OutZ],
-    Generic[B, F, S, InZ, OutZ],
+class PassthroughBFST(
+    PassthroughBase[B, F, S, T, InZ, B, F, S, T, OutZ],
+    Generic[B, F, S, T, InZ, OutZ],
 ):
     """Base class for filters that change the Zone type."""
 
@@ -117,9 +119,46 @@ class PassthroughBFS(
         return self.source.field_updates(step, field)
 
 
-class PassthroughBFZ(
-    PassthroughBase[B, F, InS, Z, B, F, OutS, Z],
-    Generic[B, F, Z, InS, OutS],
+class PassthroughBFSZ(
+    PassthroughBase[B, F, S, InT, Z, B, F, S, OutT, Z],
+    Generic[B, F, S, Z, InT, OutT],
+):
+    """Base class for filters that change the Topology type."""
+
+    def use_geometry(self, geometry: F) -> None:
+        self.source.use_geometry(geometry)
+
+    def bases(self) -> Iterator[B]:
+        return self.source.bases()
+
+    def basis_of(self, field: F) -> B:
+        return self.source.basis_of(field)
+
+    def geometries(self, basis: B) -> Iterator[F]:
+        return self.source.geometries(basis)
+
+    def fields(self, basis: B) -> Iterator[F]:
+        return self.source.fields(basis)
+
+    def steps(self) -> Iterator[S]:
+        return self.source.steps()
+
+    def zones(self) -> Iterator[Z]:
+        return self.source.zones()
+
+    def topology_updates(self, step: S, basis: B) -> bool:
+        return self.source.topology_updates(step, basis)
+
+    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+        return self.source.field_data(step, field, zone)
+
+    def field_updates(self, step: S, field: F) -> bool:
+        return self.source.field_updates(step, field)
+
+
+class PassthroughBFTZ(
+    PassthroughBase[B, F, InS, T, Z, B, F, OutS, T, Z],
+    Generic[B, F, T, Z, InS, OutS],
 ):
     """Base class for filters that change the Step type."""
 
@@ -142,9 +181,9 @@ class PassthroughBFZ(
         return self.source.zones()
 
 
-class PassthroughBSZ(
-    PassthroughBase[B, InF, S, Z, B, OutF, S, Z],
-    Generic[B, S, Z, InF, OutF],
+class PassthroughBSTZ(
+    PassthroughBase[B, InF, S, T, Z, B, OutF, S, T, Z],
+    Generic[B, S, T, Z, InF, OutF],
 ):
     """Base class for filters that change the Field type."""
 
@@ -157,7 +196,7 @@ class PassthroughBSZ(
     def zones(self) -> Iterator[Z]:
         return self.source.zones()
 
-    def topology(self, step: S, basis: B, zone: Z) -> Topology:
+    def topology(self, step: S, basis: B, zone: Z) -> T:
         return self.source.topology(step, basis, zone)
 
     def topology_updates(self, step: S, basis: B) -> bool:
@@ -165,10 +204,10 @@ class PassthroughBSZ(
 
 
 class PassthroughFSZ(
-    PassthroughBase[InB, F, S, Z, OutB, F, S, Z],
-    Generic[F, S, Z, InB, OutB],
+    PassthroughBase[InB, F, S, InT, Z, OutB, F, S, OutT, Z],
+    Generic[F, S, Z, InB, OutB, InT, OutT],
 ):
-    """Base class for filters that change the Field type."""
+    """Base class for filters that change the Field and Topology types."""
 
     def steps(self) -> Iterator[S]:
         return self.source.steps()
@@ -183,7 +222,7 @@ class PassthroughFSZ(
         return self.source.field_updates(step, field)
 
 
-class PassthroughAll(PassthroughBase[B, F, S, Z, B, F, S, Z], Generic[B, F, S, Z]):
+class PassthroughAll(PassthroughBase[B, F, S, T, Z, B, F, S, T, Z], Generic[B, F, S, T, Z]):
     """Base class for filters that don't change any of the type parameters."""
 
     def use_geometry(self, geometry: F) -> None:
@@ -207,7 +246,7 @@ class PassthroughAll(PassthroughBase[B, F, S, Z, B, F, S, Z], Generic[B, F, S, Z
     def zones(self) -> Iterator[Z]:
         return self.source.zones()
 
-    def topology(self, step: S, basis: B, zone: Z) -> Topology:
+    def topology(self, step: S, basis: B, zone: Z) -> T:
         return self.source.topology(step, basis, zone)
 
     def topology_updates(self, step: S, basis: B) -> bool:

@@ -3,22 +3,23 @@ from typing import Dict, Tuple, TypeVar
 from numpy import floating
 
 from .. import api
-from ..topology import Topology
+from ..topology import DiscreteTopology
 from ..util import FieldData
-from .passthrough import PassthroughAll
+from .passthrough import PassthroughBFSZ
 
 
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 
 
-class Discretize(PassthroughAll[B, F, S, Z]):
+class Discretize(PassthroughBFSZ[B, F, S, Z, T, DiscreteTopology]):
     nvis: int
     mappers: Dict[Tuple[B, Z], api.FieldDataFilter]
 
-    def __init__(self, source: api.Source[B, F, S, Z], nvis: int):
+    def __init__(self, source: api.Source[B, F, S, T, Z], nvis: int):
         super().__init__(source)
         self.nvis = nvis
         self.mappers = {}
@@ -29,7 +30,7 @@ class Discretize(PassthroughAll[B, F, S, Z]):
             discrete_topology=True,
         )
 
-    def topology(self, step: S, basis: B, zone: Z) -> Topology:
+    def topology(self, step: S, basis: B, zone: Z) -> DiscreteTopology:
         topology = self.source.topology(step, basis, zone)
         discrete, mapper = topology.discretize(self.nvis)
         self.mappers[(basis, zone)] = mapper

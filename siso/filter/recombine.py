@@ -6,12 +6,13 @@ from numpy import floating
 
 from .. import api
 from ..util import FieldData
-from .passthrough import PassthroughBSZ, WrappedField
+from .passthrough import PassthroughBSTZ, WrappedField
 
 
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 
 
@@ -39,7 +40,7 @@ class RecombinedField(WrappedField[F]):
         return False
 
 
-class Recombine(PassthroughBSZ[B, S, Z, F, RecombinedField[F]]):
+class Recombine(PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]):
     recombinations: List[api.RecombineFieldSpec]
 
     def __init__(self, source: api.Source, recombinations: List[api.RecombineFieldSpec]):

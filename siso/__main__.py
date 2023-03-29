@@ -22,14 +22,14 @@ from .writer import OutputFormat, find_writer
 from .writer.api import OutputMode, WriterSettings
 
 
-T = TypeVar("T")
+S = TypeVar("S")
 
 
 def coord_callback(
     ctx: click.Context,
     param: click.Parameter,
-    value: T,
-    constructor: Callable[[T], CoordinateSystem],
+    value: S,
+    constructor: Callable[[S], CoordinateSystem],
 ):
     """Callback used for converting a CLI argument to a coordinate system and
     assigning it to the 'out_coords' parameter being passed to the main

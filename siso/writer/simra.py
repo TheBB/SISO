@@ -8,14 +8,14 @@ from scipy.io import FortranFile
 from typing_extensions import Self
 
 from .. import api, util
-from ..topology import StructuredTopology
+from ..topology import DiscreteTopology, StructuredTopology
 from ..util import cell_numbering
 from .api import Writer, WriterProperties, WriterSettings
 
 
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
-T = TypeVar("T", bound=api.Step)
+S = TypeVar("S", bound=api.Step)
 Z = TypeVar("Z", bound=api.Zone)
 
 
@@ -49,7 +49,7 @@ class SimraWriter(Writer):
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
-    def consume(self, source: api.Source[B, F, T, Z], geometry: F):
+    def consume(self, source: api.Source[B, F, S, DiscreteTopology, Z], geometry: F):
         timestep = next(source.steps())
         zone = next(source.zones())
 

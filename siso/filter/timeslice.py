@@ -5,7 +5,7 @@ from attrs import define
 from numpy import floating
 
 from .. import api, util
-from .passthrough import PassthroughBFZ
+from .passthrough import PassthroughBFTZ
 
 
 @overload
@@ -34,18 +34,18 @@ def islice_flag(*args):
                 return
 
 
-T = TypeVar("T")
+Q = TypeVar("Q")
 
 
 @overload
-def islice_group(it: Iterator[T], stop: Optional[int], /) -> Iterator[List[T]]:
+def islice_group(it: Iterator[Q], stop: Optional[int], /) -> Iterator[List[Q]]:
     ...
 
 
 @overload
 def islice_group(
-    it: Iterator[T], start: Optional[int], stop: Optional[int], step: Optional[int], /
-) -> Iterator[List[T]]:
+    it: Iterator[Q], start: Optional[int], stop: Optional[int], step: Optional[int], /
+) -> Iterator[List[Q]]:
     ...
 
 
@@ -61,6 +61,7 @@ def islice_group(it, *args):
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 
 
@@ -74,8 +75,8 @@ class GroupedStep(Generic[S]):
         return self.steps[-1].value
 
 
-class GroupedTimeSource(PassthroughBFZ[B, F, Z, S, GroupedStep[S]], Generic[B, F, S, Z]):
-    def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> api.Topology:
+class GroupedTimeSource(PassthroughBFTZ[B, F, T, Z, S, GroupedStep[S]], Generic[B, F, S, T, Z]):
+    def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> T:
         return self.source.topology(step.steps[-1], basis, zone)
 
     def topology_updates(self, step: GroupedStep[S], basis: B) -> bool:
@@ -88,13 +89,13 @@ class GroupedTimeSource(PassthroughBFZ[B, F, Z, S, GroupedStep[S]], Generic[B, F
         return any(self.source.field_updates(s, field) for s in step.steps)
 
 
-class StepSlice(GroupedTimeSource[B, F, S, Z]):
+class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
     arguments: Tuple[Optional[int]]
     explicit_instantaneous: bool
 
     def __init__(
         self,
-        source: api.Source[B, F, S, Z],
+        source: api.Source[B, F, S, T, Z],
         arguments: Tuple[Optional[int]],
         explicit_instantaneous: bool = False,
     ):
@@ -114,7 +115,7 @@ class StepSlice(GroupedTimeSource[B, F, S, Z]):
             yield GroupedStep(i, times)
 
 
-class LastTime(GroupedTimeSource[B, F, S, Z]):
+class LastTime(GroupedTimeSource[B, F, S, T, Z]):
     @property
     def properties(self) -> api.SourceProperties:
         return self.source.properties.update(instantaneous=True)

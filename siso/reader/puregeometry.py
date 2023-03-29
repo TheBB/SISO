@@ -12,7 +12,7 @@ from ..util import FieldData
 T = TypeVar("T", bound=api.Topology)
 
 
-class PureGeometry(api.Source[Basis, Field, Step, Zone[int]], Generic[T]):
+class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
     filename: Path
     corners: List[Coords]
     controlpoints: List[FieldData[floating]]

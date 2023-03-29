@@ -5,12 +5,13 @@ from numpy import floating
 
 from .. import api
 from ..util import FieldData
-from .passthrough import PassthroughBSZ, WrappedField
+from .passthrough import PassthroughBSTZ, WrappedField
 
 
 B = TypeVar("B", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 
 
@@ -29,7 +30,7 @@ class Wrapped(WrappedField[F]):
         )
 
 
-class EigenDisp(PassthroughBSZ[B, S, Z, F, Wrapped[F]]):
+class EigenDisp(PassthroughBSTZ[B, S, T, Z, F, Wrapped[F]]):
     def use_geometry(self, geometry: Wrapped[F]) -> None:
         return self.source.use_geometry(geometry.wrapped_field)
 

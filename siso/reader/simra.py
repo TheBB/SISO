@@ -21,7 +21,7 @@ from .. import api, util
 from ..api import Coords, Shape, Zone
 from ..coord import Generic
 from ..impl import Basis, Field, Step
-from ..topology import CellType, StructuredTopology, Topology
+from ..topology import CellType, StructuredTopology
 from ..util import FieldData
 from . import FindReaderSettings
 
@@ -143,7 +143,7 @@ class SimraScales:
         )
 
 
-class SimraMeshBase(api.Source[Basis, Field, Step, Zone[int]]):
+class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]]):
     filename: Path
     simra_nodeshape: Tuple[int, ...]
 
@@ -361,7 +361,7 @@ class Simra3dMesh(SimraMeshBase):
         return data + mesh_offset(self.filename, dim=3)
 
 
-class SimraHasMesh(api.Source[Basis, Field, Step, Zone[int]]):
+class SimraHasMesh(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]]):
     mesh: Simra3dMesh
 
     @staticmethod
@@ -396,7 +396,7 @@ class SimraHasMesh(api.Source[Basis, Field, Step, Zone[int]]):
     def geometries(self, basis: Basis) -> Iterator[Field]:
         return self.mesh.geometries(basis)
 
-    def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> Topology:
+    def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> StructuredTopology:
         return self.mesh.topology(timestep, basis, zone)
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import reduce
-from typing import Iterator, TypeVar, cast
+from typing import Iterator, TypeVar
 
 from numpy import floating
 
@@ -9,7 +9,7 @@ from .. import util
 from ..api import Basis, Field, Shape, SourceProperties, Step, Zone
 from ..topology import DiscreteTopology, UnstructuredTopology
 from ..util import FieldData
-from .passthrough import PassthroughBFS
+from .passthrough import PassthroughBFST
 
 
 B = TypeVar("B", bound=Basis)
@@ -18,7 +18,7 @@ S = TypeVar("S", bound=Step)
 Z = TypeVar("Z", bound=Zone)
 
 
-class ZoneMerge(PassthroughBFS[B, F, S, Z, Zone[int]]):
+class ZoneMerge(PassthroughBFST[B, F, S, DiscreteTopology, Z, Zone[int]]):
     def validate_source(self) -> None:
         assert not self.source.properties.single_zoned
         assert self.source.properties.discrete_topology
@@ -47,7 +47,7 @@ class ZoneMerge(PassthroughBFS[B, F, S, Z, Zone[int]]):
     def topology(self, step: S, basis: B, zone: Zone[int]) -> DiscreteTopology:
         return reduce(
             UnstructuredTopology.join,
-            (cast(DiscreteTopology, self.source.topology(step, basis, z)) for z in self.source.zones()),
+            (self.source.topology(step, basis, z) for z in self.source.zones()),
         )
 
     def field_data(self, timestep: S, field: F, zone: Zone[int]) -> FieldData[floating]:

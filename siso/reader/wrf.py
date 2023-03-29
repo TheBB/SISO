@@ -23,7 +23,7 @@ class FieldDimensionality(Enum):
     Unknown = auto()
 
 
-class NetCdf(api.Source[Basis, Field, Step, Zone[int]]):
+class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
     filename: Path
     dataset: Dataset
 

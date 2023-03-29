@@ -11,6 +11,7 @@ from .passthrough import PassthroughFSZ
 InB = TypeVar("InB", bound=api.Basis)
 F = TypeVar("F", bound=api.Field)
 S = TypeVar("S", bound=api.Step)
+T = TypeVar("T", bound=api.Topology)
 Z = TypeVar("Z", bound=api.Zone)
 
 
@@ -18,7 +19,7 @@ Z = TypeVar("Z", bound=api.Zone)
 BASIS = Basis("mesh")
 
 
-class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis]):
+class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, T, api.Topology]):
     """Source filter that merges bases.
 
     This filter will attempt (potentially unsuccessfully) to map all the fields
@@ -35,7 +36,7 @@ class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis]):
     # Keep a mapping of the merger object associated with each zone.
     mergers: Dict[Z, api.TopologyMerger]
 
-    def __init__(self, source: api.Source[InB, F, S, Z]):
+    def __init__(self, source: api.Source[InB, F, S, T, Z]):
         super().__init__(source)
         self.mergers = {}
 

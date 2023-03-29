@@ -23,10 +23,10 @@ B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
 S = TypeVar("S", bound=Step)
 
-Source = api.Source[B, F, S, Zone[int]]
+Source = api.Source[B, F, S, DiscreteTopology, Zone[int]]
 
 
-class VtfWriter(Writer[B, F, S, Zone[int]]):
+class VtfWriter(Writer[B, F, S, DiscreteTopology, Zone[int]]):
     filename: Path
     out: vtf.File
     mode: OutputMode

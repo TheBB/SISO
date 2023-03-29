@@ -4,7 +4,7 @@ from typing import Optional, Protocol, TypeVar
 from attrs import define
 from typing_extensions import Self
 
-from ..api import Basis, Endianness, Field, Source, Step, Zone
+from ..api import Basis, Endianness, Field, Source, Step, Topology, Zone
 
 
 class OutputMode(Enum):
@@ -29,11 +29,12 @@ class WriterProperties:
 
 B = TypeVar("B", bound=Basis)
 F = TypeVar("F", bound=Field)
-T = TypeVar("T", bound=Step)
+S = TypeVar("S", bound=Step)
+T = TypeVar("T", bound=Topology)
 Z = TypeVar("Z", bound=Zone)
 
 
-class Writer(Protocol[B, F, T, Z]):
+class Writer(Protocol[B, F, S, T, Z]):
     def __enter__(self) -> Self:
         ...
 
@@ -47,5 +48,5 @@ class Writer(Protocol[B, F, T, Z]):
     def configure(self, settings: WriterSettings):
         ...
 
-    def consume(self, source: Source[B, F, T, Z], geometry: F):
+    def consume(self, source: Source[B, F, S, T, Z], geometry: F):
         ...
