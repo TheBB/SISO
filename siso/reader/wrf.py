@@ -197,7 +197,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         nodemap[0] = nodemap[0, 0]
         cells.append(util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap))
 
-        return FieldData.join(cells)
+        return FieldData.join_dofs(cells)
 
     def periodic_volumetric_topology(self) -> FieldData[integer]:
         cells = [util.structured_cells(self.wrf_cellshape, pardim=3)]
@@ -236,7 +236,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
             util.structured_cells((self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap)
         )
 
-        return FieldData.join(cells)
+        return FieldData.join_dofs(cells)
 
     def rotation(self, with_intrinsic: bool = True) -> Rotation:
         intrinsic = 0.0
@@ -250,7 +250,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         self.geodetic = geometry.name == "Geodetic"
 
     def zones(self) -> Iterator[Zone]:
-        corners = FieldData.concat(
+        corners = FieldData.join_comps(
             self.field_data_raw(
                 self.longitude_name, 0, extrude_if_volumetric=False, include_poles_if_periodic=False
             ),
@@ -272,10 +272,10 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         return Basis("mesh")
 
     def geometries(self, basis: Basis) -> Iterator[Field]:
-        yield Field("Generic", type=api.Geometry(ncomps=3, coords=Generic()))
+        yield Field("Generic", type=api.Geometry(num_comps=3, coords=Generic()))
         yield Field(
             "Geodetic",
-            type=api.Geometry(ncomps=3, coords=Geodetic(SphericalEarth(semi_major_axis=6370000.0))),
+            type=api.Geometry(num_comps=3, coords=Geodetic(SphericalEarth(semi_major_axis=6370000.0))),
         )
 
     def fields(self, basis: Basis) -> Iterator[Field]:
@@ -319,7 +319,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
     @lru_cache(maxsize=1)
     def geometry(self, index: int) -> FieldData[floating]:
         if self.geodetic:
-            return FieldData.concat(
+            return FieldData.join_comps(
                 self.field_data_raw(self.longitude_name, index),
                 self.field_data_raw(self.latitude_name, index),
                 self.height(index),
@@ -330,7 +330,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         x[...] = np.arange(self.num_longitude)[..., np.newaxis, :] * self.dataset.DX
         y[...] = np.arange(self.num_latitude)[..., :, np.newaxis] * self.dataset.DY
 
-        return FieldData.concat(
+        return FieldData.join_comps(
             FieldData(x.reshape(-1, 1)),
             FieldData(y.reshape(-1, 1)),
             self.height(index),
@@ -386,7 +386,7 @@ class Wrf(NetCdf):
 
     @lru_cache(maxsize=1)
     def wind(self, index: int) -> FieldData[floating]:
-        local = FieldData.concat(
+        local = FieldData.join_comps(
             self.field_data_raw("U", index, include_poles_if_periodic=False),
             self.field_data_raw("V", index, include_poles_if_periodic=False),
             self.field_data_raw("W", index, include_poles_if_periodic=False),
@@ -395,7 +395,7 @@ class Wrf(NetCdf):
         if not self.geodetic:
             return local
 
-        lonlat = FieldData.concat(
+        lonlat = FieldData.join_comps(
             self.field_data_raw(self.longitude_name, index, include_poles_if_periodic=False),
             self.field_data_raw(self.latitude_name, index, include_poles_if_periodic=False),
         )
@@ -424,7 +424,7 @@ class Wrf(NetCdf):
 
         vectors = vectors.reshape(-1, 3)
 
-        lonlat = FieldData.concat(
+        lonlat = FieldData.join_comps(
             self.field_data_raw(self.longitude_name, index),
             self.field_data_raw(self.latitude_name, index),
         )

@@ -136,7 +136,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
         return MultiSource(sources)
 
 
-# Main entry-point for the Siso application
+# Main entry-point for the Siso application.
 #
 # We use click to parse CLI arguments. Each option should be part of a group.
 # Some groups are mutually exclusive, others are just based on topic.
@@ -425,6 +425,8 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @defaults(
     out_coords=coord.Generic(),
 )
+
+# Catch Siso errors and log them to stdout.
 @catch
 
 # Main entry-point
@@ -666,7 +668,7 @@ def main(
             for field in source.fields(basis):
                 logging.debug(
                     f"Discovered field '{field.name}' with "
-                    f"{util.pluralize(field.ncomps, 'component', 'components')} "
+                    f"{util.pluralize(field.num_comps, 'component', 'components')} "
                     f"(basis '{basis.name}')"
                 )
 

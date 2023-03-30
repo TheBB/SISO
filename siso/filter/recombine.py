@@ -12,10 +12,18 @@ from .passthrough import PassthroughBSTZ, WrappedField
 
 @define
 class RecombinedField(WrappedField[F]):
+    """Class for a 'recombined' field: a field that combines components from
+    multiple sources into one.
+
+    If there is only one source, this acts as a faithful reprodection of the
+    source field.
+    """
+
     sources: List[F]
     name: str
 
     def __post_init__(self):
+        # Assert that the combined fields are compatible
         assert all(src.cellwise == self.sources[0].cellwise for src in self.sources)
         assert all(src.type == self.sources[0].type for src in self.sources)
 
@@ -25,16 +33,23 @@ class RecombinedField(WrappedField[F]):
 
     @property
     def type(self) -> api.FieldType:
-        return reduce(lambda x, y: x.concat(y), (s.type for s in self.sources))
+        return reduce(lambda x, y: x.join(y), (s.type for s in self.sources))
 
     @property
     def splittable(self) -> bool:
+        # Don't split a recombined field (unless it's a faithful reproduction).
         if len(self.sources) == 1:
             return self.sources[0].splittable
         return False
 
 
 class Recombine(PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]):
+    """Filter that recombines fields as indicated by a list of
+    `RecombineFieldSpec` objects. This list is produced by a source object. This
+    allows us to not implement the recombination logic itself in each source
+    type that needs it.
+    """
+
     recombinations: List[api.RecombineFieldSpec]
 
     def __init__(self, source: api.Source, recombinations: List[api.RecombineFieldSpec]):
@@ -43,6 +58,8 @@ class Recombine(PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]):
 
     @property
     def properties(self) -> api.SourceProperties:
+        # Don't pass the recombination specifications on: we're handling what
+        # there is.
         return self.source.properties.update(
             recombine_fields=[],
         )
@@ -58,11 +75,14 @@ class Recombine(PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]):
             yield RecombinedField(name=field.name, sources=[field])
 
     def fields(self, basis: B) -> Iterator[RecombinedField]:
+        # Collect all fields in the source object.
         in_fields = {field.name: field for field in self.source.fields(basis)}
 
+        # Yield all fields to pass through faithfully
         for field in in_fields.values():
             yield RecombinedField(name=field.name, sources=[field])
 
+        # Then yield all the recombined fields for this basis
         for spec in self.recombinations:
             if all(src in in_fields for src in spec.source_names):
                 yield RecombinedField(
@@ -70,7 +90,7 @@ class Recombine(PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]):
                 )
 
     def field_data(self, timestep: S, field: RecombinedField[F], zone: Z) -> FieldData[floating]:
-        return FieldData.concat(self.source.field_data(timestep, src, zone) for src in field.sources)
+        return FieldData.join_comps(self.source.field_data(timestep, src, zone) for src in field.sources)
 
     def field_updates(self, timestep: S, field: RecombinedField[F]) -> bool:
         return any(self.source.field_updates(timestep, src) for src in field.sources)

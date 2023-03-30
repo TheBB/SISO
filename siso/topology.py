@@ -151,7 +151,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
 
         # This runs the consume iterator to the end, which should populate the
         # local variables `num_nodes`, `degree` and `celltype`.
-        cells = FieldData.join(consume())
+        cells = FieldData.join_dofs(consume())
 
         if not celltype or degree is None:
             raise api.Unexpected("Joining of zero discrete topologies")
@@ -244,7 +244,7 @@ class UnstructuredTesselator:
 
         # For each cell, extract its corners, mark them as retained, and create
         # a new cell.
-        for cell in master.cells.vectors:
+        for cell in master.cells.dofs:
             new_cell = cell.reshape(3, 3, 3)[index].flatten()
             new_cells.append(list(new_cell))
             retain.update(new_cell)
@@ -686,7 +686,7 @@ class LrTesselator(api.TopologyMerger):
         """
         if field.cellwise:
             # Calculate the centers of each cell by averaging the surrounding nodes
-            cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells.vectors)
+            cell_centers = (np.mean(self.nodes[c], axis=0) for c in self.cells.dofs)
 
             # Get the LRSpline internal cell ID for each cell center by calling
             # element_at(), and use that to index into the field data array.

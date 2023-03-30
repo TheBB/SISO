@@ -4,6 +4,11 @@ from .passthrough import PassthroughBFSZ
 
 
 class ForceUnstructured(PassthroughBFSZ[B, F, S, Z, DiscreteTopology, UnstructuredTopology]):
+    """Filter that converts all topologies to unstructured topologies.
+
+    Requires that the input guarantees discrete topologies.
+    """
+
     def validate_source(self) -> None:
         assert self.source.properties.discrete_topology
 

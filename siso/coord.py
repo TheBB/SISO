@@ -308,7 +308,7 @@ def convert_vectors(
 
 @register_coords(Geodetic, Geocentric)
 def _(src: Geodetic, tgt: Geocentric, data: FieldData[floating]) -> FieldData[floating]:
-    lon, lat, height = data.components
+    lon, lat, height = data.comps
     return FieldData(
         erfa.gd2gce(
             src.ellipsoid.semi_major_axis,
@@ -329,33 +329,33 @@ def _(
 
 @register_coords(Geodetic, Utm)
 def _(src: Geodetic, tgt: Utm, data: FieldData[floating]) -> FieldData[floating]:
-    lon, lat, *rest = data.components
+    lon, lat, *rest = data.comps
     converter = coord.UtmConverter(src.semi_major_axis, src.flattening, tgt.zone_number, tgt.northern)
     x, y = converter.to_utm(lon, lat)
-    return FieldData.concat(x, y, *rest)
+    return FieldData.join_comps(x, y, *rest)
 
 
 @register_vectors(Geodetic, Utm)
 def _(src: Geodetic, tgt: Utm, data: FieldData[floating], coords: FieldData[floating]) -> FieldData[floating]:
-    lon, lat, *_ = coords.components
-    in_x, in_y, *rest = data.components
+    lon, lat, *_ = coords.comps
+    in_x, in_y, *rest = data.comps
     converter = coord.UtmConverter(src.semi_major_axis, src.flattening, tgt.zone_number, tgt.northern)
     out_x, out_y = converter.to_utm_vf(lon, lat, in_x, in_y)
-    return FieldData.concat(out_x, out_y, *rest)
+    return FieldData.join_comps(out_x, out_y, *rest)
 
 
 @register_coords(Utm, Geodetic)
 def _(src: Utm, tgt: Geodetic, data: FieldData[floating]) -> FieldData[floating]:
-    x, y, *rest = data.components
+    x, y, *rest = data.comps
     converter = coord.UtmConverter(tgt.semi_major_axis, tgt.flattening, src.zone_number, src.northern)
     lon, lat = converter.to_lonlat(x, y)
-    return FieldData.concat(lon, lat, *rest)
+    return FieldData.join_comps(lon, lat, *rest)
 
 
 @register_vectors(Utm, Geodetic)
 def _(src: Utm, tgt: Geodetic, data: FieldData[floating], coords: FieldData[floating]) -> FieldData[floating]:
-    x, y, *_ = coords.components
-    in_x, in_y, *rest = data.components
+    x, y, *_ = coords.comps
+    in_x, in_y, *rest = data.comps
     converter = coord.UtmConverter(tgt.semi_major_axis, tgt.flattening, src.zone_number, src.northern)
     out_x, out_y = converter.to_lonlat_vf(x, y, in_x, in_y)
-    return FieldData.concat(out_x, out_y, *rest)
+    return FieldData.join_comps(out_x, out_y, *rest)

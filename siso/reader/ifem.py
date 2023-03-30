@@ -183,7 +183,7 @@ class IfemStandardField(IfemField):
 
         tp: api.FieldType
         if ncomps > 1:
-            tp = api.Vector(ncomps=ncomps, interpretation=source.default_vector)
+            tp = api.Vector(num_comps=ncomps, interpretation=source.default_vector)
         else:
             tp = api.Scalar(interpretation=source.default_scalar)
 
@@ -224,7 +224,7 @@ class IfemStandardField(IfemField):
 
     def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
         cps = self.raw_cps_at(step, patch, source)
-        return FieldData(data=cps.reshape(-1, self.ncomps))
+        return FieldData(data=cps.reshape(-1, self.num_comps))
 
 
 class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):

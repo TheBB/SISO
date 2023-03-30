@@ -62,16 +62,16 @@ class FieldData(Generic[T]):
 
     @overload
     @staticmethod
-    def concat(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
+    def join_comps(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
         ...
 
     @overload
     @staticmethod
-    def concat(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
+    def join_comps(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
         ...
 
     @staticmethod
-    def concat(*other):
+    def join_comps(*other):
         """Concatenate two or more arrays along the comp axis.
 
         Supports an arbitrary number of field data or numpy arrays, or a single
@@ -83,16 +83,16 @@ class FieldData(Generic[T]):
 
     @overload
     @staticmethod
-    def join(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
+    def join_dofs(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
         ...
 
     @overload
     @staticmethod
-    def join(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
+    def join_dofs(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
         ...
 
     @staticmethod
-    def join(*other):
+    def join_dofs(*other):
         """Join two or more arrays along the dof axis.
 
         Supports an arbitrary number field data or numpy arrays, or a single
@@ -155,14 +155,14 @@ class FieldData(Generic[T]):
         return self.data.shape[0]
 
     @property
-    def components(self) -> Iterable[NDArray[T]]:
+    def comps(self) -> Iterable[NDArray[T]]:
         """Return a sequence of one-dimensional numpy arrays, one for each
         component.
         """
         return self.data.T
 
     @property
-    def vectors(self) -> Iterable[NDArray[T]]:
+    def dofs(self) -> Iterable[NDArray[T]]:
         """Return a sequence of one-dimensional numpy arrays, one for each
         dof.
         """
@@ -172,11 +172,13 @@ class FieldData(Generic[T]):
         """Take the average over the dof axis."""
         return self.data.mean(axis=0)
 
-    def slice(self, index: Union[int, List[int]]) -> FieldData[T]:
+    def slice_comps(self, index: Union[int, List[int]]) -> FieldData[T]:
         """Extract a subset of components as a new field data object."""
-        if isinstance(index, int):
-            return FieldData(data=self.data[:, index : index + 1])
-        return FieldData(data=self.data[:, index])
+        return FieldData(ensure_2d_comp(self.data[:, index]))
+
+    def slice_dofs(self, index: Union[int, List[int]]) -> FieldData[T]:
+        """Extract a subset of dofs as a new field data object."""
+        return FieldData(ensure_2d_dof(self.data[index, :]))
 
     def nan_filter(self, fill: Optional[T] = None) -> FieldData[T]:
         """Fill NANs with a specified value. If set to None, will use the
@@ -294,7 +296,7 @@ class FieldData(Generic[T]):
         - sin(latitude)
         """
         retval = np.zeros_like(self.data, shape=(self.num_dofs, 4))
-        lon, lat, *_ = self.components
+        lon, lat, *_ = self.comps
         retval[:, 0] = np.cos(np.deg2rad(lon))
         retval[:, 1] = np.cos(np.deg2rad(lat))
         retval[:, 2] = np.sin(np.deg2rad(lon))
@@ -307,8 +309,8 @@ class FieldData(Generic[T]):
         there's a third component, it is interpreted as radius from the
         center.
         """
-        clon, clat, slon, slat = self.trigonometric().components
-        retval = FieldData.concat(clon * clat, slon * clat, slat)
+        clon, clat, slon, slat = self.trigonometric().comps
+        retval = FieldData.join_comps(clon * clat, slon * clat, slat)
         if self.num_comps > 2:
             retval.data *= self.data[:, 2]
         return retval
@@ -320,15 +322,15 @@ class FieldData(Generic[T]):
         If with_radius is true, radius is included as the third component in the
         returned value.
         """
-        x, y, z = self.components
+        x, y, z = self.comps
         lon = np.rad2deg(np.arctan2(y, x))
         lat = np.rad2deg(np.arctan(z / np.sqrt(x**2 + y**2)))
 
         if not with_radius:
-            return FieldData.concat(lon, lat)
+            return FieldData.join_comps(lon, lat)
 
         radius = np.sqrt(x**2 + y**2 + z**2)
-        return FieldData.concat(lon, lat, radius)
+        return FieldData.join_comps(lon, lat, radius)
 
     def spherical_to_cartesian_vector_field(self, coords: FieldData[floating]) -> FieldData[floating]:
         """Interpret the components as a vector field in spherical coordinates
@@ -339,8 +341,8 @@ class FieldData(Generic[T]):
         Requires the coordinates of the corresponding points, in spherical
         coordinates, as input.
         """
-        clon, clat, slon, slat = coords.trigonometric().components
-        u, v, w = self.components
+        clon, clat, slon, slat = coords.trigonometric().comps
+        u, v, w = self.comps
         retval = np.zeros_like(self.data)
         retval[..., 0] -= slon * u
         retval[..., 1] -= slat * slon * v
@@ -361,8 +363,8 @@ class FieldData(Generic[T]):
         Requires the coordinates of the corresponding points, in spherical
         coordinates, as input.
         """
-        clon, clat, slon, slat = coords.trigonometric().components
-        u, v, w = self.components
+        clon, clat, slon, slat = coords.trigonometric().comps
+        u, v, w = self.comps
         retval = np.zeros_like(self.data)
         retval[..., 0] -= slon * u
         retval[..., 1] -= slat * slon * v

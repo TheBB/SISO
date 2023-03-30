@@ -71,7 +71,7 @@ def get_grid(
 
     ugrid = vtkUnstructuredGrid()
     cells = (
-        FieldData.concat(
+        FieldData.join_comps(
             topology.cells.constant_like(topology.cells.num_comps, ncomps=1, dtype=int),
             topology.cells_as(CellOrdering.Vtk),
         )

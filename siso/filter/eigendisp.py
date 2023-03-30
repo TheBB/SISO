@@ -11,6 +11,10 @@ from .passthrough import PassthroughBSTZ, WrappedField
 
 @define
 class Wrapped(WrappedField[F]):
+    """Field wrapper object that converts eigenmode fields to displacement
+    fields.
+    """
+
     wrapped_field: F
 
     @property
@@ -18,13 +22,20 @@ class Wrapped(WrappedField[F]):
         orig_type = self.wrapped_field.type
         if not self.wrapped_field.is_eigenmode:
             return orig_type
+
+        # Convert eigenmode fields to vector fields with displacement
+        # interpretation.
         return api.Vector(
-            ncomps=self.wrapped_field.ncomps,
+            num_comps=self.wrapped_field.num_comps,
             interpretation=api.VectorInterpretation.Displacement,
         )
 
 
 class EigenDisp(PassthroughBSTZ[B, S, T, Z, F, Wrapped[F]]):
+    """Filter that converts all eigenmode fields to displacement vector
+    fields.
+    """
+
     def use_geometry(self, geometry: Wrapped[F]) -> None:
         return self.source.use_geometry(geometry.wrapped_field)
 

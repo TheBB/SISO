@@ -20,6 +20,21 @@ def islice_flag(start: Optional[int], stop: Optional[int], step: Optional[int], 
 
 
 def islice_flag(*args):
+    """Version of `itertools.islice` that, instead of slicing an iterator to
+    produce elements, yields a boolean indicating whether each element should be
+    picked or not. E.g., this:
+
+    ```
+    islice(iterator, *args)
+    ```
+
+    is equivalent to:
+
+    ```
+    (e for e, f in zip(iterator, islice_flag(*args)) if f)
+    ```
+    """
+
     counter = islice(count(), *args)
     try:
         next_index = next(counter)
@@ -51,6 +66,27 @@ def islice_group(
 
 
 def islice_group(it, *args):
+    """Version of `itertools.islice` that, for all 'picked' elements, yields a
+    list of all unpicked elements since the previously picked element (or the
+    beginning). E.g., if these iterators are given:
+
+    ```
+    iterator  # => A, B, C, ...
+    islice(iterator, *args)  # => C, F, I, L, ...
+    ```
+
+    then
+
+    ```
+    islice_group(iterator, *args)
+    # => [A, B, C]
+    # => [E, D, F]
+    # => [G, H, I]
+    # => [J, K, L]
+    # ...
+    ```
+    """
+
     accum = []
     for item, flag in zip(it, islice_flag(*args)):
         accum.append(item)
@@ -61,15 +97,20 @@ def islice_group(it, *args):
 
 @define
 class GroupedStep(Generic[S]):
+    """A step composed of a multiple steps in sequence."""
+
     index: int
     steps: List[S]
 
     @property
     def value(self) -> Optional[float]:
+        # Act as the last step of the group.
         return self.steps[-1].value
 
 
 class GroupedTimeSource(PassthroughBFTZ[B, F, T, Z, S, GroupedStep[S]], Generic[B, F, S, T, Z]):
+    """Base class for all filters that group timesteps into `GroupedStep`."""
+
     def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> T:
         return self.source.topology(step.steps[-1], basis, zone)
 
@@ -84,6 +125,16 @@ class GroupedTimeSource(PassthroughBFTZ[B, F, T, Z, S, GroupedStep[S]], Generic[
 
 
 class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
+    """Filter that slices a sequence of timesteps, just like `itertools.islice`
+    would.
+
+    Parameters:
+    - source: the data source.
+    - arguments: tuple of arguments to pass to `islice`.
+    - explicit_instantaneous: true if the source should be marked explicitly as
+        instantaneous (only one timestep).
+    """
+
     arguments: Tuple[Optional[int]]
     explicit_instantaneous: bool
 
@@ -110,6 +161,8 @@ class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
 
 
 class LastTime(GroupedTimeSource[B, F, S, T, Z]):
+    """Filter that returns only the last timestep in a data source."""
+
     @property
     def properties(self) -> api.SourceProperties:
         return self.source.properties.update(instantaneous=True)

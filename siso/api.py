@@ -340,15 +340,15 @@ class FieldType(Protocol):
     """
 
     @property
-    def ncomps(self) -> int:
+    def num_comps(self) -> int:
         """Number of components in this field."""
         ...
 
-    def slice(self) -> FieldType:
+    def as_scalar(self) -> FieldType:
         """Field type for a single component of this field."""
         ...
 
-    def concat(self, other: FieldType) -> FieldType:
+    def join(self, other: FieldType) -> FieldType:
         """Field type representing the component-wise joining of this field with
         another.
         """
@@ -362,42 +362,42 @@ class Scalar(FieldType):
     interpretation: ScalarInterpretation = ScalarInterpretation.Generic
 
     @property
-    def ncomps(self) -> int:
+    def num_comps(self) -> int:
         return 1
 
-    def slice(self) -> FieldType:
+    def as_scalar(self) -> FieldType:
         return self
 
-    def concat(self, other: FieldType) -> FieldType:
+    def join(self, other: FieldType) -> FieldType:
         if isinstance(other, Scalar):
             # Joining two scalars: return a two-component vector type
             interpretation = self.interpretation.to_vector().join(other.interpretation.to_vector())
-            return Vector(ncomps=2, interpretation=interpretation)
+            return Vector(num_comps=2, interpretation=interpretation)
         # Joining a scalar to a vector: return an ncomps + 1 vector type
         assert isinstance(other, Vector)
         interpretation = self.interpretation.to_vector().join(other.interpretation)
-        return Vector(ncomps=other.ncomps + 1, interpretation=interpretation)
+        return Vector(num_comps=other.num_comps + 1, interpretation=interpretation)
 
 
 @define(frozen=True)
 class Vector(FieldType):
     """Field metadata for vector fields."""
 
-    ncomps: int
+    num_comps: int
     interpretation: VectorInterpretation = VectorInterpretation.Generic
 
-    def slice(self) -> FieldType:
+    def as_scalar(self) -> FieldType:
         return Scalar(self.interpretation.to_scalar())
 
-    def concat(self, other: FieldType) -> FieldType:
+    def join(self, other: FieldType) -> FieldType:
         if isinstance(other, Scalar):
             # Joining a vector to a scalar: return a ncomps + 1 vector type
             interpretation = self.interpretation.join(other.interpretation.to_vector())
-            return Vector(ncomps=self.ncomps + 1, interpretation=interpretation)
+            return Vector(num_comps=self.num_comps + 1, interpretation=interpretation)
         # Joining a vector to a vector: return an m + n vector type
         assert isinstance(other, Vector)
         interpretation = self.interpretation.join(other.interpretation)
-        return Vector(ncomps=self.ncomps + other.ncomps, interpretation=interpretation)
+        return Vector(num_comps=self.num_comps + other.num_comps, interpretation=interpretation)
 
     def update(self, **kwargs) -> Vector:
         """Construct a new vector type by partially updating some attributes."""
@@ -409,14 +409,14 @@ class Vector(FieldType):
 class Geometry(FieldType):
     """Field metadata for geometries."""
 
-    ncomps: int
+    num_comps: int
     coords: CoordinateSystem
 
-    def slice(self) -> FieldType:
+    def as_scalar(self) -> FieldType:
         # Geometry fields should not be sliced
         assert False
 
-    def concat(self, other: FieldType) -> FieldType:
+    def join(self, other: FieldType) -> FieldType:
         # Geometry fields should not be joined
         assert False
 
@@ -559,9 +559,9 @@ class Field(ABC):
         return isinstance(self.type, Geometry) and self.type.fits_system_name(code)
 
     @property
-    def ncomps(self) -> int:
+    def num_comps(self) -> int:
         """The number of components of this field."""
-        return self.type.ncomps
+        return self.type.num_comps
 
 
 class Step(Protocol):
