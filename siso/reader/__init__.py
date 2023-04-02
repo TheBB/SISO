@@ -1,49 +1,68 @@
 import logging
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional
 
 from attrs import define
 
 from ..api import Endianness, Source
+from ..util import Registry
 
 
 @define
 class FindReaderSettings:
+    """Settings passed to the find_reader function.
+
+    This is a subset of attributes from the `siso.api.ReaderSettings` class,
+    whichever ones are deemed necessary to decide which reader to use.
+    """
+
     endianness: Endianness
     mesh_filename: Optional[Path]
 
 
+# A callable that accepts a path and settings and determines whether this path
+# can be opened with a given reader class, returning it if so.
 ReaderCheck = Callable[[Path, FindReaderSettings], Optional[Source]]
 
-READERS: List[Tuple[str, ReaderCheck]] = []
 
-
-def register_reader(name: str) -> Callable[[ReaderCheck], ReaderCheck]:
-    def inner(check: ReaderCheck) -> ReaderCheck:
-        READERS.append((name, check))
-        return check
-
-    return inner
+# Registry of reader functions.
+readers: Registry[ReaderCheck] = Registry()
 
 
 def find_reader(path: Path, settings: FindReaderSettings) -> Optional[Source]:
-    for name, reader in READERS:
+    """Find a source object that can read the dataset at the given path with the
+    given settings, if possible.
+    """
+
+    discarded: List[str] = []
+
+    # Try each possible reader in turn
+    for name, reader in readers.items():
         try:
             source = reader(path, settings)
         except ImportError:
+            # Some readers may have optional dependencies which are only checked
+            # at this point. They should manifest as import errors.
             logging.debug(f"Unable to check for {name} format - some dependencies may not be installed")
             continue
         if not source:
-            logging.debug(
-                f"File appears not to be [blue]{name}[/blue] format - skipping", extra={"markup": True}
-            )
+            discarded.append(name)
             continue
         logging.info(f"File appears to be [blue]{name}[/blue] format", extra={"markup": True})
         return source
+
+    logging.error("Unable to find a suitable reader, tried these types:")
+    for name in discarded:
+        logging.error(f"- {name}")
+
     return None
 
 
-@register_reader("IFEM Eigenmodes")
+# To properly handle optional dependencies, reader modules are only imported
+# when the relevant function is called, not before!
+
+
+@readers.register("IFEM Eigenmodes")
 def ifem_modes(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .ifem import IfemModes
 
@@ -52,7 +71,7 @@ def ifem_modes(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("IFEM")
+@readers.register("IFEM")
 def ifem(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .ifem import Ifem
 
@@ -61,7 +80,7 @@ def ifem(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("SIMRA Map")
+@readers.register("SIMRA Map")
 def simra_map(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import SimraMap
 
@@ -70,7 +89,7 @@ def simra_map(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("SIMRA 2D Mesh")
+@readers.register("SIMRA 2D Mesh")
 def simra_2dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import Simra2dMesh
 
@@ -79,7 +98,7 @@ def simra_2dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("SIMRA 3D Mesh")
+@readers.register("SIMRA 3D Mesh")
 def simra_3dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import Simra3dMesh
 
@@ -88,7 +107,7 @@ def simra_3dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("SIMRA Boundary")
+@readers.register("SIMRA Boundary")
 def simra_boundary(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import SimraBoundary
 
@@ -97,7 +116,7 @@ def simra_boundary(path: Path, settings: FindReaderSettings) -> Optional[Source]
     return None
 
 
-@register_reader("SIMRA Continuation")
+@readers.register("SIMRA Continuation")
 def simra_cont(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import SimraContinuation
 
@@ -106,7 +125,7 @@ def simra_cont(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("SIMRA History")
+@readers.register("SIMRA History")
 def simra_hist(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .simra import SimraHistory
 
@@ -115,7 +134,7 @@ def simra_hist(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("WRF")
+@readers.register("WRF")
 def wrf(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .wrf import Wrf
 
@@ -124,7 +143,7 @@ def wrf(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("GeoGrid")
+@readers.register("GeoGrid")
 def geogrid(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     from .wrf import GeoGrid
 
@@ -133,7 +152,7 @@ def geogrid(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return None
 
 
-@register_reader("GoTools")
+@readers.register("GoTools")
 def gotools(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     if path.suffix.casefold() != ".g2":
         return None
@@ -142,7 +161,7 @@ def gotools(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     return GoTools(path)
 
 
-@register_reader("LRSpline")
+@readers.register("LRSpline")
 def lrspline(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     if path.suffix.casefold() != ".lr":
         return None

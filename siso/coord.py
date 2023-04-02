@@ -14,8 +14,8 @@ from . import api, util
 from .util import FieldData, coord
 
 
-systems: util.Registry[api.CoordinateSystem] = util.Registry()
-ellpsoids: util.Registry[Ellipsoid] = util.Registry()
+systems: util.Registry[Type[api.CoordinateSystem]] = util.Registry()
+ellpsoids: util.Registry[Type[Ellipsoid]] = util.Registry()
 
 
 def find_system(code: str) -> api.CoordinateSystem:

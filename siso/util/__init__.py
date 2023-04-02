@@ -33,30 +33,50 @@ from .. import api
 from .field_data import FieldData
 
 
+@runtime_checkable
 class HasName(Protocol):
     name: ClassVar[str]
 
 
-N = TypeVar("N", bound=HasName)
 W = TypeVar("W")
 M = TypeVar("M", bound=Hashable)
+Q = TypeVar("Q", bound=HasName)
 
 
-class Registry(Generic[N]):
-    classes: Dict[str, Type[N]]
+class Registry(Generic[W]):
+    classes: Dict[str, W]
 
     def __init__(self):
         self.classes = {}
 
-    def register(self, cls: Type[N]) -> Type[N]:
-        self.classes[cls.name.casefold()] = cls
-        return cls
+    @overload
+    def register(self, arg: str) -> Callable[[W], W]:
+        ...
 
-    def __getitem__(self, key: str) -> Type[N]:
+    @overload
+    def register(self, arg: Type[Q]) -> Type[Q]:
+        ...
+
+    def register(self, arg):
+        if not isinstance(arg, str):
+            assert isinstance(arg, HasName)
+            self.classes[arg.name.casefold()] = arg
+            return arg
+
+        def decorator(x: W) -> W:
+            self.classes[arg] = x
+            return x
+
+        return decorator
+
+    def __getitem__(self, key: str) -> W:
         return self.classes[key.casefold()]
 
     def __contains__(self, key: str) -> bool:
         return key.casefold() in self.classes
+
+    def items(self) -> Iterable[Tuple[str, W]]:
+        return self.classes.items()
 
 
 class NoSuchMarkError(Exception):
