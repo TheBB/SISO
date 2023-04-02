@@ -30,6 +30,7 @@ from typing import (
     Generic,
     Iterator,
     List,
+    NewType,
     Optional,
     Protocol,
     Sequence,
@@ -41,6 +42,7 @@ from typing import (
 import numpy as np
 from attrs import Factory, asdict, define
 from numpy import floating, integer
+from numpy.typing import NDArray
 from typing_extensions import Self
 
 
@@ -48,8 +50,10 @@ if TYPE_CHECKING:
     from .util import FieldData
 
 
-Point = Tuple[float, ...]
-Coords = Tuple[Point, ...]
+Point = NewType("Point", Tuple[float, ...])
+Points = NewType("Points", Tuple[Point, ...])
+KnotVector = NewType("KnotVector", NDArray[floating])
+Knots = NewType("Knots", Tuple[KnotVector, ...])
 
 
 @define
@@ -107,7 +111,7 @@ class Zone(Generic[K]):
     """
 
     shape: Shape
-    coords: Coords
+    coords: Points
     key: K
 
 

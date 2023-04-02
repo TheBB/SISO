@@ -21,10 +21,11 @@ from . import api, util
 from .api import (
     CellOrdering,
     CellType,
-    Coords,
     DiscreteTopology,
     Field,
     FieldDataFilter,
+    Point,
+    Points,
     Rationality,
     Topology,
 )
@@ -53,7 +54,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
     degree: int
 
     @staticmethod
-    def from_ifem(data: bytes) -> Tuple[Coords, UnstructuredTopology, FieldData[floating]]:
+    def from_ifem(data: bytes) -> Tuple[Points, UnstructuredTopology, FieldData[floating]]:
         """Special purpose constructor for parsing an IFEM Lagriangian patch
         with hexahedral cells.
 
@@ -105,7 +106,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         permutation = cell_numbering.permute_from(celltype, degree, cell_numbering.CellOrdering.Ifem)
         cell_data = cell_data.permute_components(permutation)
 
-        corners = (tuple(nodes[0]),)
+        corners = Points((Point(tuple(nodes[0])),))
         topology = UnstructuredTopology(num_nodes, cell_data, celltype, degree)
         return corners, topology, FieldData(nodes)
 
@@ -385,13 +386,13 @@ class SplineTopology(Topology):
     weights: Optional[np.ndarray]
 
     @staticmethod
-    def from_splineobject(obj: SplineObject) -> Tuple[Coords, SplineTopology, FieldData[floating]]:
+    def from_splineobject(obj: SplineObject) -> Tuple[Points, SplineTopology, FieldData[floating]]:
         """Construct a spline topology from a Splipy SplineObject.
 
         Returns a sequence of coordinates (the corners) for constructing zone
         objects, the topology, as well as the field data for the nodal array.
         """
-        corners = tuple(tuple(point) for point in obj.corners())
+        corners = Points(tuple(Point(tuple(point)) for point in obj.corners()))
 
         # If NURBS, extract the weights separately (they are part of the
         # topology, not the field data)
@@ -412,12 +413,12 @@ class SplineTopology(Topology):
         )
 
     @staticmethod
-    def from_bytes(data: bytes) -> Iterator[Tuple[Coords, SplineTopology, FieldData[floating]]]:
+    def from_bytes(data: bytes) -> Iterator[Tuple[Points, SplineTopology, FieldData[floating]]]:
         """Special constructor parsing bytestring in G2-format."""
         yield from SplineTopology.from_string(data.decode())
 
     @staticmethod
-    def from_string(data: str) -> Iterator[Tuple[Coords, SplineTopology, FieldData[floating]]]:
+    def from_string(data: str) -> Iterator[Tuple[Points, SplineTopology, FieldData[floating]]]:
         """Special constructor for parsing a string in G2-format."""
         with G2Object(StringIO(data), "r") as g2:
             for obj in g2.read():
@@ -538,14 +539,15 @@ class LrTopology(Topology):
     def from_lrobject(
         obj: lr.LRSplineObject,
         rationality: Optional[Rationality],
-    ) -> Tuple[Coords, LrTopology, FieldData[floating]]:
+    ) -> Tuple[Points, LrTopology, FieldData[floating]]:
         """Construct an LR topology from an LRSplineObject.
 
         Returns a sequence of coordinates (the corners) for constructing zone
         objects, the topology, as well as the field data for the nodal array.
         """
 
-        corners = tuple(tuple(point) for point in obj.corners())
+        corners = Points(tuple(Point(tuple(point)) for point in obj.corners()))
+
         if rationality == Rationality.Always:
             rational = True
         elif rationality == Rationality.Never:
@@ -583,7 +585,7 @@ class LrTopology(Topology):
     def from_bytes(
         data: bytes,
         rationality: Optional[Rationality],
-    ) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
+    ) -> Iterator[Tuple[Points, LrTopology, FieldData[floating]]]:
         """Special constructor parsing bytestring in LR-format."""
         yield from LrTopology.from_string(data.decode(), rationality)
 
@@ -591,7 +593,7 @@ class LrTopology(Topology):
     def from_string(
         data: str,
         rationality: Optional[Rationality],
-    ) -> Iterator[Tuple[Coords, LrTopology, FieldData[floating]]]:
+    ) -> Iterator[Tuple[Points, LrTopology, FieldData[floating]]]:
         """Special constructor parsing string in LR-format."""
         for obj in lr.LRSplineObject.read_many(StringIO(data)):
             yield LrTopology.from_lrobject(obj, rationality)

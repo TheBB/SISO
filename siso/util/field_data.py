@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import TYPE_CHECKING, Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, overload
+from typing import Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, overload
 
 import numpy as np
 from attrs import define
@@ -23,9 +23,7 @@ from scipy.spatial.transform import Rotation
 from vtkmodules.util.numpy_support import numpy_to_vtk
 from vtkmodules.vtkCommonCore import vtkDataArray
 
-
-if TYPE_CHECKING:
-    from ..api import Coords
+from ..api import Point, Points
 
 
 T = TypeVar("T", bound=number)
@@ -214,14 +212,14 @@ class FieldData(Generic[T]):
             return self
         return FieldData(self.data.byteswap().newbyteorder())
 
-    def corners(self: FieldData[floating], shape: Tuple[int, ...]) -> Coords:
+    def corners(self: FieldData[floating], shape: Tuple[int, ...]) -> Points:
         """Return a sequence of corner points by interpreting the array as a
         cartesian product with a certain shape.
         """
         temp = self.data.reshape(*shape, -1)
         corners = temp[tuple(slice(None, None, j - 1) for j in temp.shape[:-1])]
         corners = corners.reshape(-1, self.num_comps)
-        return tuple(tuple(corner) for corner in corners)
+        return Points(tuple(Point(tuple(corner)) for corner in corners))
 
     def collapse_weights(self: FieldData[floating]) -> FieldData[floating]:
         """Reduce the number of components by one, by dividing the first ncomps-1

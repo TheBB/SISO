@@ -18,7 +18,7 @@ from numpy import floating, generic
 from typing_extensions import Self
 
 from .. import api, util
-from ..api import Coords, Shape, Zone
+from ..api import Points, Shape, Zone
 from ..coord import Generic
 from ..impl import Basis, Field, Step
 from ..topology import CellType, StructuredTopology
@@ -264,7 +264,7 @@ class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]
         """Return the geometry nodal points."""
         ...
 
-    def corners(self) -> Coords:
+    def corners(self) -> Points:
         """Return the corners of the mesh."""
         return self.nodes().corners(self.simra_nodeshape)
 

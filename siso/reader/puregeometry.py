@@ -5,14 +5,14 @@ from attrs import define
 from numpy import floating
 
 from .. import api, coord
-from ..api import Coords, Shape, T, Zone
+from ..api import Points, Shape, T, Zone
 from ..impl import Basis, Field, Step
 from ..util import FieldData
 
 
 @define
 class PureGeometryZone(Generic[T]):
-    corners: Coords
+    corners: Points
     field_data: FieldData[floating]
     topology: T
 
