@@ -22,6 +22,8 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    overload,
+    runtime_checkable,
 )
 
 import lrspline as lr
@@ -84,11 +86,31 @@ class NoSuchMarkError(Exception):
 
 
 class RandomAccessFile(Generic[W, M]):
+    """Utility class for wrapping a file pointer in an interface that allows
+    random access. The file pointer in question must be seekable.
+
+    This class has the ability to track 'markers': named locations in the file
+    that can be returned to. They can be produced on demand by a marker
+    generator: a function that generates marks as it finds them.
+
+    Explicit access to the file is only granted to one user at a time, through
+    use of the `borrow_fp` or `leap` context managers, or the
+    `RandomAccessTracker` class (see below).
+
+    Parameters:
+    - fp: the file pointer to wrap
+    - wrapper: callable for constructing 'wrapper' objects from the file pointer
+    - marker_generator: a function that accepts a `RandomAccessTracker` and
+        generates marks. The function will always receive the same instance of
+        tracker, so it can be used to remember file location.
+    """
+
     wrapper: Callable[[IO], W]
 
     markers: Dict[M, int]
     marker_generator: Optional[Iterator[Tuple[M, int]]] = None
 
+    fp: IO
     fp_borrowed: bool = False
 
     def __init__(
@@ -97,6 +119,7 @@ class RandomAccessFile(Generic[W, M]):
         wrapper: Optional[Callable[[IO], W]] = None,
         marker_generator: Optional[Callable[[RandomAccessTracker[W, M]], Iterator[Tuple[M, int]]]] = None,
     ):
+        assert fp.seekable()
         self.fp = fp
         self.wrapper = wrapper or cast(Callable[[IO], W], (lambda fp: fp))
         self.markers = {}
@@ -113,6 +136,19 @@ class RandomAccessFile(Generic[W, M]):
 
     @contextmanager
     def borrow_fp(self) -> Generator[IO, None, None]:
+        """Borrow the file pointer. This will error if the file pointer is
+        already borrowed: only one borrower can use it at a time.
+
+        User code should generally use `leap` instead of this method, if
+        possible.
+
+        Use as a context manager to release the file pointer after use:
+
+        ```
+        with file.borrow_fp(mark) as fp:
+            ...
+        ```
+        """
         if self.fp_borrowed:
             raise api.Unexpected("Borrowing already borrowed file pointer")
         assert not self.fp_borrowed
@@ -123,11 +159,20 @@ class RandomAccessFile(Generic[W, M]):
             self.fp_borrowed = False
 
     def mark(self, name: M, loc: Optional[int] = None) -> None:
+        """Mark the location at `loc` with the name `name`. If `loc` is not
+        given, this will use the current position of the file pointer.
+        """
         if loc is None:
             loc = self.fp.tell()
         self.markers[name] = loc
 
     def loc_at(self, name: M) -> int:
+        """Return the offset at the given mark.
+
+        If the mark has not been discovered yet, but a marker generator was
+        provided at construction time, this will attempt to generate marks until
+        the requested mark is found.
+        """
         if name in self.markers:
             return self.markers[name]
         if self.marker_generator:
@@ -139,18 +184,41 @@ class RandomAccessFile(Generic[W, M]):
 
     @contextmanager
     def leap(self, mark: M) -> Generator[W, None, None]:
+        """Borrow the file pointer, set its location to the requested mark, and
+        return it wrapped in the type W.
+
+        Use as a context manager to release the file pointer after use:
+
+        ```
+        with file.leap(mark) as w:
+            ...
+        ```
+        """
         loc = self.loc_at(mark)
         with self.borrow_fp() as fp:
             fp.seek(loc)
             yield self.wrapper(fp)
 
     def tracker(self, mark: Optional[M] = None) -> RandomAccessTracker[W, M]:
+        """Create a new tracker object initialized at a given mark (or at the
+        beginning of the file, if not given).
+
+        See `RandomAccessTracker` for more info.
+        """
         if mark is None:
             return RandomAccessTracker(self, 0)
         return RandomAccessTracker(self, self.loc_at(mark))
 
 
 class RandomAccessTracker(Generic[W, M]):
+    """A tracking object for use with `RandomAccessFile`.
+
+    The tracker remembers the last location that it was used with, and can be
+    used to restart from there. Trackers don't own a copy of the file pointer,
+    so multiple of them can exist at the same time. Use one of the `excursion`
+    or `journey` methods to access the file.
+    """
+
     file: RandomAccessFile[W, M]
     continue_from: int
 
@@ -160,12 +228,33 @@ class RandomAccessTracker(Generic[W, M]):
 
     @contextmanager
     def excursion(self) -> Generator[W, None, None]:
+        """Borrow the file pointer and return it wrapped in the type W,
+        starting at the previously abandoned location of the tracker.
+
+        An excursion does not change the location of the tracker. After the
+        excursion is over, the tracker will restart from the previous location
+        in the file.
+
+        Use as a context manager to release the file pointer after use:
+
+        ```
+        with tracker.excursion() as w:
+            ...
+        ```
+        """
         with self.file.borrow_fp() as fp:
             fp.seek(self.continue_from)
             yield self.file.wrapper(fp)
 
     @contextmanager
     def journey(self) -> Generator[W, None, None]:
+        """Borrow the file pointer and return it wrapped in the type W,
+        starting at the previously abandoned location of the tracker.
+
+        A journey updates the location of the tracker, so that after the journey
+        is over, the tracker will restart from the location where the journey
+        ended.
+        """
         with self.file.borrow_fp() as fp:
             fp.seek(self.continue_from)
             try:
@@ -174,6 +263,10 @@ class RandomAccessTracker(Generic[W, M]):
                 self.continue_from = fp.tell()
 
     def origin_marker(self, name: M) -> Tuple[M, int]:
+        """Create a tuple of mark and location.
+
+        Use with marker generators (see `RandomAccessFile`).
+        """
         return (name, self.continue_from)
 
 

@@ -305,6 +305,9 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
             celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
             return StructuredTopology(self.wrf_cellshape, celltype, degree=1)
 
+    def topology_updates(self, step: Step, basis: Basis) -> bool:
+        return step.index == 0
+
     def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
         if not field.is_geometry and not field.is_vector:
             return self.field_data_raw(field.name, timestep.index)
