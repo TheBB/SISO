@@ -24,7 +24,7 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from .. import api, util
-from ..api import B, CellOrdering, DiscreteTopology, F, S, Source, T, Z
+from ..api import B, CellOrdering, DiscreteTopology, F, NodeShape, S, Source, T, Z
 from ..topology import CellType, StructuredTopology
 from ..util import FieldData
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
@@ -47,7 +47,7 @@ def transpose(data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) ->
     if cellwise:
         i, j, k = shape
         shape = (max(i - 1, 1), max(j - 1, 1), max(k - 1, 1))
-    return data.transpose(shape, (2, 1, 0))
+    return data.transpose(NodeShape(shape), (2, 1, 0))
 
 
 def get_grid(
@@ -55,7 +55,7 @@ def get_grid(
 ) -> Tuple[vtkPointSet, BackendWriter]:
     if isinstance(topology, StructuredTopology) and behavior != Behavior.OnlyUnstructured:
         sgrid = vtkStructuredGrid()
-        shape = topology.cellshape
+        shape = tuple(topology.cellshape)
         while len(shape) < 3:
             shape = (*shape, 0)
         sgrid.SetDimensions(*(s + 1 for s in shape))

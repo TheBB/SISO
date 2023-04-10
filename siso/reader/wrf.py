@@ -10,7 +10,7 @@ from scipy.spatial.transform import Rotation
 from typing_extensions import Self
 
 from .. import api, util
-from ..api import Shape, Zone
+from ..api import CellShape, NodeShape, Zone, ZoneShape
 from ..coord import Generic, Geodetic, SphericalEarth
 from ..impl import Basis, Field, Step
 from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
@@ -80,23 +80,23 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         return self.num_latitude * self.num_longitude
 
     @property
-    def wrf_planar_nodeshape(self) -> Tuple[int, ...]:
-        return (self.num_latitude, self.num_longitude)
+    def wrf_planar_nodeshape(self) -> NodeShape:
+        return NodeShape(self.num_latitude, self.num_longitude)
 
     @property
-    def wrf_planar_cellshape(self) -> Tuple[int, ...]:
-        return tuple(s - 1 for s in self.wrf_planar_nodeshape)
+    def wrf_planar_cellshape(self) -> CellShape:
+        return self.wrf_planar_nodeshape.cellular
 
     @property
-    def wrf_nodeshape(self) -> Tuple[int, ...]:
+    def wrf_nodeshape(self) -> NodeShape:
         planar_shape = self.wrf_planar_nodeshape
         if not self.volumetric:
             return planar_shape
-        return (self.num_vertical, *planar_shape)
+        return NodeShape(self.num_vertical, *planar_shape)
 
     @property
-    def wrf_cellshape(self) -> Tuple[int, ...]:
-        return tuple(s - 1 for s in self.wrf_nodeshape)
+    def wrf_cellshape(self) -> CellShape:
+        return self.wrf_nodeshape.cellular
 
     def field_domain(self, name: str) -> FieldDimensionality:
         try:
@@ -183,19 +183,19 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         cells = [util.structured_cells(self.wrf_planar_cellshape, pardim=2)]
 
         nodemap = util.nodemap((self.num_latitude, 2), (self.num_longitude, self.num_longitude - 1))
-        cells.append(util.structured_cells((self.num_latitude - 1, 1), pardim=2, nodemap=nodemap))
+        cells.append(util.structured_cells(CellShape(self.num_latitude - 1, 1), pardim=2, nodemap=nodemap))
 
         south_pole_id = self.num_planar
         nodemap = util.nodemap((2, self.num_longitude + 1), (south_pole_id, 1), periodic=(1,))
         nodemap[1] = nodemap[1, 0]
-        cells.append(util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap))
+        cells.append(util.structured_cells(CellShape(1, self.num_longitude), pardim=2, nodemap=nodemap))
 
         north_pole_id = self.num_planar + 1
         nodemap = util.nodemap(
             (2, self.num_longitude + 1), (-self.num_longitude - 1, 1), periodic=(1,), init=north_pole_id
         )
         nodemap[0] = nodemap[0, 0]
-        cells.append(util.structured_cells((1, self.num_longitude), pardim=2, nodemap=nodemap))
+        cells.append(util.structured_cells(CellShape(1, self.num_longitude), pardim=2, nodemap=nodemap))
 
         return FieldData.join_dofs(cells)
 
@@ -211,7 +211,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         )
         cells.append(
             util.structured_cells(
-                (self.num_vertical - 1, self.num_latitude - 1, 1), pardim=3, nodemap=nodemap
+                CellShape(self.num_vertical - 1, self.num_latitude - 1, 1), pardim=3, nodemap=nodemap
             )
         )
 
@@ -221,7 +221,9 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         )
         nodemap[:, 1] = (nodemap[:, 1] - south_pole_id) // num_horizontal * num_horizontal + south_pole_id
         cells.append(
-            util.structured_cells((self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap)
+            util.structured_cells(
+                CellShape(self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+            )
         )
 
         north_pole_id = self.num_planar + 1
@@ -233,7 +235,9 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         )
         nodemap[:, 0] = (nodemap[:, 0] - north_pole_id) // num_horizontal * num_horizontal + north_pole_id
         cells.append(
-            util.structured_cells((self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap)
+            util.structured_cells(
+                CellShape(self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+            )
         )
 
         return FieldData.join_dofs(cells)
@@ -260,7 +264,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         ).corners(self.wrf_planar_nodeshape)
 
         yield Zone(
-            shape=Shape.Hexahedron,
+            shape=ZoneShape.Hexahedron,
             coords=corners,
             key=0,
         )

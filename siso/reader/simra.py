@@ -18,7 +18,7 @@ from numpy import floating, generic
 from typing_extensions import Self
 
 from .. import api, util
-from ..api import Points, Shape, Zone
+from ..api import CellShape, NodeShape, Points, Zone, ZoneShape
 from ..coord import Generic
 from ..impl import Basis, Field, Step
 from ..topology import CellType, StructuredTopology
@@ -222,7 +222,7 @@ class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]
     """
 
     filename: Path
-    simra_nodeshape: Tuple[int, ...]
+    simra_nodeshape: NodeShape
 
     dim: ClassVar[int]
 
@@ -235,19 +235,19 @@ class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]
         return len(self.simra_nodeshape)
 
     @property
-    def simra_cellshape(self) -> Tuple[int, ...]:
-        return tuple(i - 1 for i in self.simra_nodeshape)
+    def simra_cellshape(self) -> CellShape:
+        return self.simra_nodeshape.cellular
 
     @property
-    def out_nodeshape(self) -> Tuple[int, ...]:
+    def out_nodeshape(self) -> NodeShape:
         """Convert SIMRA shapes to Siso shapes."""
         i, j, *rest = self.simra_nodeshape
-        return (j, i, *rest)
+        return NodeShape(j, i, *rest)
 
     @property
-    def out_cellshape(self) -> Tuple[int, ...]:
+    def out_cellshape(self) -> CellShape:
         """Convert SIMRA shapes to Siso shapes."""
-        return tuple(i - 1 for i in self.out_nodeshape)
+        return self.out_nodeshape.cellular
 
     @property
     def properties(self) -> api.SourceProperties:
@@ -293,7 +293,7 @@ class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]
         yield Step(index=0)
 
     def zones(self) -> Iterator[Zone[int]]:
-        shape = Shape.Hexahedron if self.pardim == 3 else Shape.Quatrilateral
+        shape = ZoneShape.Hexahedron if self.pardim == 3 else ZoneShape.Quatrilateral
         yield Zone(shape=shape, coords=self.corners(), key=0)
 
     def topology(self, step: Step, basis: Basis, zone: Zone[int]) -> StructuredTopology:
@@ -335,7 +335,7 @@ class SimraMap(SimraMeshBase):
         # Extract the shape without moving the file pointer
         with self.save_excursion():
             i, j = map(int, next(self.mesh).split())
-        self.simra_nodeshape = (i, j)
+        self.simra_nodeshape = NodeShape(i, j)
 
         return self
 
@@ -404,7 +404,7 @@ class Simra2dMesh(SimraMeshBase):
         with self.save_excursion():
             next(self.mesh)
             i, j = map(int, next(self.mesh).split()[2:])
-        self.simra_nodeshape = (i, j)
+        self.simra_nodeshape = NodeShape(i, j)
 
         return self
 
@@ -468,7 +468,7 @@ class Simra3dMesh(SimraMeshBase):
         # Leap to the first block (index zero) to get mesh metadata
         with self.mesh.leap(0) as f:
             _, _, imax, jmax, kmax, _ = f.read_ints(self.u4_type)
-        self.simra_nodeshape = (jmax, imax, kmax)
+        self.simra_nodeshape = NodeShape(jmax, imax, kmax)
 
         return self
 

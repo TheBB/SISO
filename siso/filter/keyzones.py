@@ -8,7 +8,7 @@ from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, T
 from numpy import floating
 
 from .. import api
-from ..api import B, F, Point, S, Shape, Source, SourceProperties, T, Z, Zone
+from ..api import B, F, Point, S, Source, SourceProperties, T, Z, Zone, ZoneShape
 from ..util import FieldData, bisect
 from .passthrough import PassthroughBFST
 
@@ -47,7 +47,7 @@ class KeyZones(PassthroughBFST[B, F, S, T, Z, Zone[int]]):
 
 class ZoneManager:
     lut: VertexDict[Set[int]]
-    shapes: Dict[int, Shape]
+    shapes: Dict[int, ZoneShape]
 
     def __init__(self):
         self.lut = VertexDict()

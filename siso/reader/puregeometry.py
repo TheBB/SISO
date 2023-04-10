@@ -5,7 +5,7 @@ from attrs import define
 from numpy import floating
 
 from .. import api, coord
-from ..api import Points, Shape, T, Zone
+from ..api import Points, T, Zone, ZoneShape
 from ..impl import Basis, Field, Step
 from ..util import FieldData
 
@@ -58,7 +58,7 @@ class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
 
     def zones(self) -> Iterator[Zone[int]]:
         for i, zone in enumerate(self.zone_data):
-            shape = [Shape.Line, Shape.Quatrilateral, Shape.Hexahedron][zone.topology.pardim - 1]
+            shape = [ZoneShape.Line, ZoneShape.Quatrilateral, ZoneShape.Hexahedron][zone.topology.pardim - 1]
             yield Zone(shape=shape, coords=zone.corners, key=i)
 
     def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> T:

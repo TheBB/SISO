@@ -20,10 +20,12 @@ from splipy.io import G2
 from . import api, util
 from .api import (
     CellOrdering,
+    CellShape,
     CellType,
     DiscreteTopology,
     Field,
     FieldDataFilter,
+    NodeShape,
     Point,
     Points,
     Rationality,
@@ -294,13 +296,13 @@ class StructuredTopology(DiscreteTopologyImpl):
     """Structured topologies represent a Cartesian tensor product grid of
     cells."""
 
-    cellshape: Tuple[int, ...]
+    cellshape: CellShape
     celltype: CellType
     degree: int
 
     @property
     def pardim(self) -> int:
-        return len(self.cellshape)
+        return self.cellshape.pardim
 
     @property
     def num_cells(self) -> int:
@@ -337,7 +339,7 @@ class StructuredTopology(DiscreteTopologyImpl):
                 "Transposition of structured topology: number of axes must match parametric dimension"
             )
         return StructuredTopology(
-            cellshape=tuple(self.cellshape[i] for i in axes),
+            cellshape=CellShape(tuple(self.cellshape[i] for i in axes)),
             celltype=self.celltype,
             degree=self.degree,
         )
@@ -345,7 +347,7 @@ class StructuredTopology(DiscreteTopologyImpl):
 
 @define
 class StructuredTopologyMerger:
-    cellshape: Tuple[int, ...]
+    cellshape: CellShape
     celltype: CellType
     degree: int
 
@@ -490,7 +492,7 @@ class SplineTesselator(api.TopologyMerger):
         the appropriate cell type and shape.
         """
         celltype = [CellType.Line, CellType.Quadrilateral, CellType.Hexahedron][len(self.nodal_knots) - 1]
-        cellshape = tuple(len(knots) - 1 for knots in self.nodal_knots)
+        cellshape = NodeShape(tuple(len(knots) for knots in self.nodal_knots)).cellular
         return StructuredTopology(cellshape, celltype, degree=1)
 
     def tesselate_field(

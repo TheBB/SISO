@@ -18,7 +18,7 @@ from numpy import floating
 from typing_extensions import Self
 
 from .. import api, util
-from ..api import Shape, Topology, Zone
+from ..api import Topology, Zone, ZoneShape
 from ..coord import Named
 from ..impl import Basis, Field, Step
 from ..topology import LrTopology, SplineTopology, UnstructuredTopology
@@ -167,7 +167,7 @@ class IfemBasis(Basis):
             corners, topology, cps = next(SplineTopology.from_bytes(raw_data))
 
         # IFEM patches never have irregular shapes.
-        shape = [Shape.Line, Shape.Quatrilateral, Shape.Hexahedron][topology.pardim - 1]
+        shape = [ZoneShape.Line, ZoneShape.Quatrilateral, ZoneShape.Hexahedron][topology.pardim - 1]
         zone = Zone(shape=shape, coords=corners, key=ZoneKey(self.name, step, patch))
 
         return zone, topology, cps

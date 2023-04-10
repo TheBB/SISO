@@ -6,7 +6,7 @@ from typing import Iterator
 from numpy import floating
 
 from .. import util
-from ..api import B, F, Points, S, Shape, SourceProperties, Z, Zone
+from ..api import B, F, Points, S, SourceProperties, Z, Zone, ZoneShape
 from ..topology import DiscreteTopology, UnstructuredTopology
 from ..util import FieldData
 from .passthrough import PassthroughBFST
@@ -33,7 +33,7 @@ class ZoneMerge(PassthroughBFST[B, F, S, DiscreteTopology, Z, Zone[int]]):
         if multi_zone:
             # We can't make any predictions about the shape of a merged zone.
             yield Zone(
-                shape=Shape.Shapeless,
+                shape=ZoneShape.Shapeless,
                 coords=Points(()),
                 key=0,
             )

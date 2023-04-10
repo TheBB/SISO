@@ -23,7 +23,7 @@ from scipy.spatial.transform import Rotation
 from vtkmodules.util.numpy_support import numpy_to_vtk
 from vtkmodules.vtkCommonCore import vtkDataArray
 
-from ..api import Point, Points
+from ..api import NodeShape, Point, Points
 
 
 T = TypeVar("T", bound=number)
@@ -212,7 +212,7 @@ class FieldData(Generic[T]):
             return self
         return FieldData(self.data.byteswap().newbyteorder())
 
-    def corners(self: FieldData[floating], shape: Tuple[int, ...]) -> Points:
+    def corners(self: FieldData[floating], shape: NodeShape) -> Points:
         """Return a sequence of corner points by interpreting the array as a
         cartesian product with a certain shape.
         """
@@ -231,7 +231,7 @@ class FieldData(Generic[T]):
         data = self.data[..., :-1] / self.data[..., -1:]
         return FieldData(data)
 
-    def transpose(self, shape: Tuple[int, ...], transposition: Tuple[int, ...]) -> FieldData[T]:
+    def transpose(self, shape: NodeShape, transposition: Tuple[int, ...]) -> FieldData[T]:
         """Perform a transposition operation.
 
         Parameters:

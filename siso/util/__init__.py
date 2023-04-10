@@ -423,9 +423,11 @@ def only(values: Iterable[T]) -> T:
 
 
 def structured_cells(
-    cellshape: Tuple[int, ...], pardim: int, nodemap: Optional[np.ndarray] = None
+    cellshape: api.CellShape,
+    pardim: int,
+    nodemap: Optional[np.ndarray] = None,
 ) -> FieldData[integer]:
-    nodeshape = tuple(s + 1 for s in cellshape)
+    nodeshape = tuple(cellshape.nodal)
     ranges = [range(k) for k in cellshape]
     nidxs = [np.array(q) for q in zip(*product(*ranges))]
     eidxs = np.zeros((len(nidxs[0]), 2 ** len(nidxs)), dtype=int)

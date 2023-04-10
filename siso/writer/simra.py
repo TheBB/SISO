@@ -7,7 +7,7 @@ from scipy.io import FortranFile
 from typing_extensions import Self
 
 from .. import api, util
-from ..api import B, F, S, T, Z
+from ..api import B, CellShape, F, S, T, Z
 from ..topology import StructuredTopology
 from ..util import cell_numbering
 from .api import Writer, WriterProperties, WriterSettings
@@ -67,7 +67,7 @@ class SimraWriter(Writer):
         nodes = nodes.astype(self.f4_type)
         cells = topology.cells_as(api.CellOrdering.Simra).numpy().astype(self.u4_type) + 1
 
-        macro_shape = tuple(c - 1 for c in topology.cellshape)
+        macro_shape = CellShape(tuple(c - 1 for c in topology.cellshape))
         permutation = cell_numbering.permute_to(
             api.CellType.Hexahedron, degree=1, ordering=api.CellOrdering.Simra
         )

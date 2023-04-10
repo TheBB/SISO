@@ -28,6 +28,7 @@ from typing import (
     TYPE_CHECKING,
     ClassVar,
     Generic,
+    Iterable,
     Iterator,
     List,
     NewType,
@@ -37,6 +38,7 @@ from typing import (
     Tuple,
     TypeVar,
     cast,
+    overload,
 )
 
 import numpy as np
@@ -54,6 +56,58 @@ Point = NewType("Point", Tuple[float, ...])
 Points = NewType("Points", Tuple[Point, ...])
 KnotVector = NewType("KnotVector", NDArray[floating])
 Knots = NewType("Knots", Tuple[KnotVector, ...])
+
+
+class Nodal:
+    ...
+
+
+class Cellular:
+    ...
+
+
+class Aritmetical(Protocol):
+    def __add__(self, other: int) -> Self:
+        ...
+
+    def __sub__(self, other: int) -> Self:
+        ...
+
+
+M = TypeVar("M", Nodal, Cellular)
+P = TypeVar("P", bound=Aritmetical)
+
+
+class ShapeTuple(Tuple[P, ...], Generic[M, P]):
+    @overload
+    def __new__(cls, *args: P) -> Self:
+        ...
+
+    @overload
+    def __new__(cls, arg: Iterable[P]) -> Self:
+        ...
+
+    def __new__(cls, *args):
+        if hasattr(args[0], "__iter__"):
+            return super().__new__(cls, iter(args[0]))
+        else:
+            return super().__new__(cls, args)
+
+    @property
+    def pardim(self) -> int:
+        return len(self)
+
+    @property
+    def nodal(self: ShapeTuple[Cellular, P]) -> ShapeTuple[Nodal, P]:
+        return ShapeTuple(k + 1 for k in self)
+
+    @property
+    def cellular(self: ShapeTuple[Nodal, P]) -> ShapeTuple[Cellular, P]:
+        return ShapeTuple(k - 1 for k in self)
+
+
+NodeShape = ShapeTuple[Nodal, int]
+CellShape = ShapeTuple[Cellular, int]
 
 
 @define
@@ -76,7 +130,7 @@ class Unexpected(SisoError):
     ...
 
 
-class Shape(Enum):
+class ZoneShape(Enum):
     """The shape of a zone."""
 
     # 1D
@@ -110,7 +164,7 @@ class Zone(Generic[K]):
     - key: any object identfying the zone
     """
 
-    shape: Shape
+    shape: ZoneShape
     coords: Points
     key: K
 
@@ -570,7 +624,7 @@ class Field(ABC):
 
 class Step(Protocol):
     """A step represents an instance of the time axis (which may or may not be
-    actual time).
+    actual time)
     """
 
     @property
