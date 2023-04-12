@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "siso"
-version = "4.0.0"
+version = "4.1.0"
 description = ""
 authors = ["Eivind Fonn <evfonn@gmail.com>"]
 readme = "README.rst"
