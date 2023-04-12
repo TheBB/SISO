@@ -1,523 +1,472 @@
-from abc import abstractmethod
-from datetime import datetime
+from enum import Enum, auto
 from functools import lru_cache
 from pathlib import Path
+from typing import ClassVar, Iterator, Optional, Tuple
 
-import netCDF4
-from numpy import newaxis as __
 import numpy as np
+from netCDF4 import Dataset
+from numpy import floating, integer
 from scipy.spatial.transform import Rotation
-import treelog as log
+from typing_extensions import Self
 
-from typing import Optional, Tuple, Iterable, List
-from ..typing import Shape, Array2D, StepData
-
-from .reader import Reader
-from .. import config, ConfigTarget
-from ..coords import Local, Geocentric, Geodetic, Coords
-from ..coords.util import spherical_cartesian_vf
-from ..fields import Field, SimpleField, Geometry, FieldPatches
-from ..geometry import Quad, Hex, StructuredTopology, UnstructuredTopology, Patch
-from ..util import unstagger, structured_cells, angle_mean_deg, nodemap as mknodemap, flatten_2d
-from ..writer import Writer
+from .. import api, util
+from ..api import CellShape, NodeShape, Zone, ZoneShape
+from ..coord import Generic, Geodetic, SphericalEarth
+from ..impl import Basis, Field, Step
+from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
+from ..util import FieldData
 
 
-
-class WRFScalarField(SimpleField):
-
-    decompose = False
-    ncomps = 1
-    cells = False
-
-    reader: 'WRFReader'
-
-    def __init__(self, name: str, reader: 'WRFReader'):
-        self.name = name
-        self.reader = reader
-
-    def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
-        patch = self.reader.patch_at(stepid)
-        kwargs = {'extrude_if_planar': config.volumetric == 'extrude'}
-        data = self.reader.variable_at(self.name, stepid, **kwargs)
-        yield patch, data.reshape(patch.topology.num_nodes, -1)
+class FieldDimensionality(Enum):
+    Planar = auto()
+    Volumetric = auto()
+    Unknown = auto()
 
 
-class WRFVectorField(SimpleField):
+class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
+    filename: Path
+    dataset: Dataset
 
-    components: List[str]
-    decompose = False
-    cells = False
+    volumetric: bool
+    valid_domains: Tuple[FieldDimensionality, ...]
+    periodic: bool
+    geodetic: bool
+    staggering: api.Staggering
 
-    reader: 'WRFReader'
+    longitude_name: ClassVar[str]
+    latitude_name: ClassVar[str]
+    height_name: ClassVar[str]
 
-    def __init__(self, name: str, components: List[str], reader: 'WRFReader'):
-        self.name = name
-        self.components = components
-        self.reader = reader
-        self.ncomps = len(components)
+    def __init__(self, path: Path):
+        self.filename = path
 
-    def patches(self, stepid: int, force: bool = False, coords: Optional[Coords] = None) -> FieldPatches:
-        kwargs = {'extrude_if_planar': config.volumetric == 'extrude'}
-
-        if isinstance(coords, Local):
-            data = np.array([self.reader.variable_at(x, stepid, **kwargs).flatten() for x in 'UVW']).T
-            yield self.reader.patch_at(stepid), data; return
-
-        data = np.array([self.reader.variable_at(x, stepid, include_poles=False, **kwargs).flatten() for x in 'UVW']).T
-        reader = self.reader
-
-        # Convert to structured shape
-        data = data.reshape((-1, reader.nlat, reader.nlon, 3))
-
-        # Convert to rotated geocentric coordinates
-        lon = self.reader.variable_at('XLONG', stepid, include_poles=False)
-        lat = self.reader.variable_at('XLAT', stepid, include_poles=False)
-        pts = np.array([
-            (np.cos(np.deg2rad(lon)) * np.cos(np.deg2rad(lat))).flatten(),
-            (np.sin(np.deg2rad(lon)) * np.cos(np.deg2rad(lat))).flatten(),
-            np.sin(np.deg2rad(lat)).flatten(),
-        ]).T
-        pts = reader.rotation(with_intrinsic=True).inv().apply(pts)
-        lon = np.rad2deg(np.arctan2(pts[:,1], pts[:,0]))
-        lat = np.rad2deg(np.arctan(pts[:,2] / np.sqrt(pts[:,0]**2 + pts[:,1]**2)))
-        data = spherical_cartesian_vf(lon, lat, data.reshape(-1, reader.nplanar, 3)).reshape(data.shape)
-
-        # Extract mean values at poles
-        if config.periodic:
-            south = np.mean(data[:, 0, ...], axis=-2)[:, __, :]
-            north = np.mean(data[:, -1, ...], axis=-2)[:, __, :]
-
-        # Flatten the horizontal directions
-        data = data.reshape((-1, reader.nlat * reader.nlon, 3))
-
-        # Append mean values at poles
-        if config.periodic:
-            data = np.append(data, south, axis=1)
-            data = np.append(data, north, axis=1)
-
-        # Rotate to true geocentric coordinates
-        data = reader.rotation().apply(flatten_2d(data)).reshape(data.shape)
-
-        # Convert back to geodetic coordinates
-        lon = self.reader.variable_at('XLONG', stepid)
-        lat = self.reader.variable_at('XLAT', stepid)
-        data = spherical_cartesian_vf(lon, lat, data, invert=True)
-
-        yield self.reader.patch_at(stepid), flatten_2d(data)
-
-
-class WRFGeometryField(SimpleField):
-
-    cells = False
-    ncomps = 3
-
-    reader: 'WRFReader'
-    heightname: str
-
-    def __init__(self, reader: 'WRFReader', heightname: str):
-        self.reader = reader
-        self.heightname = heightname
-
-    @abstractmethod
-    def nodes(self, stepid: int) -> Array2D:
-        pass
-
-    def height(self, stepid: int, x: Array2D, y: Array2D) -> Tuple[Array2D, Array2D, Array2D]:
-        if config.volumetric == 'planar':
-            # PLANAR: Use the terrain height according to the dataset.
-            return x, y, self.reader.variable_at(self.heightname, stepid)
-        # VOLUMETRIC: Compute the height using geopotential fields.
-        z = (self.reader.variable_at('PH', stepid) + self.reader.variable_at('PHB', stepid)) / 9.81
-        return x[__, ...], y[__, ...], z
-
-    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
-        x, y, z = self.nodes(stepid)
-        nodes = np.zeros(z.shape + (3,), dtype=x.dtype)
-        nodes[..., 0] = x
-        nodes[..., 1] = y
-        nodes[..., 2] = z
-        yield self.reader.patch_at(stepid), flatten_2d(nodes)
-
-
-class WRFLocalGeometryField(WRFGeometryField):
-
-    cells = False
-    ncomps = 3
-
-    def __init__(self, reader: 'WRFReader', heightname: str):
-        super().__init__(reader, heightname)
-        self.fieldtype = Geometry(Local().substitute())
-        self.name = 'local'
-
-    def nodes(self, stepid: int) -> Array2D:
-        reader = self.reader
-        x = np.arange(reader.nlon) * reader.nc.DX
-        y = np.arange(reader.nlat) * reader.nc.DY
-        x, y = np.meshgrid(x, y)
-        return self.height(stepid, x.flatten(), y.flatten())
-
-
-class WRFGeodeticGeometryField(WRFGeometryField):
-
-    def __init__(self, reader: 'WRFReader', heightname: str):
-        super().__init__(reader, heightname)
-        self.fieldtype = Geometry(Geodetic())
-        self.name = 'geodetic'
-
-    def nodes(self, stepid: int) -> Array2D:
-        lon = self.reader.variable_at(self.reader.lon_name, stepid)
-        lat = self.reader.variable_at(self.reader.lat_name, stepid)
-        return self.height(stepid, lon, lat)
-
-
-class NetCDFHelper(Reader):
-
-    nc: netCDF4.Dataset
-
-    lon_name: str
-    lat_name: str
-
-    def __init__(self, filename: Path):
-        self.filename = filename
-
-    def __enter__(self):
-        self.nc = netCDF4.Dataset(self.filename, 'r').__enter__()
+    def __enter__(self) -> Self:
+        self.dataset = Dataset(self.filename, "r").__enter__()
         return self
 
-    def __exit__(self, *args):
-        self.nc.__exit__(*args)
+    def __exit__(self, *args) -> None:
+        self.dataset.__exit__(*args)
 
     @property
-    def nsteps(self) -> int:
-        """Number of time steps in the dataset."""
-        return len(self.nc.dimensions['Time'])
+    def num_timesteps(self) -> int:
+        return len(self.dataset.dimensions["Time"])
 
     @property
-    def nlat(self) -> int:
-        """Number of points in latitudinal direction."""
-        return len(self.nc.dimensions['south_north'])
+    def num_latitude(self) -> int:
+        return len(
+            self.dataset.dimensions[
+                "south_north" if self.staggering == api.Staggering.Inner else "south_north_stag"
+            ]
+        )
 
     @property
-    def nlon(self) -> int:
-        """Number of points in longitudinal direction."""
-        return len(self.nc.dimensions['west_east'])
+    def num_longitude(self) -> int:
+        return len(
+            self.dataset.dimensions[
+                "west_east" if self.staggering == api.Staggering.Inner else "west_east_stag"
+            ]
+        )
 
     @property
-    def planar_shape(self) -> Shape:
-        """Shape (in terms of cells) of a single grid plane."""
-        return (self.nlat - 1, self.nlon - 1)
+    def num_vertical(self) -> int:
+        return len(
+            self.dataset.dimensions[
+                "bottom_top" if self.staggering == api.Staggering.Inner else "bottom_top_stag"
+            ]
+        )
 
     @property
-    def nplanar(self) -> int:
-        """Number of points in a single grid plane, not including possible
-        polar points that are appended later.
-        """
-        return self.nlat * self.nlon
+    def num_planar(self) -> int:
+        return self.num_latitude * self.num_longitude
 
     @property
-    def nvert(self) -> int:
-        """Number of points in vertical direction."""
-        return 1
+    def wrf_planar_nodeshape(self) -> NodeShape:
+        return NodeShape(self.num_latitude, self.num_longitude)
 
     @property
-    def volumetric_shape(self) -> Shape:
-        """Shape (in terms of cells) of the volumetric grid."""
-        return (self.nvert - 1, *self.planar_shape)
+    def wrf_planar_cellshape(self) -> CellShape:
+        return self.wrf_planar_nodeshape.cellular
 
-    def variable_type(self, name: str) -> Optional[str]:
-        """Check if a variable is volumetric, planar or none of the above."""
+    @property
+    def wrf_nodeshape(self) -> NodeShape:
+        planar_shape = self.wrf_planar_nodeshape
+        if not self.volumetric:
+            return planar_shape
+        return NodeShape(self.num_vertical, *planar_shape)
+
+    @property
+    def wrf_cellshape(self) -> CellShape:
+        return self.wrf_nodeshape.cellular
+
+    def field_domain(self, name: str) -> FieldDimensionality:
         try:
-            time, *dimensions = self.nc[name].dimensions
+            time, *dimensions = self.dataset[name].dimensions
         except IndexError:
-            return False
+            return FieldDimensionality.Unknown
 
-        if time != 'Time':
-            return None
+        if time != "Time":
+            return FieldDimensionality.Unknown
 
         try:
-            assert len(dimensions) == 2
-            assert dimensions[0].startswith('south_north')
-            assert dimensions[1].startswith('west_east')
-            return 'planar'
-        except AssertionError:
+            x, y = dimensions
+            assert x.startswith("south_north")
+            assert y.startswith("west_east")
+            return FieldDimensionality.Planar
+        except (AssertionError, ValueError):
             pass
 
         try:
-            assert len(dimensions) == 3
-            assert dimensions[0].startswith('bottom_top')
-            assert dimensions[1].startswith('south_north')
-            assert dimensions[2].startswith('west_east')
-            return 'volumetric'
-        except AssertionError:
+            x, y, z = dimensions
+            assert x.startswith("bottom_top")
+            assert y.startswith("south_north")
+            assert z.startswith("west_east")
+            return FieldDimensionality.Volumetric
+        except (AssertionError, ValueError):
             pass
 
-        return None
+        return FieldDimensionality.Unknown
 
-    def variable_at(self, name: str, stepid: int,
-                    include_poles: bool = True,
-                    extrude_if_planar: bool = False) -> np.ndarray:
-        """Extract a variable with a given name at a given time from
-        the dataset.
-
-        If 'extrude_if_planar' is set, planar variables will be
-        extruded with constant values in the vertical direction.
-
-        If 'include_poles' is set, calculate the values at the polar
-        points by averaging the values nearby, and include them.
-
-        The returned array has the vertical axis on the first
-        dimension, and the horizontal axes flattened on the second
-        dimension.  All variables in the dataset should be scalar, so
-        there is no third dimension.
-        """
-
-        time, *dimensions = self.nc[name].dimensions
+    def field_data_raw(
+        self,
+        name: str,
+        index: int,
+        extrude_if_volumetric: bool = True,
+        include_poles_if_periodic: bool = True,
+    ) -> FieldData[floating]:
+        time, *dimensions = self.dataset[name].dimensions
+        assert time == "Time"
+        assert len(dimensions) in (2, 3)
         dimensions = list(dimensions)
-        assert time == 'Time'
-        data = self.nc[name][stepid, ...]
+        data = self.dataset[name][index, ...].filled()
 
-        # Detect staggered axes and un-stagger them
-        for i, dim in enumerate(dimensions):
-            if dim.endswith('_stag'):
-                data = unstagger(data, i)
-                dimensions[i] = dim[:-5]
+        # Handle staggering
+        for dim, dim_name in enumerate(dimensions):
+            if dim_name.endswith("_stag") and self.staggering == api.Staggering.Inner:
+                data = util.unstagger(data, dim)
+                dimensions[dim] = dim_name[:-5]
+            elif not dim_name.endswith("_stag") and self.staggering == api.Staggering.Outer:
+                data = util.stagger(data, dim)
+                dimensions[dim] = f"{dim}_stag"
 
-        # If we're in planar mode and the field is volumetric, grab
-        # the surface slice
-        if len(dimensions) == 3 and config.volumetric == 'planar':
-            index = len(self.nc.dimensions['soil_layers_stag']) - 1
+        if len(dimensions) == 3 and not self.volumetric:
+            index = len(self.dataset.dimensions["soil_layers_stag"]) - 1
             data = data[index, ...]
             dimensions = dimensions[1:]
 
-        # Compute polar values if necessary
-        if include_poles and config.periodic:
-            if name in (self.lon_name, self.lat_name):
-                south = angle_mean_deg(data[0])
-                north = angle_mean_deg(data[-1])
+        south: Optional[np.ndarray] = None
+        north: Optional[np.ndarray] = None
+        if include_poles_if_periodic and self.periodic:
+            if name in (self.longitude_name, self.latitude_name):
+                south = util.angular_mean(data[0])
+                north = util.angular_mean(data[-1])
             else:
-                south = np.mean(data[...,  0, :], axis=-1)
+                south = np.mean(data[..., 0, :], axis=-1)
                 north = np.mean(data[..., -1, :], axis=-1)
 
-        # Flatten the horizontals but leave the verticals intact
         if len(dimensions) == 3:
-            data = data.reshape((self.nvert, -1))
+            data = data.reshape(self.num_vertical, -1)
         else:
             data = data.flatten()
 
-        # If periodic, append previously computed polar values
-        if include_poles and config.periodic:
-            appendix = np.array([south, north]).T
-            data = np.append(data, appendix, axis=-1)
+        if include_poles_if_periodic and self.periodic:
+            to_append = np.array([south, north]).T
+            data = np.append(data, to_append, axis=-1)
 
-        # Extrude the vertical direction if desired
-        if extrude_if_planar and len(dimensions) == 2:
-            newdata = np.zeros((self.nvert,) + data.shape, dtype=data.dtype)
+        if len(dimensions) == 2 and extrude_if_volumetric and self.volumetric:
+            newdata = np.zeros_like(data, shape=(self.num_vertical,) + data.shape)
             newdata[...] = data
             data = newdata
 
-        return data
+        return FieldData(data.reshape(-1, 1))
 
-    def patch_at(self, stepid: int) -> Patch:
-        """Construct the patch object at the given time step.  This method
-        handles all variations of mesh options.
-        """
+    def periodic_planar_topology(self) -> FieldData[integer]:
+        cells = [util.structured_cells(self.wrf_planar_cellshape, pardim=2)]
 
-        nnodes = self.nplanar
-        if config.periodic:
-            nnodes += 2
-        if config.volumetric != 'planar':
-            nnodes *= self.nvert
+        nodemap = util.nodemap((self.num_latitude, 2), (self.num_longitude, self.num_longitude - 1))
+        cells.append(util.structured_cells(CellShape(self.num_latitude - 1, 1), pardim=2, nodemap=nodemap))
 
-        if config.periodic and config.volumetric == 'planar':
-            topo = UnstructuredTopology(nnodes, self.periodic_planar_mesh(), celltype=Quad())
-        elif config.periodic:
-            topo = UnstructuredTopology(nnodes, self.periodic_volumetric_mesh(), celltype=Hex())
-        elif config.volumetric == 'planar':
-            topo = StructuredTopology(self.planar_shape, celltype=Quad())
-        else:
-            topo = StructuredTopology(self.volumetric_shape, celltype=Hex())
-        return Patch(('geometry',), topo)
+        south_pole_id = self.num_planar
+        nodemap = util.nodemap((2, self.num_longitude + 1), (south_pole_id, 1), periodic=(1,))
+        nodemap[1] = nodemap[1, 0]
+        cells.append(util.structured_cells(CellShape(1, self.num_longitude), pardim=2, nodemap=nodemap))
 
-    def periodic_planar_mesh(self):
-        """Compute cell topology for the periodic planar unstructured case,
-        with polar points.
-        """
-        assert config.periodic
-        assert config.volumetric == 'planar'
+        north_pole_id = self.num_planar + 1
+        nodemap = util.nodemap(
+            (2, self.num_longitude + 1), (-self.num_longitude - 1, 1), periodic=(1,), init=north_pole_id
+        )
+        nodemap[0] = nodemap[0, 0]
+        cells.append(util.structured_cells(CellShape(1, self.num_longitude), pardim=2, nodemap=nodemap))
 
-        # Construct the basic structured mesh.  Note that our nodes
-        # are stored in order: S/N, W/E
-        cells = structured_cells(self.planar_shape, 2)
+        return FieldData.join_dofs(cells)
 
-        # Append a layer of cells for periodicity in the longitude direction
-        nodemap = mknodemap((self.nlat, 2), (self.nlon, self.nlon - 1))
-        appendix = structured_cells((self.nlat - 1, 1), 2, nodemap)
-        cells = np.append(cells, appendix, axis=0)
+    def periodic_volumetric_topology(self) -> FieldData[integer]:
+        cells = [util.structured_cells(self.wrf_cellshape, pardim=3)]
 
-        # Append a layer of cells tying the southern boundary to the south pole
-        pole_id = self.nplanar
-        nodemap = mknodemap((2, self.nlon + 1), (pole_id, 1), periodic=(1,))
-        nodemap[1] = nodemap[1,0]
-        appendix = structured_cells((1, self.nlon), 2, nodemap)
-        cells = np.append(cells, appendix, axis=0)
+        cells[0] += cells[0] // self.num_planar * 2
+        num_horizontal = self.num_planar + 2
 
-        # Append a layer of cells tying the northern boundary to the north pole
-        pole_id = self.nplanar + 1
-        nodemap = mknodemap((2, self.nlon + 1), (-self.nlon - 1, 1), periodic=(1,), init=pole_id)
-        nodemap[0] = nodemap[0,0]
-        appendix = structured_cells((1, self.nlon), 2, nodemap)
-        cells = np.append(cells, appendix, axis=0)
-
-        return cells
-
-    def periodic_volumetric_mesh(self):
-        """Compute cell topology for the periodic volumetric unstructured
-        case, with polar points.
-        """
-        assert config.periodic
-        assert config.volumetric != 'planar'
-
-        # Construct the basic structured mesh.  Note that our nodes
-        # are stored in order: vertical, S/N, W/E
-        cells = structured_cells(self.volumetric_shape, 3)
-
-        # Increment indices by two for every vertical layer, to
-        # account for the polar points
-        cells += cells // (self.nlat * self.nlon) * 2
-
-        # Append a layer of cells for periodicity in the longitude direction
-        nhoriz = self.nplanar + 2
-        nodemap = mknodemap((self.nvert, self.nlat, 2), (nhoriz, self.nlon, self.nlon - 1))
-        appendix = structured_cells((self.nvert - 1, self.nlat - 1, 1), 3, nodemap)
-        cells = np.append(cells, appendix, axis=0)
-
-        # Append a layer of cells tying the southern boundary to the south pole
-        pole_id = self.nplanar
-        nodemap = mknodemap((self.nvert, 2, self.nlon + 1), (self.nplanar + 2, pole_id, 1), periodic=(2,))
-        nodemap[:,1] = (nodemap[:,1] - pole_id) // nhoriz * nhoriz + pole_id
-        appendix = structured_cells((self.nvert - 1, 1, self.nlon), 3, nodemap)
-        cells = np.append(cells, appendix, axis=0)
-
-        # Append a layer of cells tying the northern boundary to the north pole
-        pole_id = self.nplanar + 1
-        nodemap = mknodemap((self.nvert, 2, self.nlon + 1), (nhoriz, -self.nlon - 1, 1), periodic=(2,), init=pole_id)
-        nodemap[:,0] = (nodemap[:,0] - pole_id) // nhoriz * nhoriz + pole_id
-        appendix = structured_cells((self.nvert - 1, 1, self.nlon), 3, nodemap)
-        cells = np.append(cells, appendix, axis=0)
-
-        return cells
-
-
-class WRFReader(NetCDFHelper):
-
-    reader_name = "WRF"
-
-    lon_name = 'XLONG'
-    lat_name = 'XLAT'
-
-    filename: Path
-
-    @classmethod
-    def applicable(cls, filepath: Path) -> bool:
-        try:
-            with netCDF4.Dataset(filepath, 'r') as f:
-                assert 'WRF' in f.TITLE
-            return True
-        except:
-            return False
-
-    def validate(self):
-        super().validate()
-
-        # Disable periodicity except in geocentric coordinates
-        if not isinstance(config.coords, Geocentric):
-            config.require(
-                periodic=False,
-                reason="WRF does not support periodic non-geocentric coordinates; try with --coords geocentric"
+        nodemap = util.nodemap(
+            (self.num_vertical, self.num_latitude, 2),
+            (num_horizontal, self.num_longitude, self.num_longitude - 1),
+        )
+        cells.append(
+            util.structured_cells(
+                CellShape(self.num_vertical - 1, self.num_latitude - 1, 1), pardim=3, nodemap=nodemap
             )
-        else:
-            log.warning("Geocentric coordinates of WRF data is experimental, please do not use indiscriminately")
-
-        config.ensure_limited(
-            ConfigTarget.Reader, 'volumetric', 'periodic',
-            reason="not supported by WRF"
         )
 
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        for stepid in range(self.nsteps):
-            yield stepid, {'time': self.nc['XTIME'][stepid] * 60}
+        south_pole_id = self.num_planar
+        nodemap = util.nodemap(
+            (self.num_vertical, 2, self.num_longitude + 1), (num_horizontal, south_pole_id, 1), periodic=(2,)
+        )
+        nodemap[:, 1] = (nodemap[:, 1] - south_pole_id) // num_horizontal * num_horizontal + south_pole_id
+        cells.append(
+            util.structured_cells(
+                CellShape(self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+            )
+        )
 
-    @property
-    def nvert(self) -> int:
-        """Number of points in vertical direction."""
-        return len(self.nc.dimensions['bottom_top'])
+        north_pole_id = self.num_planar + 1
+        nodemap = util.nodemap(
+            (self.num_vertical, 2, self.num_longitude + 1),
+            (num_horizontal, -self.num_longitude - 1, 1),
+            periodic=(2,),
+            init=north_pole_id,
+        )
+        nodemap[:, 0] = (nodemap[:, 0] - north_pole_id) // num_horizontal * num_horizontal + north_pole_id
+        cells.append(
+            util.structured_cells(
+                CellShape(self.num_vertical - 1, 1, self.num_longitude), pardim=3, nodemap=nodemap
+            )
+        )
+
+        return FieldData.join_dofs(cells)
 
     def rotation(self, with_intrinsic: bool = True) -> Rotation:
-        """Return a rotation that sends the north pole to the grid's
-        north pole, the south pole to the grid's south pole and the
-        prime meridian to the grid's prime meridian.
-
-        This is step 2 of the two-step coordinate transform outlined
-        in the beginning of the file.
-        """
-
-        # Note: the final rotation around Z is essentially guesswork.
-        intrinsic = 360 * np.ceil(self.nlon / 2) / self.nlon if with_intrinsic else 0.0
-        return Rotation.from_euler('ZYZ', [-self.nc.STAND_LON, -self.nc.MOAD_CEN_LAT, intrinsic], degrees=True)
-
-    def fields(self) -> Iterable[Field]:
-        yield WRFLocalGeometryField(self, 'HGT')
-        yield WRFGeodeticGeometryField(self, 'HGT')
-
-        if config.volumetric == 'volumetric':
-            allowed_types = {'volumetric'}
-        else:
-            allowed_types = {'volumetric', 'planar'}
-
-        for variable in self.nc.variables:
-            if self.variable_type(variable) in allowed_types:
-                yield WRFScalarField(variable, self)
-
-        if all(self.variable_type(x) in allowed_types for x in 'UVW'):
-            yield WRFVectorField('WIND', ['U', 'V', 'W'], self)
-
-
-class GeoGridReader(NetCDFHelper):
-
-    reader_name = "GeoGrid"
-
-    lon_name = 'XLONG_M'
-    lat_name = 'XLAT_M'
-
-    filename: Path
-    nc: netCDF4.Dataset
-
-    @classmethod
-    def applicable(cls, filepath: Path) -> bool:
-        try:
-            with netCDF4.Dataset(filepath, 'r') as f:
-                assert 'GEOGRID' in f.TITLE
-            return True
-        except:
-            return False
-
-    def validate(self):
-        super().validate()
-        config.require(volumetric='planar', reason="GeoGrid does not support volumetric")
-
-        config.ensure_limited(
-            ConfigTarget.Reader, 'periodic',
-            reason="not supported by WRF"
+        intrinsic = 0.0
+        if with_intrinsic:
+            intrinsic = 360 * np.ceil(self.num_longitude / 2) / self.num_longitude
+        return Rotation.from_euler(
+            "ZYZ", [-self.dataset.STAND_LON, -self.dataset.MOAD_CEN_LAT, intrinsic], degrees=True
         )
 
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        for stepid in range(self.nsteps):
-            yield stepid, {'time': float(stepid)}
+    def use_geometry(self, geometry: Field) -> None:
+        self.geodetic = geometry.name == "Geodetic"
 
-    def fields(self) -> Iterable[Field]:
-        yield WRFLocalGeometryField(self, 'HGT_M')
-        yield WRFGeodeticGeometryField(self, 'HGT_M')
+    def zones(self) -> Iterator[Zone]:
+        corners = FieldData.join_comps(
+            self.field_data_raw(
+                self.longitude_name, 0, extrude_if_volumetric=False, include_poles_if_periodic=False
+            ),
+            self.field_data_raw(
+                self.latitude_name, 0, extrude_if_volumetric=False, include_poles_if_periodic=False
+            ),
+        ).corners(self.wrf_planar_nodeshape)
 
-        for variable in self.nc.variables:
-            if self.variable_type(variable) == 'planar':
-                yield WRFScalarField(variable, self)
+        yield Zone(
+            shape=ZoneShape.Hexahedron,
+            coords=corners,
+            key=0,
+        )
+
+    def bases(self) -> Iterator[Basis]:
+        yield Basis("mesh")
+
+    def basis_of(self, field: Field) -> Basis:
+        return Basis("mesh")
+
+    def geometries(self, basis: Basis) -> Iterator[Field]:
+        yield Field("Generic", type=api.Geometry(num_comps=3, coords=Generic()))
+        yield Field(
+            "Geodetic",
+            type=api.Geometry(num_comps=3, coords=Geodetic(SphericalEarth(semi_major_axis=6370000.0))),
+        )
+
+    def fields(self, basis: Basis) -> Iterator[Field]:
+        for variable in self.dataset.variables:
+            if self.field_domain(variable) in self.valid_domains:
+                yield Field(variable, type=api.Scalar())
+
+    def topology(self, timestep: Step, basis: Basis, zone: Zone) -> DiscreteTopology:
+        if self.periodic:
+            num_nodes = self.num_planar + 2
+            if self.volumetric:
+                num_nodes *= self.num_vertical
+                return UnstructuredTopology(
+                    num_nodes,
+                    self.periodic_volumetric_topology(),
+                    celltype=CellType.Hexahedron,
+                    degree=1,
+                )
+            else:
+                return UnstructuredTopology(
+                    num_nodes,
+                    self.periodic_planar_topology(),
+                    celltype=CellType.Quadrilateral,
+                    degree=1,
+                )
+        else:
+            celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
+            return StructuredTopology(self.wrf_cellshape, celltype, degree=1)
+
+    def topology_updates(self, step: Step, basis: Basis) -> bool:
+        return step.index == 0
+
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+        if not field.is_geometry and not field.is_vector:
+            return self.field_data_raw(field.name, timestep.index)
+        assert field.is_geometry
+        return self.geometry(timestep.index)
+
+    def height(self, index: int) -> FieldData[floating]:
+        if self.volumetric:
+            return (self.field_data_raw("PH", index) + self.field_data_raw("PHB", index)) / 9.81
+        return self.field_data_raw(self.height_name, 0)
+
+    @lru_cache(maxsize=1)
+    def geometry(self, index: int) -> FieldData[floating]:
+        if self.geodetic:
+            return FieldData.join_comps(
+                self.field_data_raw(self.longitude_name, index),
+                self.field_data_raw(self.latitude_name, index),
+                self.height(index),
+            )
+
+        x = np.zeros(self.wrf_nodeshape, dtype=float)
+        y = np.zeros(self.wrf_nodeshape, dtype=float)
+        x[...] = np.arange(self.num_longitude)[..., np.newaxis, :] * self.dataset.DX
+        y[...] = np.arange(self.num_latitude)[..., :, np.newaxis] * self.dataset.DY
+
+        return FieldData.join_comps(
+            FieldData(x.reshape(-1, 1)),
+            FieldData(y.reshape(-1, 1)),
+            self.height(index),
+        )
+
+
+class Wrf(NetCdf):
+    longitude_name = "XLONG"
+    latitude_name = "XLAT"
+    height_name = "HGT"
+
+    @staticmethod
+    def applicable(path: Path) -> bool:
+        try:
+            with Dataset(path, "r") as f:
+                assert "WRF" in f.TITLE
+            return True
+        except (AssertionError, OSError):
+            return False
+
+    @property
+    def properties(self) -> api.SourceProperties:
+        return api.SourceProperties(
+            instantaneous=False,
+            globally_keyed=True,
+            discrete_topology=True,
+            single_zoned=True,
+        )
+
+    def configure(self, settings: api.ReaderSettings) -> None:
+        self.volumetric = settings.dimensionality.out_is_volumetric()
+
+        self.valid_domains = (FieldDimensionality.Volumetric,)
+        if settings.dimensionality.in_allows_planar():
+            self.valid_domains += (FieldDimensionality.Planar,)
+
+        self.staggering = settings.staggering
+        self.periodic = settings.periodic
+
+    def steps(self) -> Iterator[Step]:
+        for index in range(self.num_timesteps):
+            time = self.dataset["XTIME"][index] * 60
+            yield Step(index=index, value=time)
+
+    def fields(self, basis: Basis) -> Iterator[Field]:
+        yield from super().fields(basis)
+        yield Field("WIND", type=api.Vector(3, api.VectorInterpretation.Flow), splittable=False)
+
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+        if field.name == "WIND":
+            return self.wind(timestep.index)
+        return super().field_data(timestep, field, zone)
+
+    @lru_cache(maxsize=1)
+    def wind(self, index: int) -> FieldData[floating]:
+        local = FieldData.join_comps(
+            self.field_data_raw("U", index, include_poles_if_periodic=False),
+            self.field_data_raw("V", index, include_poles_if_periodic=False),
+            self.field_data_raw("W", index, include_poles_if_periodic=False),
+        )
+
+        if not self.geodetic:
+            return local
+
+        lonlat = FieldData.join_comps(
+            self.field_data_raw(self.longitude_name, index, include_poles_if_periodic=False),
+            self.field_data_raw(self.latitude_name, index, include_poles_if_periodic=False),
+        )
+
+        points = (
+            lonlat.spherical_to_cartesian()
+            .rotate(self.rotation(with_intrinsic=True).inv())
+            .cartesian_to_spherical(with_radius=False)
+        )
+
+        vectors = local.spherical_to_cartesian_vector_field(points).numpy(-1, *self.wrf_planar_nodeshape)
+
+        south: Optional[np.ndarray] = None
+        north: Optional[np.ndarray] = None
+        if self.periodic:
+            south = np.mean(vectors[:, 0, ...], axis=-2)[:, np.newaxis, :]
+            north = np.mean(vectors[:, -1, ...], axis=-2)[:, np.newaxis, :]
+
+        vectors = vectors.reshape(-1, self.num_planar, 3)
+
+        if self.periodic:
+            assert south is not None
+            assert north is not None
+            vectors = np.append(vectors, south, axis=1)
+            vectors = np.append(vectors, north, axis=1)
+
+        vectors = vectors.reshape(-1, 3)
+
+        lonlat = FieldData.join_comps(
+            self.field_data_raw(self.longitude_name, index),
+            self.field_data_raw(self.latitude_name, index),
+        )
+
+        return FieldData(vectors).rotate(self.rotation()).cartesian_to_spherical_vector_field(lonlat)
+
+
+class GeoGrid(NetCdf):
+    longitude_name = "XLONG_M"
+    latitude_name = "XLAT_M"
+    height_name = "HGT_M"
+
+    @staticmethod
+    def applicable(path: Path) -> bool:
+        try:
+            with Dataset(path, "r") as f:
+                assert "GEOGRID" in f.TITLE
+            return True
+        except (AssertionError, OSError):
+            return False
+
+    @property
+    def properties(self) -> api.SourceProperties:
+        return api.SourceProperties(
+            instantaneous=True,
+            globally_keyed=True,
+            discrete_topology=True,
+            single_zoned=True,
+        )
+
+    def configure(self, settings: api.ReaderSettings) -> None:
+        self.volumetric = False
+        self.valid_domains = (FieldDimensionality.Planar,)
+        self.staggering = settings.staggering
+        self.periodic = settings.periodic
+
+    def steps(self) -> Iterator[Step]:
+        yield Step(index=0, value=0.0)

@@ -1,98 +1,68 @@
-from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Generic, Iterator, List
 
-import lrspline
-from splipy.io import G2
+from attrs import define
+from numpy import floating
 
-from typing import Iterable, Tuple, Optional, List
-from ..typing import StepData, Array2D
-
-from .. import config, ConfigTarget
-from ..coords import Local
-from ..geometry import SplineTopology, LRTopology, Patch
-from ..fields import Field, SimpleField, Geometry, FieldPatches
-from .reader import Reader
-from ..util import save_excursion
+from .. import api, coord
+from ..api import Points, T, Zone, ZoneShape
+from ..impl import Basis, Field, Step
+from ..util import FieldData
 
 
+@define
+class PureGeometryZone(Generic[T]):
+    corners: Points
+    field_data: FieldData[floating]
+    topology: T
 
-class PureGeometryReader(Reader, ABC):
 
-    suffix: str
+class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
+    """Base class for a source that reads from a file that only has geometry.
+
+    Subclasses should populate the `zone_data` list when `__enter__` is called.
+    """
+
     filename: Path
-
-    allowed_settings: List[str]
-
-    @classmethod
-    def applicable(cls, filename: Path) -> bool:
-        return filename.suffix == cls.suffix
+    zone_data: List[PureGeometryZone[T]]
 
     def __init__(self, filename: Path):
         self.filename = filename
-        self.allowed_settings = []
+        self.zone_data = []
 
-    def __enter__(self):
-        self.f = open(self.filename).__enter__()
-        return self
-
-    def __exit__(self, *args):
-        self.f.__exit__(*args)
-
-    def validate(self):
-        super().validate()
-        config.require(multiple_timesteps=False, reason=f"{self.reader_name} do do not support multiple timesteps")
-        config.ensure_limited(
-            ConfigTarget.Reader, *self.allowed_settings,
-            reason=f"not supported by {self.reader_name}"
+    @property
+    def properties(self) -> api.SourceProperties:
+        return api.SourceProperties(
+            instantaneous=True,
+            globally_keyed=True,
+            single_basis=True,
         )
 
-    def steps(self) -> Iterable[Tuple[int, StepData]]:
-        yield (0, {'time': 0.0})
+    def bases(self) -> Iterator[Basis]:
+        yield Basis("mesh")
 
-    def fields(self) -> Iterable[Field]:
-        yield PureGeometryField(self)
+    def basis_of(self, field: Field) -> Basis:
+        return Basis("mesh")
 
-    @abstractmethod
-    def patches(self) -> FieldPatches:
-        pass
+    def fields(self, basis: Basis) -> Iterator[Field]:
+        return
+        yield
 
+    def geometries(self, basis: Basis) -> Iterator[Field]:
+        yield Field(
+            "Geometry", type=api.Geometry(self.zone_data[0].field_data.num_comps, coords=coord.Generic())
+        )
 
-class PureGeometryField(SimpleField):
+    def steps(self) -> Iterator[Step]:
+        yield Step(index=0)
 
-    name = 'Geometry'
-    cells = False
+    def zones(self) -> Iterator[Zone[int]]:
+        for i, zone in enumerate(self.zone_data):
+            shape = [ZoneShape.Line, ZoneShape.Quatrilateral, ZoneShape.Hexahedron][zone.topology.pardim - 1]
+            yield Zone(shape=shape, coords=zone.corners, key=i)
 
-    reader: PureGeometryReader
+    def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> T:
+        return self.zone_data[zone.key].topology
 
-    def __init__(self, reader: PureGeometryReader):
-        self.reader = reader
-        self.fieldtype = Geometry(Local().substitute())
-
-    def patches(self, stepid: int, force: bool = False, **_) -> FieldPatches:
-        yield from self.reader.patches()
-
-
-class G2Reader(PureGeometryReader):
-
-    reader_name = "GoTools"
-    suffix = '.g2'
-
-    def patches(self):
-        with save_excursion(self.f):
-            for i, (topo, data) in enumerate(SplineTopology.from_string(self.f.read())):
-                yield Patch((i,), topo), data
-
-
-class LRReader(PureGeometryReader):
-
-    reader_name = "LRSplines"
-    suffix = '.lr'
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.allowed_settings.append('lr_are_nurbs')
-
-    def patches(self):
-        with save_excursion(self.f):
-            for i, (topo, data) in enumerate(LRTopology.from_string(self.f.read())):
-                yield Patch((i,), topo), data
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
+        return self.zone_data[zone.key].field_data

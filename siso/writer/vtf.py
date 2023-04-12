@@ -1,151 +1,144 @@
-"""Module for VTF format writer."""
+from __future__ import annotations
 
-from contextlib import contextmanager
+import logging
 from pathlib import Path
+from typing import Dict, List, Tuple, Type
 
-from typing import List, Dict, Any, Tuple, Type, Optional
+import vtfwriter as vtf
+from attrs import define
+from typing_extensions import Self
 
-from dataclasses import dataclass
-import treelog as log
-
-from .. import config
-from ..fields import SimpleField
-from ..geometry import Patch
-from ..util import ensure_ncomps
-from .writer import Writer
-
-from ..typing import Array2D, StepData
-
-try:
-    import vtfwriter as vtf
-    HAS_VTF = True
-except ImportError:
-    HAS_VTF = False
+from .. import api
+from ..api import B, CellOrdering, DiscreteTopology, F, S, Step, StepInterpretation, T, Z, Zone
+from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
 
-
-@dataclass
-class Field:
-    """Utility class for block book-keeping."""
-    blocktype: Type['vtf.Block']
-    steps: Dict[int, List['vtf.ResultBlock']]
+@define
+class FieldInfo:
+    blocktype: Type[vtf.Block]
+    steps: Dict[int, List[vtf.ResultBlock]]
 
 
-class VTFWriter(Writer):
-    """Writer for VTF format."""
+class VtfWriter(Writer):
+    filename: Path
+    out: vtf.File
+    mode: OutputMode
 
-    writer_name = "VTF"
-
-    out: 'vtf.File'             # vtf is optional
-    dirty_geometry: bool
-
-    steps: List[Dict[str, Any]]
-    geometry_blocks: List[Tuple['vtf.NodeBlock', 'vtf.ElementBlock']]
-    field_blocks: Dict[str, Field]
-
-    gblock: Optional['vtf.GeometryBlock']
-
-    @classmethod
-    def applicable(cls, fmt: str) -> bool:
-        return HAS_VTF and fmt == 'vtf'
+    geometry_block: vtf.GeometryBlock
+    geometry_blocks: List[Tuple[vtf.NodeBlock, vtf.ElementBlock]]
+    timesteps: List[Step]
+    field_info: Dict[str, FieldInfo]
+    step_interpretation: StepInterpretation
 
     def __init__(self, filename: Path):
-        super().__init__(filename)
-        self.steps = []
+        self.filename = filename
+        self.timesteps = []
         self.geometry_blocks = []
+        self.field_info = {}
+        self.step_interpretation = StepInterpretation.Time
 
-        self.field_blocks = dict()
-        self.dirty_geometry = False
+    @property
+    def properties(self) -> WriterProperties:
+        return WriterProperties(
+            require_discrete_topology=True,
+            require_single_basis=True,
+        )
 
-        self.gblock = None
+    def configure(self, settings: WriterSettings):
+        if settings.output_mode is not None:
+            if settings.output_mode not in (OutputMode.Binary, OutputMode.Ascii):
+                raise api.Unsupported(f"Unsupported output mode for VTF: {settings.output_mode}")
+            self.mode = settings.output_mode
+        else:
+            self.mode = OutputMode.Binary
 
-    def validate(self):
-        config.require_in(reason="not supported by VTF", output_mode=('binary', 'ascii'))
-
-    def __enter__(self) -> 'Writer':
-        super().__enter__()
-        self.out = vtf.File(str(self.make_filename()), 'w' if config.output_mode == 'ascii' else 'wb').__enter__()
-        self.gblock = self.out.GeometryBlock().__enter__()
+    def __enter__(self) -> Self:
+        self.out = vtf.File(
+            str(self.filename),
+            "w" if self.mode == OutputMode.Ascii else "wb",
+        ).__enter__()
+        self.geometry_block = self.out.GeometryBlock().__enter__()
         return self
 
-    def __exit__(self, *args, **kwargs):
-        for fname, data in self.field_blocks.items():
-            with data.blocktype() as fblock:
-                fblock.SetName(fname)
-                for stepid, rblocks in data.steps.items():
-                    fblock.BindResultBlocks(stepid, *rblocks)
+    def __exit__(self, *args) -> None:
+        for field_name, info in self.field_info.items():
+            with info.blocktype() as field_block:
+                field_block.SetName(field_name)
+                for index, result_blocks in info.steps.items():
+                    field_block.BindResultBlocks(index, *result_blocks)
 
-        self.gblock.__exit__(*args, **kwargs)
-        self.exit_stateinfo()
-        self.out.__exit__(*args, **kwargs)
-        super().__exit__(*args, **kwargs)
-        log.user(self.make_filename())
+        self.geometry_block.__exit__(*args)
 
-    def exit_stateinfo(self):
-        """Create the state info block, as the last thing to happen before
-        closing the file.
-        """
-        with self.out.StateInfoBlock() as states:
-            for stepid, data in enumerate(self.steps):
-                key, value = next(iter(data.items()))
-                func = states.SetStepData if key == 'time' else states.SetModeData
-                desc = {'value': 'Eigenvalue', 'frequency': 'Frequency', 'time': 'Time'}[key]
-                func(stepid+1, '{} {:.4g}'.format(desc, value), value)
+        with self.out.StateInfoBlock() as state_info:
+            setter = state_info.SetStepData if self.step_interpretation.is_time else state_info.SetModeData
+            desc = str(self.step_interpretation)
+            for timestep in self.timesteps:
+                time = timestep.value if timestep.value is not None else float(timestep.index)
+                setter(timestep.index + 1, f"{desc} {time:.4g}", time)
 
-    @contextmanager
-    def step(self, stepdata: StepData):
-        self.steps.append(stepdata)
-        with super().step(stepdata) as step:
-            yield step
+        self.out.__exit__(*args)
+        logging.info(self.filename)
 
-    @contextmanager
-    def geometry(self, field: Field):
-        with super().geometry(field) as geometry:
-            yield geometry
-            if self.dirty_geometry:
-                self.gblock.BindElementBlocks(*[e for _, e in self.geometry_blocks], step=self.stepid+1)
-            self.dirty_geometry = False
+    def update_geometry(
+        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
+    ) -> None:
+        for zone in source.zones():
+            topology = source.topology(timestep, source.basis_of(geometry), zone)
+            nodes = source.field_data(timestep, geometry, zone).ensure_ncomps(3)
 
-    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
-        data = ensure_ncomps(data, 3, allow_scalar=False)
-        patchid = patch.key[0]
+            with self.out.NodeBlock() as node_block:
+                node_block.SetNodes(nodes.numpy().flatten())
 
-        # If we haven't seen this patch before, assert that it's the
-        # next unseen one
-        if len(self.geometry_blocks) <= patchid:
-            assert len(self.geometry_blocks) == patchid
+            with self.out.ElementBlock() as element_block:
+                element_block.AddElements(
+                    topology.cells_as(CellOrdering.Vtk).numpy().flatten(), topology.pardim
+                )
+                element_block.SetPartName(f"Patch {zone.key + 1}")
+                element_block.BindNodeBlock(node_block, zone.key + 1)
 
-        with self.out.NodeBlock() as nblock:
-            nblock.SetNodes(data.flat)
-
-        with self.out.ElementBlock() as eblock:
-            eblock.AddElements(patch.topology.cells.flat, patch.topology.num_pardim)
-            eblock.SetPartName('Patch {}'.format(patchid+1))
-            eblock.BindNodeBlock(nblock, patchid+1)
-
-        if len(self.geometry_blocks) <= patchid:
-            self.geometry_blocks.append((nblock, eblock))
-        else:
-            self.geometry_blocks[patchid] = (nblock, eblock)
-        self.dirty_geometry = True
-
-    def update_field(self, field: SimpleField, patch: Patch, data: Array2D):
-        data = ensure_ncomps(data, 3, allow_scalar=field.is_scalar)
-        patchid = patch.key[0]
-
-        nblock, eblock = self.geometry_blocks[patchid]
-        with self.out.ResultBlock(cells=field.cells, vector=field.is_vector) as rblock:
-            rblock.SetResults(data.flatten())
-            rblock.BindBlock(eblock if field.cells else nblock)
-
-        if field.name not in self.field_blocks:
-            if field.is_scalar:
-                blocktype = self.out.ScalarBlock
-            elif not field.is_displacement:
-                blocktype = self.out.VectorBlock
+            if len(self.geometry_blocks) <= zone.key:
+                self.geometry_blocks.append((node_block, element_block))
             else:
-                blocktype = self.out.DisplacementBlock
-            self.field_blocks[field.name] = Field(blocktype, {})
+                self.geometry_blocks[zone.key] = (node_block, element_block)
 
-        steps = self.field_blocks[field.name].steps
-        steps.setdefault(self.stepid + 1, []).append(rblock)
+        self.geometry_block.BindElementBlocks(*(e for _, e in self.geometry_blocks), step=timestep.index + 1)
+
+    def update_field(
+        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], field: F
+    ) -> None:
+        for zone in source.zones():
+            data = source.field_data(timestep, field, zone)
+            data = data.ensure_ncomps(3, allow_scalar=field.is_scalar, pad_right=not field.is_displacement)
+            node_block, element_block = self.geometry_blocks[zone.key]
+
+            with self.out.ResultBlock(cells=field.cellwise, vector=field.is_vector) as result_block:
+                result_block.SetResults(data.numpy().flatten())
+                result_block.BindBlock(element_block if field.cellwise else node_block)
+
+            if field.name not in self.field_info:
+                if field.is_scalar:
+                    blocktype = self.out.ScalarBlock
+                elif not field.is_displacement:
+                    blocktype = self.out.VectorBlock
+                else:
+                    blocktype = self.out.DisplacementBlock
+                self.field_info[field.name] = FieldInfo(blocktype, {})
+
+            steps = self.field_info[field.name].steps
+            steps.setdefault(timestep.index + 1, []).append(result_block)
+
+    def consume_timestep(
+        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
+    ) -> None:
+        if source.field_updates(timestep, geometry):
+            self.update_geometry(timestep, source, geometry)
+        for field in source.fields(source.single_basis()):
+            if source.field_updates(timestep, field):
+                self.update_field(timestep, source, field)
+
+    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F):
+        casted = source.cast_discrete_topology().cast_globally_keyed()
+        self.step_interpretation = source.properties.step_interpretation
+        for step in casted.steps():
+            self.timesteps.append(step)
+            self.consume_timestep(step, casted, geometry)

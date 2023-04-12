@@ -1,86 +1,99 @@
-"""Module for Simra format writer."""
+import logging
+from pathlib import Path
 
 import numpy as np
 from numpy.linalg import norm
-import treelog as log
 from scipy.io import FortranFile
+from typing_extensions import Self
 
-from .. import config, ConfigTarget
-from ..fields import Field
-from ..geometry import Patch, StructuredTopology
-from ..util import structured_cells
-from .writer import Writer
-
-from ..typing import Array, Array2D
-
-
-def dtypes(endianness):
-    endian = {'native': '=', 'big': '>', 'small': '<'}[endianness]
-    return np.dtype(f'{endian}f4'), np.dtype(f'{endian}u4')
+from .. import api, util
+from ..api import B, CellShape, F, S, T, Z
+from ..topology import StructuredTopology
+from ..util import cell_numbering
+from .api import Writer, WriterProperties, WriterSettings
 
 
-def fix_orientation(data: Array, tol=1e-2) -> Array:
-    if not config.fix_orientation:
-        return data
-    a = data[1,0,0] - data[0,0,0]
-    b = data[0,1,0] - data[0,0,0]
-    c = data[0,0,1] - data[0,0,0]
+class SimraWriter(Writer):
+    filename: Path
+    data: FortranFile
 
-    x = np.dot(c / norm(c), np.cross(a / norm(a), b / norm(b)))
-    if x > tol:
-        log.warning("Swapping horizontal axes for left-handed mesh")
-        data = data.transpose((1, 0, 2, 3))
-    return data
+    f4_type: np.dtype
+    u4_type: np.dtype
 
+    def __init__(self, filename: Path):
+        self.filename = filename
 
-class SIMRAWriter(Writer):
-    """Simra format writer."""
+    def __enter__(self) -> Self:
+        self.data = FortranFile(self.filename, "w", header_dtype=self.u4_type)
+        return self
 
-    writer_name = "SIMRA"
+    def __exit__(self, *args) -> None:
+        self.data.__exit__(*args)
+        logging.info(self.filename)
 
-    @classmethod
-    def applicable(cls, fmt: str) -> bool:
-        return fmt == 'dat'
+    @property
+    def properties(self) -> WriterProperties:
+        return WriterProperties(
+            require_single_zone=True,
+            require_discrete_topology=True,
+            require_instantaneous=True,
+        )
 
-    def validate(self):
-        config.ensure_limited(ConfigTarget.Writer, 'output_endianness', 'fix_orientation', reason="not supported by SIMRA")
-        config.require(multiple_timesteps=False)
+    def configure(self, settings: WriterSettings):
+        self.f4_type = settings.endianness.f4_type()
+        self.u4_type = settings.endianness.u4_type()
 
-    def update_geometry(self, geometry: Field, patch: Patch, data: Array2D):
-        if not isinstance(patch.topology, StructuredTopology):
-            raise TypeError("SIMRA writer does not support unstructured grids")
-        nodeshape = tuple(s+1 for s in patch.topology.shape)
-        data = data.reshape(*nodeshape, 3)
-        data = fix_orientation(data)
-        cellshape = tuple(s-1 for s in data.shape[:-1])
-        cells = structured_cells(cellshape, 3) + 1
-        cells[:,1], cells[:,3] = cells[:,3].copy(), cells[:,1].copy()
-        cells[:,5], cells[:,7] = cells[:,7].copy(), cells[:,5].copy()
+    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F):
+        casted = source.cast_discrete_topology()
+        step = casted.single_step()
+        zone = casted.single_zone()
 
-        # Compute macro elements
-        rshape = tuple(c - 1 for c in cellshape)
-        mcells = structured_cells(tuple(c - 1 for c in cellshape), 3).reshape(*rshape, -1) + 1
-        mcells = mcells[::2, ::2, ::2, ...].transpose((1, 0, 2, 3))
-        mcells = mcells.reshape(-1, 8)
-        mcells[:,1], mcells[:,3] = mcells[:,3].copy(), mcells[:,1].copy()
-        mcells[:,5], mcells[:,7] = mcells[:,7].copy(), mcells[:,5].copy()
+        topology = casted.topology(step, casted.basis_of(geometry), zone)
+        assert isinstance(topology, StructuredTopology)
+        data = casted.field_data(step, geometry, zone)
 
-        # Write single precision
-        f4_dtype, u4_dtype = dtypes(config.output_endianness)
-        data = data.astype(f4_dtype)
-        cells = cells.astype(u4_dtype)
-        mcells = mcells.astype(u4_dtype)
+        nodes = data.numpy(*topology.nodeshape)
+        a = nodes[1, 0, 0] - nodes[0, 0, 0]
+        b = nodes[0, 1, 0] - nodes[0, 0, 0]
+        c = nodes[0, 0, 1] - nodes[0, 0, 0]
 
-        with FortranFile(self.outpath, 'w', header_dtype=u4_dtype) as f:
-            f.write_record(np.array([
-                data.size // 3, cells.size // 8,
-                data.shape[1], data.shape[0], data.shape[2],
-                mcells.size // 8,
-            ], dtype=u4_dtype))
-            f.write_record(data.flatten())
-            f.write_record(cells.flatten())
-            f.write_record(mcells.flatten())
-        log.user(self.outpath)
+        x = np.dot(c / norm(c), np.cross(a / norm(a), b / norm(b)))
+        tol = 1e-2
+        if x > tol:
+            logging.warning(f"Swapping horizontal axes for left-handed mesh ({x:.2e} > {tol:.2e})")
+            nodes = nodes.transpose((1, 0, 2, 3))
+            topology = topology.transpose((1, 0, 2))
 
-    def update_field(self, field: Field, patch: Patch, data: Array2D):
-        log.warning("SIMRA writer ignores fields")
+        nodes = nodes.astype(self.f4_type)
+        cells = topology.cells_as(api.CellOrdering.Simra).numpy().astype(self.u4_type) + 1
+
+        macro_shape = CellShape(tuple(c - 1 for c in topology.cellshape))
+        permutation = cell_numbering.permute_to(
+            api.CellType.Hexahedron, degree=1, ordering=api.CellOrdering.Simra
+        )
+        macro_cells = (
+            util.structured_cells(macro_shape, topology.pardim)
+            .permute_components(permutation)
+            .numpy(*macro_shape)[::2, ::2, ::2, :]
+            .transpose((1, 0, 2, 3))
+            .reshape(-1, 8)
+            .astype(self.u4_type)
+        ) + 1
+
+        self.data.write_record(
+            np.array(
+                [
+                    nodes.size // 3,
+                    cells.shape[0],
+                    nodes.shape[1],
+                    nodes.shape[0],
+                    nodes.shape[2],
+                    macro_cells.shape[0],
+                ],
+                dtype=self.u4_type,
+            )
+        )
+
+        self.data.write_record(nodes.flatten())
+        self.data.write_record(cells.flatten())
+        self.data.write_record(macro_cells.flatten())

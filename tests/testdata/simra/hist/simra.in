@@ -1,0 +1,25 @@
+&PARAM_DATA
+ NSTEP=1000,   ! Number of time steps
+ DT=0.125,          ! Initial time step
+ STRATIFICATION=0,  ! = 1: stratification included
+ SAVE_RES=250,      ! time-steps between output
+ RESTART=0,         ! Toggle startup from previous run 
+ MAXIT=1000,         ! max number of iterations
+ CC=0.01,           ! Tolerance level for linear solver
+ VIS=1.5e-05,       ! kinematic viscosity
+ RHOREF=1.3,        ! reference density
+ UREF=20,           ! reference velocity
+ LENREF=2000,       ! reference length
+ TAU_SU=0.25,       ! SUPG parameter (0, 10, 0.25)
+ PSI=1,             ! Time stepping scheme (Theta method), PSI=1 (backward Euler), PSI=0.5 (Crank-Nicolson)
+ ROTBOUND=0,        ! variable outer side boundary BCs
+ COURANT_MIN=0.25,  ! min acceptable Cr-number, for time-step control
+ COURANT_MAX=1,     ! max acceptable Cr-number, for time-step control
+ RELAX=1/           ! outer BC relaxation
+
+&EXTRA_DATA
+ TURB=1,            ! = 1: turbulence model included
+ WRITE_NORMS=.TRUE.,! print absolute norm of updates
+ LOG_ADJUST=.FALSE.,
+ SAVE_HIST=1000,      ! time-steps between saved output
+ SOURCE=0/          ! Source function flag

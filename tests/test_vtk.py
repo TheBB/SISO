@@ -1,8 +1,6 @@
 from pathlib import Path
 import pytest
 
-from click.testing import CliRunner
-
 from .shared import TESTCASES, TESTIDS, compare_vtk_unstructured, PreparedTestCase
 
 import vtk
