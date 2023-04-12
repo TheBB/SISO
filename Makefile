@@ -1,4 +1,4 @@
-.PHONY: install mypy lint pytest test fmt fmtcheck
+.PHONY: install mypy lint pytest fmt fmtcheck test wheel sdist build
 
 install:
 	poetry install --with=dev
@@ -21,3 +21,11 @@ fmtcheck:
 	poetry run isort siso --check
 
 test: mypy pytest lint fmtcheck
+
+wheel:
+	poetry build -f wheel
+
+sdist:
+	poetry build -f sdist
+
+build: wheel sdist
