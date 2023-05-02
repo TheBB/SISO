@@ -201,8 +201,7 @@ testcase('lr/cube-3.lr', None, formats)
 formats = ['vtk', 'vtu', 'pvd']
 testcase('hdf5/TestCell1D.hdf5', 1, formats)
 
-# WRF reader with various options.  We only use PVD, VTU and VTS here
-# to save some space.
+# WRF reader with various options.  We only use PVD here to save some space.
 pr = '--periodic'
 pl = '--planar'
 ex = '--extrude'
@@ -216,13 +215,13 @@ for n in ['eastward', 'northward', 'outward']:
     # The geocentric reference cases were generated with a slightly different
     # coordinate transformation algorithm.  Instead of regenerating them, we
     # use elevated tolerances.
-    formats = ['vtu', 'pvd']
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, suffix='-volumetric-global', rel_tol=2e-4, abs_tol=2e-6)
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, suffix='-planar-global', rel_tol=2e-4, abs_tol=2e-6)
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, suffix='-extrude-global', rel_tol=2e-4, abs_tol=2e-6)
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, pr, suffix='-planar-periodic', rel_tol=2e-4, abs_tol=2e-6)
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, pr, suffix='-volumetric-periodic', rel_tol=2e-4, abs_tol=2e-6)
-    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, pr, suffix='-extrude-periodic', rel_tol=2e-4, abs_tol=2e-6)
+    formats = ['pvd']
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, suffix='-volumetric-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, suffix='-planar-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, suffix='-extrude-global')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, pl, *gl, pr, suffix='-planar-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, *gl, pr, suffix='-volumetric-periodic')
+    testcase(f'wrf/wrfout_d01-{n}.nc', 4, formats, ex, *gl, pr, suffix='-extrude-periodic')
 
 # Simra mesh output (relatively untested, here mostly to prevent regressions)
 testcase('g2/simra.g2', None, ['simra'])
