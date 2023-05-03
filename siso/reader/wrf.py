@@ -11,7 +11,7 @@ from typing_extensions import Self
 
 from .. import api, util
 from ..api import CellShape, NodeShape, Zone, ZoneShape
-from ..coord import Generic, Geodetic, SphericalEarth
+from ..coord import Generic, Geodetic, Wgs84
 from ..impl import Basis, Field, Step
 from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
 from ..util import FieldData
@@ -277,10 +277,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
 
     def geometries(self, basis: Basis) -> Iterator[Field]:
         yield Field("Generic", type=api.Geometry(num_comps=3, coords=Generic()))
-        yield Field(
-            "Geodetic",
-            type=api.Geometry(num_comps=3, coords=Geodetic(SphericalEarth(semi_major_axis=6370000.0))),
-        )
+        yield Field("Geodetic", type=api.Geometry(num_comps=3, coords=Geodetic(Wgs84())))
 
     def fields(self, basis: Basis) -> Iterator[Field]:
         for variable in self.dataset.variables:
