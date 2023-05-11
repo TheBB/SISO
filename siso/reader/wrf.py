@@ -165,6 +165,11 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
 
         if len(dimensions) == 3:
             data = data.reshape(self.num_vertical, -1)
+
+            # Somewhat hacky: force U, V, W to be zero near the ground.
+            # The mesh only reaches the ground if staggering is 'outer'.
+            if self.staggering == api.Staggering.Outer and name in ("U", "V", "W"):
+                data[0, ...] = 0
         else:
             data = data.flatten()
 
