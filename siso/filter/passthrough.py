@@ -15,14 +15,21 @@ implementations for the methods that make sense. I.e. PassthroughBFS implements
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Generic, Iterator
+from typing import TYPE_CHECKING, Generic
 
-from numpy import floating
 from typing_extensions import Self
 
-from .. import api
-from ..api import B, F, InB, InF, InS, InT, InZ, OutB, OutF, OutS, OutT, OutZ, S, T, Z
-from ..util import FieldData
+from siso import api
+from siso.api import B, F, InB, InF, InS, InT, InZ, OutB, OutF, OutS, OutT, OutZ, S, T, Z
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from types import TracebackType
+    from typing import Optional
+
+    from numpy import floating
+
+    from siso.util import FieldData
 
 
 # In general a filter is parametrized on ten types: the input and output B, F, S
@@ -58,8 +65,13 @@ class PassthroughBase(
         self.source.__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
-        self.source.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.source.__exit__(exc_type, exc_val, exc_tb)
 
     @property
     def properties(self) -> api.SourceProperties:

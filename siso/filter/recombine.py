@@ -1,12 +1,13 @@
+from collections.abc import Iterator
 from functools import reduce
-from typing import Iterator, List
 
 from attrs import define
 from numpy import floating
 
-from .. import api
-from ..api import B, F, S, T, Z
-from ..util import FieldData
+from siso import api
+from siso.api import B, F, S, T, Z
+from siso.util import FieldData
+
 from .passthrough import PassthroughBSTZ, WrappedField
 
 
@@ -19,10 +20,10 @@ class RecombinedField(WrappedField[F]):
     source field.
     """
 
-    sources: List[F]
+    sources: list[F]
     name: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Assert that the combined fields are compatible
         assert all(src.cellwise == self.sources[0].cellwise for src in self.sources)
         assert all(src.type == self.sources[0].type for src in self.sources)
@@ -50,9 +51,9 @@ class Recombine(PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]):
     type that needs it.
     """
 
-    recombinations: List[api.RecombineFieldSpec]
+    recombinations: list[api.RecombineFieldSpec]
 
-    def __init__(self, source: api.Source, recombinations: List[api.RecombineFieldSpec]):
+    def __init__(self, source: api.Source, recombinations: list[api.RecombineFieldSpec]):
         super().__init__(source)
         self.recombinations = recombinations
 

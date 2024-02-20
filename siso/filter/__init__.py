@@ -12,7 +12,6 @@ from .strict import Strict
 from .timeslice import LastTime, StepSlice
 from .zonemerge import ZoneMerge
 
-
 __all__ = [
     "BasisFilter",
     "BasisMerge",

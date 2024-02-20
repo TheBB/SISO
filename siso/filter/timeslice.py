@@ -1,12 +1,20 @@
+from __future__ import annotations
+
 from itertools import count, islice
-from typing import Generic, Iterator, List, Optional, Tuple, TypeVar, overload
+from typing import TYPE_CHECKING, Generic, Optional, TypeVar, overload
 
 from attrs import define
-from numpy import floating
 
-from .. import api, util
-from ..api import B, F, S, T, Z
+from siso.api import B, F, S, T, Z
+
 from .passthrough import PassthroughBFTZ
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from numpy import floating
+
+    from siso import api, util
 
 
 @overload
@@ -19,7 +27,7 @@ def islice_flag(start: Optional[int], stop: Optional[int], step: Optional[int], 
     ...
 
 
-def islice_flag(*args):
+def islice_flag(*args):  # type: ignore[no-untyped-def]
     """Version of `itertools.islice` that, instead of slicing an iterator to
     produce elements, yields a boolean indicating whether each element should be
     picked or not. E.g., this:
@@ -54,18 +62,18 @@ Q = TypeVar("Q")
 
 
 @overload
-def islice_group(it: Iterator[Q], stop: Optional[int], /) -> Iterator[List[Q]]:
+def islice_group(it: Iterator[Q], stop: Optional[int], /) -> Iterator[list[Q]]:
     ...
 
 
 @overload
 def islice_group(
     it: Iterator[Q], start: Optional[int], stop: Optional[int], step: Optional[int], /
-) -> Iterator[List[Q]]:
+) -> Iterator[list[Q]]:
     ...
 
 
-def islice_group(it, *args):
+def islice_group(it, *args):  # type: ignore[no-untyped-def]
     """Version of `itertools.islice` that, for all 'picked' elements, yields a
     list of all unpicked elements since the previously picked element (or the
     beginning). E.g., if these iterators are given:
@@ -100,7 +108,7 @@ class GroupedStep(Generic[S]):
     """A step composed of a multiple steps in sequence."""
 
     index: int
-    steps: List[S]
+    steps: list[S]
 
     @property
     def value(self) -> Optional[float]:
@@ -135,13 +143,13 @@ class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
         instantaneous (only one timestep).
     """
 
-    arguments: Tuple[Optional[int]]
+    arguments: tuple[Optional[int]]
     explicit_instantaneous: bool
 
     def __init__(
         self,
         source: api.Source[B, F, S, T, Z],
-        arguments: Tuple[Optional[int]],
+        arguments: tuple[Optional[int]],
         explicit_instantaneous: bool = False,
     ):
         super().__init__(source)

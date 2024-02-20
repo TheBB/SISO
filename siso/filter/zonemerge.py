@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 from functools import reduce
-from typing import Iterator
+from typing import TYPE_CHECKING
 
-from numpy import floating
+from siso import util
+from siso.api import B, F, Points, S, SourceProperties, Z, Zone, ZoneShape
+from siso.topology import DiscreteTopology, UnstructuredTopology
+from siso.util import FieldData
 
-from .. import util
-from ..api import B, F, Points, S, SourceProperties, Z, Zone, ZoneShape
-from ..topology import DiscreteTopology, UnstructuredTopology
-from ..util import FieldData
 from .passthrough import PassthroughBFST
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from numpy import floating
 
 
 class ZoneMerge(PassthroughBFST[B, F, S, DiscreteTopology, Z, Zone[int]]):

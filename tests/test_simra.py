@@ -1,24 +1,24 @@
-from pathlib import Path
-import pytest
 import sys
+from pathlib import Path
 
 import numpy as np
+import pytest
 from scipy.io import FortranFile
 
 from .shared import TESTCASES, TESTIDS, PreparedTestCase
 
 
 def to_native(arr: np.ndarray) -> np.ndarray:
-    if arr.dtype.byteorder in ('=', sys.byteorder):
+    if arr.dtype.byteorder in ("=", sys.byteorder):
         return arr
     return arr.byteswap().newbyteorder()
 
 
 def compare_simra(out: Path, ref: Path, case: PreparedTestCase):
-    out_u4 = np.dtype(f'{case.out_endian}u4')
-    out_f4 = np.dtype(f'{case.out_endian}f4')
-    ref_u4 = np.dtype(f'{case.ref_endian}u4')
-    ref_f4 = np.dtype(f'{case.ref_endian}f4')
+    out_u4 = np.dtype(f"{case.out_endian}u4")
+    out_f4 = np.dtype(f"{case.out_endian}f4")
+    ref_u4 = np.dtype(f"{case.ref_endian}u4")
+    ref_f4 = np.dtype(f"{case.ref_endian}f4")
 
     with FortranFile(out, header_dtype=out_u4) as o, FortranFile(ref, header_dtype=ref_u4) as r:
         out_header = to_native(o.read_ints(out_u4))
@@ -35,8 +35,8 @@ def compare_simra(out: Path, ref: Path, case: PreparedTestCase):
         assert (out_mcells == ref_mcells).all()
 
 
-@pytest.mark.parametrize('case', TESTCASES['simra'], ids=TESTIDS['simra'])
+@pytest.mark.parametrize("case", TESTCASES["simra"], ids=TESTIDS["simra"])
 def test_simra_integrity(case: PreparedTestCase):
-    with case.invoke('simra') as tempdir:
+    with case.invoke("simra") as tempdir:
         for out, ref in case.check_files(tempdir):
             compare_simra(out, ref, case)

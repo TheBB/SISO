@@ -1,11 +1,9 @@
 from pathlib import Path
+
 import pytest
-
-from click.testing import CliRunner
-
-from .shared import TESTCASES, TESTIDS, compare_vtk_structured, PreparedTestCase
-
 import vtk
+
+from .shared import TESTCASES, TESTIDS, PreparedTestCase, compare_vtk_structured
 
 
 def load_grid(filename: Path):
@@ -21,8 +19,8 @@ def compare_vts(out: Path, ref: Path, case: PreparedTestCase):
     compare_vtk_structured(load_grid(out), load_grid(ref), case)
 
 
-@pytest.mark.parametrize('case', TESTCASES['vts'], ids=TESTIDS['vts'])
+@pytest.mark.parametrize("case", TESTCASES["vts"], ids=TESTIDS["vts"])
 def test_vts_integrity(case: PreparedTestCase):
-    with case.invoke('vts') as tempdir:
+    with case.invoke("vts") as tempdir:
         for out, ref in case.check_files(tempdir):
             compare_vts(out, ref, case)

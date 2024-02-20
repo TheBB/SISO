@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from attrs import define
 
-from ..api import Endianness, Source
-from ..util import Registry
+from siso.api import Endianness, Source
+from siso.util import Registry
 
 
 @define
@@ -34,7 +36,7 @@ def find_reader(path: Path, settings: FindReaderSettings) -> Optional[Source]:
     given settings, if possible.
     """
 
-    discarded: List[str] = []
+    discarded: list[str] = []
 
     # Try each possible reader in turn
     for name, reader in readers.items():

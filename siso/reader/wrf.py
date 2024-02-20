@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from enum import Enum, auto
 from functools import lru_cache
-from pathlib import Path
-from typing import ClassVar, Iterator, Optional, Tuple
+from typing import TYPE_CHECKING, ClassVar, Optional
 
 import numpy as np
 from netCDF4 import Dataset
@@ -9,12 +10,17 @@ from numpy import floating, integer
 from scipy.spatial.transform import Rotation
 from typing_extensions import Self
 
-from .. import api, util
-from ..api import CellShape, NodeShape, Zone, ZoneShape
-from ..coord import Generic, Geodetic, Wgs84
-from ..impl import Basis, Field, Step
-from ..topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
-from ..util import FieldData
+from siso import api, util
+from siso.api import CellShape, NodeShape, Zone, ZoneShape
+from siso.coord import Generic, Geodetic, Wgs84
+from siso.impl import Basis, Field, Step
+from siso.topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
+from siso.util import FieldData
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+    from types import TracebackType
 
 
 class FieldDimensionality(Enum):
@@ -28,7 +34,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
     dataset: Dataset
 
     volumetric: bool
-    valid_domains: Tuple[FieldDimensionality, ...]
+    valid_domains: tuple[FieldDimensionality, ...]
     periodic: bool
     geodetic: bool
     staggering: api.Staggering
@@ -44,8 +50,13 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         self.dataset = Dataset(self.filename, "r").__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
-        self.dataset.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.dataset.__exit__(exc_type, exc_val, exc_tb)
 
     @property
     def num_timesteps(self) -> int:
@@ -163,10 +174,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
                 south = np.mean(data[..., 0, :], axis=-1)
                 north = np.mean(data[..., -1, :], axis=-1)
 
-        if len(dimensions) == 3:
-            data = data.reshape(self.num_vertical, -1)
-        else:
-            data = data.flatten()
+        data = data.reshape(self.num_vertical, -1) if len(dimensions) == 3 else data.flatten()
 
         if include_poles_if_periodic and self.periodic:
             to_append = np.array([south, north]).T
@@ -295,16 +303,14 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
                     celltype=CellType.Hexahedron,
                     degree=1,
                 )
-            else:
-                return UnstructuredTopology(
-                    num_nodes,
-                    self.periodic_planar_topology(),
-                    celltype=CellType.Quadrilateral,
-                    degree=1,
-                )
-        else:
-            celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
-            return StructuredTopology(self.wrf_cellshape, celltype, degree=1)
+            return UnstructuredTopology(
+                num_nodes,
+                self.periodic_planar_topology(),
+                celltype=CellType.Quadrilateral,
+                degree=1,
+            )
+        celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
+        return StructuredTopology(self.wrf_cellshape, celltype, degree=1)
 
     def topology_updates(self, step: Step, basis: Basis) -> bool:
         return step.index == 0

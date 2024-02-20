@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 from io import BytesIO, StringIO
-from typing import IO, Dict, Iterable, Iterator, List, Optional, Set, Tuple, overload
+from typing import TYPE_CHECKING, Optional, TextIO, overload
 
 import lrspline as lr
 import numpy as np
@@ -33,6 +33,9 @@ from .api import (
 )
 from .util import FieldData, cell_numbering
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
 
 class DiscreteTopologyImpl(DiscreteTopology):
     def cells_as(self, ordering: CellOrdering) -> FieldData[integer]:
@@ -56,7 +59,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
     degree: int
 
     @staticmethod
-    def from_ifem(data: bytes) -> Tuple[Points, UnstructuredTopology, FieldData[floating]]:
+    def from_ifem(data: bytes) -> tuple[Points, UnstructuredTopology, FieldData[floating]]:
         """Special purpose constructor for parsing an IFEM Lagriangian patch
         with hexahedral cells.
 
@@ -123,7 +126,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         ...
 
     @staticmethod
-    def join(*other) -> UnstructuredTopology:
+    def join(*other: UnstructuredTopology) -> UnstructuredTopology:
         """Join two or more unstructured topologies together.
 
         This does not perform any actual 'joining': the nodes in each topology
@@ -167,14 +170,14 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         )
 
     @property
-    def pardim(self):
+    def pardim(self) -> int:
         return {CellType.Line: 1, CellType.Quadrilateral: 2, CellType.Hexahedron: 3}[self.celltype]
 
     @property
     def num_cells(self) -> int:
         return self.cells.num_dofs
 
-    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
+    def discretize(self, nvis: int) -> tuple[DiscreteTopology, FieldDataFilter]:
         # Discretizing an unstructured linear topology with nvis=1 is a no-op
         if nvis == 1 and self.degree == 1:
             return self, lambda field, data: data
@@ -187,7 +190,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         return discrete, lambda field, data: tesselator.tesselate_field(field, data)
 
     def create_merger(self) -> api.TopologyMerger:
-        def merger(topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+        def merger(topology: Topology) -> tuple[Topology, api.FieldDataFilter]:
             # At the moment we do not support the merging of two incompatible
             # unstructured topologies. Therefore assert (to the best of our
             # abilities) that the topology is identical to the source topology, and
@@ -226,7 +229,7 @@ class UnstructuredTesselator:
     master: UnstructuredTopology
 
     # Which nodal indexes to extract for nodal fields
-    pick_indexes: List[int]
+    pick_indexes: list[int]
 
     # Cell array of new topology
     new_cells: FieldData[integer]
@@ -240,10 +243,10 @@ class UnstructuredTesselator:
         index = np.ix_(*([(0, -1)] * master.celltype.pardim))
 
         # Collection of nodal indices which should be retained
-        retain: Set[int] = set()
+        retain: set[int] = set()
 
         # New cells, in terms of old node indices
-        new_cells: List[List[int]] = []
+        new_cells: list[list[int]] = []
 
         # For each cell, extract its corners, mark them as retained, and create
         # a new cell.
@@ -257,7 +260,7 @@ class UnstructuredTesselator:
 
         # The indices pick for nodal fields is the collection of retained nodes,
         # in order of increasing (old) index.
-        self.pick_indexes = sorted(list(retain))
+        self.pick_indexes = sorted(retain)
 
         # Give the retained nodes new node numbers.
         new_node_numbers[self.pick_indexes] = np.arange(len(retain))
@@ -318,10 +321,10 @@ class StructuredTopology(DiscreteTopologyImpl):
         return util.structured_cells(self.cellshape, self.pardim)
 
     @property
-    def nodeshape(self) -> Tuple[int, ...]:
+    def nodeshape(self) -> tuple[int, ...]:
         return tuple(n + 1 for n in self.cellshape)
 
-    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
+    def discretize(self, nvis: int) -> tuple[DiscreteTopology, FieldDataFilter]:
         """Discretizing a structured topology is a no-op."""
         if nvis != 1:
             raise api.Unsupported("Discretizing structured topologies with nvis > 1")
@@ -332,7 +335,7 @@ class StructuredTopology(DiscreteTopologyImpl):
     def create_merger(self) -> api.TopologyMerger:
         return StructuredTopologyMerger(self.cellshape, self.celltype, self.degree)
 
-    def transpose(self, axes: Tuple[int, ...]) -> StructuredTopology:
+    def transpose(self, axes: tuple[int, ...]) -> StructuredTopology:
         """Return a new structured topology with transposed axes."""
         if len(axes) != self.pardim:
             raise api.Unexpected(
@@ -351,7 +354,7 @@ class StructuredTopologyMerger:
     celltype: CellType
     degree: int
 
-    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+    def __call__(self, topology: Topology) -> tuple[Topology, api.FieldDataFilter]:
         # At the moment we do not support the merging of two incompatible
         # structured topologies. Therefore assert (to the best of our abilities)
         # that the topology is identical to the source topology, and return it
@@ -371,7 +374,7 @@ class G2Object(G2):
     streams, and not just files.
     """
 
-    def __init__(self, fstream: IO, mode: str):
+    def __init__(self, fstream: TextIO, mode: str):
         self.fstream = fstream
         self.onlywrite = mode == "w"
         super().__init__("")
@@ -384,11 +387,11 @@ class G2Object(G2):
 class SplineTopology(Topology):
     """A B-Spline or NURBS topology as represented by Splipy."""
 
-    bases: List[BSplineBasis]
+    bases: list[BSplineBasis]
     weights: Optional[np.ndarray]
 
     @staticmethod
-    def from_splineobject(obj: SplineObject) -> Tuple[Points, SplineTopology, FieldData[floating]]:
+    def from_splineobject(obj: SplineObject) -> tuple[Points, SplineTopology, FieldData[floating]]:
         """Construct a spline topology from a Splipy SplineObject.
 
         Returns a sequence of coordinates (the corners) for constructing zone
@@ -415,12 +418,12 @@ class SplineTopology(Topology):
         )
 
     @staticmethod
-    def from_bytes(data: bytes) -> Iterator[Tuple[Points, SplineTopology, FieldData[floating]]]:
+    def from_bytes(data: bytes) -> Iterator[tuple[Points, SplineTopology, FieldData[floating]]]:
         """Special constructor parsing bytestring in G2-format."""
         yield from SplineTopology.from_string(data.decode())
 
     @staticmethod
-    def from_string(data: str) -> Iterator[Tuple[Points, SplineTopology, FieldData[floating]]]:
+    def from_string(data: str) -> Iterator[tuple[Points, SplineTopology, FieldData[floating]]]:
         """Special constructor for parsing a string in G2-format."""
         with G2Object(StringIO(data), "r") as g2:
             for obj in g2.read():
@@ -438,7 +441,7 @@ class SplineTopology(Topology):
     def num_cells(self) -> int:
         return util.prod(len(basis.knot_spans()) - 1 for basis in self.bases)
 
-    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
+    def discretize(self, nvis: int) -> tuple[DiscreteTopology, FieldDataFilter]:
         tesselator = SplineTesselator(self, nvis)
         discrete = tesselator.tesselate_topology(self)
         return discrete, lambda field, data: tesselator.tesselate_field(self, field, data)
@@ -466,8 +469,8 @@ class SplineTesselator(api.TopologyMerger):
     - nvis: number of subdivions per element
     """
 
-    nodal_knots: List[np.ndarray]
-    cellwise_knots: List[np.ndarray]
+    nodal_knots: list[np.ndarray]
+    cellwise_knots: list[np.ndarray]
 
     def __init__(self, topology: SplineTopology, nvis: int = 1):
         # These are the parametric points that will be used to discretize nodal fields
@@ -480,7 +483,7 @@ class SplineTesselator(api.TopologyMerger):
         ]
 
     # This method implements the interface for TopologyMerger
-    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+    def __call__(self, topology: Topology) -> tuple[Topology, api.FieldDataFilter]:
         if not isinstance(topology, SplineTopology):
             raise api.Unsupported("Merging non-spline topology with spline topology")
         discrete = self.tesselate_topology(topology)
@@ -541,7 +544,7 @@ class LrTopology(Topology):
     def from_lrobject(
         obj: lr.LRSplineObject,
         rationality: Optional[Rationality],
-    ) -> Tuple[Points, LrTopology, FieldData[floating]]:
+    ) -> tuple[Points, LrTopology, FieldData[floating]]:
         """Construct an LR topology from an LRSplineObject.
 
         Returns a sequence of coordinates (the corners) for constructing zone
@@ -587,7 +590,7 @@ class LrTopology(Topology):
     def from_bytes(
         data: bytes,
         rationality: Optional[Rationality],
-    ) -> Iterator[Tuple[Points, LrTopology, FieldData[floating]]]:
+    ) -> Iterator[tuple[Points, LrTopology, FieldData[floating]]]:
         """Special constructor parsing bytestring in LR-format."""
         yield from LrTopology.from_string(data.decode(), rationality)
 
@@ -595,7 +598,7 @@ class LrTopology(Topology):
     def from_string(
         data: str,
         rationality: Optional[Rationality],
-    ) -> Iterator[Tuple[Points, LrTopology, FieldData[floating]]]:
+    ) -> Iterator[tuple[Points, LrTopology, FieldData[floating]]]:
         """Special constructor parsing string in LR-format."""
         for obj in lr.LRSplineObject.read_many(StringIO(data)):
             yield LrTopology.from_lrobject(obj, rationality)
@@ -612,7 +615,7 @@ class LrTopology(Topology):
     def num_cells(self) -> int:
         return len(self.obj.elements)
 
-    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
+    def discretize(self, nvis: int) -> tuple[DiscreteTopology, FieldDataFilter]:
         tesselator = LrTesselator(self.obj, self.weights, nvis)
         discrete = tesselator.tesselate_topology(self)
         return discrete, lambda field, data: tesselator.tesselate_field(self, field, data)
@@ -648,10 +651,10 @@ class LrTesselator(api.TopologyMerger):
 
     def __init__(self, obj: lr.LRSplineObject, weights: Optional[np.ndarray], nvis: int):
         # Dictionary mapping parametric values to node index
-        nodes: Dict[Tuple[float, ...], int] = {}
+        nodes: dict[tuple[float, ...], int] = {}
 
         # Cells represented as nodal indices
-        cells: List[List[int]] = []
+        cells: list[list[int]] = []
 
         # The visitor function, when called on each element, will populate the
         # above two data structures.
@@ -665,7 +668,7 @@ class LrTesselator(api.TopologyMerger):
         self.nvis = nvis
 
     # This method implements the interface for TopologyMerger
-    def __call__(self, topology: Topology) -> Tuple[Topology, api.FieldDataFilter]:
+    def __call__(self, topology: Topology) -> tuple[Topology, api.FieldDataFilter]:
         if not isinstance(topology, LrTopology):
             raise api.Unsupported("Merging non-LR topology with LR topology")
         discrete = self.tesselate_topology(topology)
@@ -698,16 +701,15 @@ class LrTesselator(api.TopologyMerger):
                 field_data.numpy()[topology.obj.element_at(*c).id] for c in cell_centers
             )
 
-        else:
-            # Clone the LRSpline object and replace its control points with the
-            # field we want to evaluate. Then evaluate at the nodal parametric
-            # points.
-            obj = topology.obj.clone()
-            coeffs = field_data.data
-            if self.weights is not None:
-                coeffs = np.hstack((coeffs, self.weights.reshape(-1, 1)))
-            obj.controlpoints = coeffs
-            evaluated = FieldData.from_iter(obj(*node) for node in self.nodes)
-            if self.weights is not None:
-                evaluated = evaluated.collapse_weights()
-            return evaluated
+        # Clone the LRSpline object and replace its control points with the
+        # field we want to evaluate. Then evaluate at the nodal parametric
+        # points.
+        obj = topology.obj.clone()
+        coeffs = field_data.data
+        if self.weights is not None:
+            coeffs = np.hstack((coeffs, self.weights.reshape(-1, 1)))
+        obj.controlpoints = coeffs
+        evaluated = FieldData.from_iter(obj(*node) for node in self.nodes)
+        if self.weights is not None:
+            evaluated = evaluated.collapse_weights()
+        return evaluated

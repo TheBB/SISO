@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-from typing import Dict, List, Tuple, Type
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 import vtfwriter as vtf
 from attrs import define
 from typing_extensions import Self
 
-from .. import api
-from ..api import B, CellOrdering, DiscreteTopology, F, S, Step, StepInterpretation, T, Z, Zone
+from siso import api
+from siso.api import B, CellOrdering, DiscreteTopology, F, S, Step, StepInterpretation, T, Z, Zone
+
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from types import TracebackType
 
 
 @define
 class FieldInfo:
-    blocktype: Type[vtf.Block]
-    steps: Dict[int, List[vtf.ResultBlock]]
+    blocktype: Callable[[], Union[vtf.ScalarBlock, vtf.VectorBlock, vtf.DisplacementBlock]]
+    steps: dict[int, list[vtf.ResultBlock]]
 
 
 class VtfWriter(Writer):
@@ -25,9 +29,9 @@ class VtfWriter(Writer):
     mode: OutputMode
 
     geometry_block: vtf.GeometryBlock
-    geometry_blocks: List[Tuple[vtf.NodeBlock, vtf.ElementBlock]]
-    timesteps: List[Step]
-    field_info: Dict[str, FieldInfo]
+    geometry_blocks: list[tuple[vtf.NodeBlock, vtf.ElementBlock]]
+    timesteps: list[Step]
+    field_info: dict[str, FieldInfo]
     step_interpretation: StepInterpretation
 
     def __init__(self, filename: Path):
@@ -44,7 +48,7 @@ class VtfWriter(Writer):
             require_single_basis=True,
         )
 
-    def configure(self, settings: WriterSettings):
+    def configure(self, settings: WriterSettings) -> None:
         if settings.output_mode is not None:
             if settings.output_mode not in (OutputMode.Binary, OutputMode.Ascii):
                 raise api.Unsupported(f"Unsupported output mode for VTF: {settings.output_mode}")
@@ -60,14 +64,19 @@ class VtfWriter(Writer):
         self.geometry_block = self.out.GeometryBlock().__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         for field_name, info in self.field_info.items():
             with info.blocktype() as field_block:
                 field_block.SetName(field_name)
                 for index, result_blocks in info.steps.items():
                     field_block.BindResultBlocks(index, *result_blocks)
 
-        self.geometry_block.__exit__(*args)
+        self.geometry_block.__exit__(exc_type, exc_val, exc_tb)
 
         with self.out.StateInfoBlock() as state_info:
             setter = state_info.SetStepData if self.step_interpretation.is_time else state_info.SetModeData
@@ -76,7 +85,7 @@ class VtfWriter(Writer):
                 time = timestep.value if timestep.value is not None else float(timestep.index)
                 setter(timestep.index + 1, f"{desc} {time:.4g}", time)
 
-        self.out.__exit__(*args)
+        self.out.__exit__(exc_type, exc_val, exc_tb)
         logging.info(self.filename)
 
     def update_geometry(
@@ -115,6 +124,7 @@ class VtfWriter(Writer):
                 result_block.SetResults(data.numpy().flatten())
                 result_block.BindBlock(element_block if field.cellwise else node_block)
 
+            blocktype: Callable[[], Union[vtf.ScalarBlock, vtf.VectorBlock, vtf.DisplacementBlock]]
             if field.name not in self.field_info:
                 if field.is_scalar:
                     blocktype = self.out.ScalarBlock
@@ -136,7 +146,7 @@ class VtfWriter(Writer):
             if source.field_updates(timestep, field):
                 self.update_field(timestep, source, field)
 
-    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F):
+    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F) -> None:
         casted = source.cast_discrete_topology().cast_globally_keyed()
         self.step_interpretation = source.properties.step_interpretation
         for step in casted.steps():

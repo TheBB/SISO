@@ -1,9 +1,9 @@
 from pathlib import Path
+
 import pytest
-
-from .shared import TESTCASES, TESTIDS, compare_vtk_unstructured, PreparedTestCase
-
 import vtk
+
+from .shared import TESTCASES, TESTIDS, PreparedTestCase, compare_vtk_unstructured
 
 
 def load_grid(filename: Path):
@@ -19,8 +19,8 @@ def compare_vtk(out: Path, ref: Path, case: PreparedTestCase):
     compare_vtk_unstructured(load_grid(str(out)), load_grid(ref), case)
 
 
-@pytest.mark.parametrize('case', TESTCASES['vtk'], ids=TESTIDS['vtk'])
+@pytest.mark.parametrize("case", TESTCASES["vtk"], ids=TESTIDS["vtk"])
 def test_vtk_integrity(case: PreparedTestCase):
-    with case.invoke('vtk') as tempdir:
+    with case.invoke("vtk") as tempdir:
         for out, ref in case.check_files(tempdir):
             compare_vtk(out, ref, case)

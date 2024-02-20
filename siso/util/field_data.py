@@ -12,24 +12,27 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Generic, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Generic, Optional, TypeVar, Union, cast, overload
 
 import numpy as np
 from attrs import define
 from numpy import floating, integer, number
 from numpy.typing import DTypeLike, NDArray
-from scipy.spatial.transform import Rotation
-
 from vtkmodules.util.numpy_support import numpy_to_vtk
 from vtkmodules.vtkCommonCore import vtkDataArray
 
-from ..api import NodeShape, Point, Points
+from siso.api import NodeShape, Point, Points
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Sequence
+    from typing import Any
+
+    from scipy.spatial.transform import Rotation
 
 T = TypeVar("T", bound=number)
 S = TypeVar("S", bound=number)
 Index = Union[int, slice, None, NDArray[integer]]
-Indices = Union[Index, Tuple[Index, ...]]
+Indices = Union[Index, tuple[Index, ...]]
 
 
 def ensure_2d_dof(array: NDArray[T]) -> NDArray[T]:
@@ -69,7 +72,7 @@ class FieldData(Generic[T]):
         ...
 
     @staticmethod
-    def join_comps(*other):
+    def join_comps(*other):  # type: ignore[no-untyped-def]
         """Concatenate two or more arrays along the comp axis.
 
         Supports an arbitrary number of field data or numpy arrays, or a single
@@ -90,7 +93,7 @@ class FieldData(Generic[T]):
         ...
 
     @staticmethod
-    def join_dofs(*other):
+    def join_dofs(*other):  # type: ignore[no-untyped-def]
         """Join two or more arrays along the dof axis.
 
         Supports an arbitrary number field data or numpy arrays, or a single
@@ -113,7 +116,7 @@ class FieldData(Generic[T]):
         ...
 
     @staticmethod
-    def from_iter(iterable, dtype: DTypeLike = float):
+    def from_iter(iterable, dtype: DTypeLike = float):  # type: ignore[no-untyped-def]
         """Construct a field data object from an iterable of iterables of scalars.
         The outer iterable loops through the rows (dof axis) and the inner
         iterables loop through the columns (comp axis).
@@ -128,7 +131,7 @@ class FieldData(Generic[T]):
         # Utility function for flattening the iterator. Keeps track of the
         # number of rows seen so that the final array can be reshaped in the
         # end.
-        def values():
+        def values() -> Iterator:
             nonlocal num_dofs
             for value in iter(iterable):
                 num_dofs += 1
@@ -168,13 +171,13 @@ class FieldData(Generic[T]):
 
     def mean(self) -> NDArray[T]:
         """Take the average over the dof axis."""
-        return self.data.mean(axis=0)
+        return cast(NDArray[T], self.data.mean(axis=0))
 
-    def slice_comps(self, index: Union[int, List[int]]) -> FieldData[T]:
+    def slice_comps(self, index: Union[int, list[int]]) -> FieldData[T]:
         """Extract a subset of components as a new field data object."""
         return FieldData(ensure_2d_comp(self.data[:, index]))
 
-    def slice_dofs(self, index: Union[int, List[int]]) -> FieldData[T]:
+    def slice_dofs(self, index: Union[int, list[int]]) -> FieldData[T]:
         """Extract a subset of dofs as a new field data object."""
         return FieldData(ensure_2d_dof(self.data[index, :]))
 
@@ -231,7 +234,7 @@ class FieldData(Generic[T]):
         data = self.data[..., :-1] / self.data[..., -1:]
         return FieldData(data)
 
-    def transpose(self, shape: NodeShape, transposition: Tuple[int, ...]) -> FieldData[T]:
+    def transpose(self, shape: NodeShape, transposition: tuple[int, ...]) -> FieldData[T]:
         """Perform a transposition operation.
 
         Parameters:
@@ -264,7 +267,7 @@ class FieldData(Generic[T]):
     ) -> FieldData[floating]:
         ...
 
-    def constant_like(self, value, ndofs=None, ncomps=None, dtype=None):
+    def constant_like(self, value, ndofs=None, ncomps=None, dtype=None):  # type: ignore[no-untyped-def]
         """Return a new constant FieldData array.
 
         Parameters:
@@ -388,9 +391,9 @@ class FieldData(Generic[T]):
 
     def vtk(self) -> vtkDataArray:
         """Return the wrapped array as a VTK array."""
-        return numpy_to_vtk(self.data, deep=1)
+        return cast(vtkDataArray, numpy_to_vtk(self.data, deep=1))
 
-    def __add__(self, other) -> FieldData:
+    def __add__(self, other: Any) -> FieldData:
         """Implement the '+' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data + other.data)
@@ -408,7 +411,7 @@ class FieldData(Generic[T]):
     ) -> FieldData[floating]:
         ...
 
-    def __mul__(self, other):
+    def __mul__(self, other):  # type: ignore[no-untyped-def]
         """Implement the '*' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data * other.data)
@@ -422,7 +425,7 @@ class FieldData(Generic[T]):
             return FieldData(self.data // other.data)
         return FieldData(self.data // other)
 
-    def __truediv__(self, other) -> FieldData:
+    def __truediv__(self, other: Union[int, float, NDArray[number], FieldData[number]]) -> FieldData:
         """Implement the '/' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data / other.data)

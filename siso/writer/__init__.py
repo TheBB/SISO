@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 
 from .api import Writer
 
@@ -14,7 +16,7 @@ class OutputFormat(Enum):
     Pvd = "pvd"
     Simra = "simra"
 
-    def default_suffix(self):
+    def default_suffix(self) -> str:
         if self == OutputFormat.Simra:
             return ".dat"
         return f".{self.value}"
@@ -22,7 +24,7 @@ class OutputFormat(Enum):
 
 MakeWriter = Callable[[Path], Writer]
 
-WRITERS: Dict[OutputFormat, MakeWriter] = {}
+WRITERS: dict[OutputFormat, MakeWriter] = {}
 
 
 def register_writer(fmt: OutputFormat) -> Callable[[MakeWriter], MakeWriter]:

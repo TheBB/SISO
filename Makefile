@@ -1,31 +1,52 @@
-.PHONY: install mypy lint pytest fmt fmtcheck test wheel sdist build
+package := siso
 
+
+# Convenience targets
+
+.PHONY: install
 install:
-	poetry install --with=dev
+	pdm install --dev
 
-mypy:
-	poetry run mypy siso
 
+# Linting targets
+
+.PHONY: format
+format:
+	pdm run ruff format
+
+.PHONY: lint
 lint:
-	poetry run ruff siso
+	pdm run ruff check --fix
 
+
+# Test targets
+
+.PHONY: pytest
 pytest:
-	poetry run pytest
+	pdm run pytest
 
-fmt:
-	poetry run black siso
-	poetry run isort siso
+.PHONY: mypy
+mypy:
+	pdm run mypy
 
-fmtcheck:
-	poetry run black siso --check
-	poetry run isort siso --check
+.PHONY: lint-check
+lint-check:
+	pdm run ruff check
+	pdm run ruff format --check
 
-test: mypy pytest lint fmtcheck
+.PHONY: test
+test: pytest mypy lint-check
 
-wheel:
-	poetry build -f wheel
 
+# Build targets (used from CI)
+
+.PHONY: sdist
 sdist:
-	poetry build -f sdist
+	pdm build --no-wheel
 
+.PHONY: wheel
+wheel:
+	pdm build --no-sdist
+
+.PHONY: build
 build: wheel sdist

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from .. import api
-from ..topology import LrTopology
+from siso.topology import LrTopology
+
 from .puregeometry import PureGeometry, PureGeometryZone
+
+if TYPE_CHECKING:
+    from siso import api
 
 
 class LrSpline(PureGeometry[LrTopology]):
@@ -15,12 +18,12 @@ class LrSpline(PureGeometry[LrTopology]):
     # always possible. This setting can be set in the CLI to override this.
     rationality: Optional[api.Rationality] = None
 
-    def configure(self, settings: api.ReaderSettings):
+    def configure(self, settings: api.ReaderSettings) -> None:
         super().configure(settings)
         self.rationality = settings.rationality
 
     def __enter__(self) -> LrSpline:
-        with open(self.filename, "r") as f:
+        with self.filename.open() as f:
             data = f.read()
 
         # The heavy lifting is done by LrTopology.
