@@ -1,13 +1,13 @@
-from typing import Dict, Iterator
+from collections.abc import Iterator
 
 from numpy import floating
 
-from .. import api
-from ..api import F, InB, InT, S, Z
-from ..impl import Basis
-from ..util import FieldData
-from .passthrough import PassthroughFSZ
+from siso import api
+from siso.api import F, InB, InT, S, Z
+from siso.impl import Basis
+from siso.util import FieldData
 
+from .passthrough import PassthroughFSZ
 
 # The singleton basis object to yield.
 BASIS = Basis("mesh")
@@ -28,7 +28,7 @@ class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, InT, api.Topology]):
     master_basis: InB
 
     # Keep a mapping of the merger object associated with each zone.
-    mergers: Dict[Z, api.TopologyMerger]
+    mergers: dict[Z, api.TopologyMerger]
 
     def __init__(self, source: api.Source[InB, F, S, InT, Z]):
         super().__init__(source)

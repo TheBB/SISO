@@ -1,11 +1,11 @@
-import pytest
-
 import numpy as np
+import pytest
 
 from .shared import TESTCASES, TESTIDS, PreparedTestCase
 
 try:
     import vtfwriter as vtf
+
     has_vtf = True
 except ImportError:
     has_vtf = False
@@ -100,11 +100,11 @@ def compare_vtf(out, ref, case: PreparedTestCase):
 
 
 @pytest.mark.skipif(not has_vtf, reason="VTF tests not runnable without vtfwriter")
-@pytest.mark.parametrize('case', TESTCASES['vtf'], ids=TESTIDS['vtf'])
+@pytest.mark.parametrize("case", TESTCASES["vtf"], ids=TESTIDS["vtf"])
 def test_vtf_integrity(case: PreparedTestCase):
-    with case.invoke('vtf') as tempdir:
+    with case.invoke("vtf") as tempdir:
         for out, ref in case.check_files(tempdir):
             assert out.exists()
             assert ref.exists()
-            with vtf.File(str(out), 'r') as o, vtf.File(str(ref), 'r') as r:
+            with vtf.File(str(out), "r") as o, vtf.File(str(ref), "r") as r:
                 compare_vtf(o, r, case)

@@ -9,20 +9,25 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from functools import lru_cache
 from itertools import chain, count, repeat
-from pathlib import Path
-from typing import ClassVar, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, ClassVar, Optional, cast
 
 import h5py
 from attrs import define, field
-from numpy import floating
 from typing_extensions import Self
 
-from .. import api, util
-from ..api import Topology, Zone, ZoneShape
-from ..coord import Named
-from ..impl import Basis, Field, Step
-from ..topology import LrTopology, SplineTopology, UnstructuredTopology
-from ..util import FieldData
+from siso import api, util
+from siso.api import Topology, Zone, ZoneShape
+from siso.coord import Named
+from siso.impl import Basis, Field, Step
+from siso.topology import LrTopology, SplineTopology, UnstructuredTopology
+from siso.util import FieldData
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+    from types import TracebackType
+
+    from numpy import floating
 
 
 @define(frozen=True)
@@ -111,7 +116,7 @@ class IfemBasis(Basis):
     locator: Locator = field(eq=False, repr=False)
 
     # List of fields belonging to this basis (populated by the Field class).
-    fields: List[IfemField] = field(factory=list, init=False, eq=False, repr=False)
+    fields: list[IfemField] = field(factory=list, init=False, eq=False, repr=False)
 
     @lru_cache(maxsize=1)
     def num_patches(self, source: Ifem) -> int:
@@ -144,7 +149,7 @@ class IfemBasis(Basis):
         step: int,
         patch: int,
         source: Ifem,
-    ) -> Tuple[Zone[ZoneKey], api.Topology, FieldData[floating]]:
+    ) -> tuple[Zone[ZoneKey], api.Topology, FieldData[floating]]:
         """Obtain the patch at the given step by index. This returns a tuple
         with three items: zone, topology and field data.
         """
@@ -156,7 +161,7 @@ class IfemBasis(Basis):
         # class. We discriminate based on the first few bytes.
         patchdata = source.h5[self.patch_path(step, patch)][:]
         initial = patchdata[:20].tobytes()
-        raw_data = memoryview(patchdata).tobytes()
+        raw_data = memoryview(cast(bytes, patchdata)).tobytes()
         topology: api.Topology
         if initial.startswith(b"# LAGRANGIAN"):
             corners, topology, cps = UnstructuredTopology.from_ifem(raw_data)
@@ -353,8 +358,8 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     geometry: IfemBasis
 
     # Populated by discover_bases and discover_fields (called by __enter__)
-    _bases: Dict[str, IfemBasis]
-    _fields: Dict[str, IfemField]
+    _bases: dict[str, IfemBasis]
+    _fields: dict[str, IfemField]
 
     # Options that can be overridden by subclasses (for eigenmodes)
     locator: ClassVar[Locator] = StandardLocator()
@@ -395,8 +400,13 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
 
         return self
 
-    def __exit__(self, *args) -> None:
-        self.h5.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.h5.__exit__(exc_type, exc_val, exc_tb)
 
     @property
     def properties(self) -> api.SourceProperties:
@@ -456,7 +466,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
                 # this field is cellwise. The cellwise fields are in the
                 # 'knotspan' group, while the nodal fields are in the 'fields'
                 # group.
-                fields: Iterator[Tuple[str, bool]] = chain(
+                fields: Iterator[tuple[str, bool]] = chain(
                     zip(basis_grp.get("fields", ()), repeat(False)),
                     zip(basis_grp.get("knotspan", ()), repeat(True)),
                 )
@@ -474,7 +484,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
                     )
 
     @lru_cache(maxsize=1)
-    def propose_recombinations(self) -> Tuple[List[api.SplitFieldSpec], List[api.RecombineFieldSpec]]:
+    def propose_recombinations(self) -> tuple[list[api.SplitFieldSpec], list[api.RecombineFieldSpec]]:
         """Collect suggested field splits and recombinations.
 
         This method, which is expensive to run, is called from properties, which
@@ -485,7 +495,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
         splits = list(chain.from_iterable(field.splits() for field in self._fields.values()))
 
         # Keep a list of candidates for potential recombination.
-        candidates: Dict[str, List[str]] = defaultdict(list)
+        candidates: dict[str, list[str]] = defaultdict(list)
 
         # We can recombine both newly split fields as well as already existing ones.
         field_names = chain(self._fields, (split.new_name for split in splits))
@@ -515,10 +525,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
 
     def steps(self) -> Iterator[Step]:
         for i, group in enumerate(self.step_groups()):
-            if "timeinfo/level" in group:
-                time = group["timeinfo/level"][0]
-            else:
-                time = float(i)
+            time = group["timeinfo/level"][0] if "timeinfo/level" in group else float(i)
             yield Step(index=i, value=time)
 
     def zones(self) -> Iterator[Zone]:
@@ -615,10 +622,7 @@ class IfemModes(Ifem):
 
     def steps(self) -> Iterator[Step]:
         for i, group in enumerate(self.step_groups()):
-            if "Value" in group:
-                time = group["Value"][0]
-            else:
-                time = group["Frequency"][0]
+            time = group["Value"][0] if "Value" in group else group["Frequency"][0]
             yield Step(index=i, value=time)
 
     def field_updates(self, timestep: Step, field: IfemField) -> bool:

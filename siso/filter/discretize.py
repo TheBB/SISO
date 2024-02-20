@@ -1,11 +1,10 @@
-from typing import Dict, Tuple
-
 from numpy import floating
 
-from .. import api
-from ..api import B, F, S, T, Z
-from ..topology import DiscreteTopology
-from ..util import FieldData
+from siso import api
+from siso.api import B, F, S, T, Z
+from siso.topology import DiscreteTopology
+from siso.util import FieldData
+
 from .passthrough import PassthroughBFSZ
 
 
@@ -19,7 +18,7 @@ class Discretize(PassthroughBFSZ[B, F, S, Z, T, DiscreteTopology]):
     # When a user calls topology(), the discretization produces a mapper: a
     # callable that can be used to convert field data from old to new topology.
     # This mapper is specific to the basis and zone.
-    mappers: Dict[Tuple[B, Z], api.FieldDataFilter]
+    mappers: dict[tuple[B, Z], api.FieldDataFilter]
 
     def __init__(self, source: api.Source[B, F, S, T, Z], nvis: int):
         super().__init__(source)

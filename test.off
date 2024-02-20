@@ -1,0 +1,157 @@
+import json
+from pathlib import Path
+from typing import Any, Dict, Iterator
+
+import numpy as np
+from typing_extensions import Self
+
+from ..api import B, F, S, Source, T, Z
+from .api import Writer, WriterProperties, WriterSettings
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj) -> Any:
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+
+class TestWriter(Writer):
+    filename: Path
+    data: Dict
+
+    def __init__(self, filename: Path):
+        self.filename = filename
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args) -> None:
+        with open(self.filename, "w") as f:
+            json.dump(self.data, f, cls=NumpyEncoder)
+
+    @property
+    def properties(self) -> WriterProperties:
+        return WriterProperties()
+
+    def configure(self, settings: WriterSettings) -> None:
+        return
+
+    def consume_basis(
+        self,
+        step: S,
+        basis: B,
+        source: Source[B, F, S, T, Z],
+    ) -> Iterator[Dict]:
+        if not source.topology_updates(step, basis):
+            yield {
+                "basis": basis.name,
+                "update": False,
+            }
+            return
+
+        for zone in source.zones():
+            yield {
+                "zone": zone.key,
+                "basis": basis.name,
+                "updates": True,
+                "topology": source.topology(step, basis, zone).as_dict(),
+            }
+
+    def consume_field(
+        self,
+        step: S,
+        field: F,
+        source: Source[B, F, S, T, Z],
+    ) -> Iterator[Dict]:
+        if not source.field_updates(step, field):
+            yield {
+                "field": field.name,
+                "update": False,
+            }
+            return
+
+        for zone in source.zones():
+            yield {
+                "zone": zone.key,
+                "field": field.name,
+                "updates": True,
+                "data": source.field_data(step, field, zone).as_dict(),
+            }
+
+    def consume_timestep(
+        self,
+        step: S,
+        source: Source[B, F, S, T, Z],
+        geometry: F,
+    ) -> Dict:
+        topologies = []
+        data = []
+
+        geom_basis = source.basis_of(geometry)
+        topologies.extend(self.consume_basis(step, geom_basis, source))
+        data.extend(self.consume_field(step, geometry, source))
+        for field in source.fields(geom_basis):
+            data.extend(self.consume_field(step, field, source))
+
+        for basis in source.bases():
+            if basis.name == geom_basis.name:
+                continue
+            topologies.extend(self.consume_basis(step, basis, source))
+            for field in source.fields(basis):
+                data.extend(self.consume_field(step, field, source))
+
+        return {
+            "index": step.index,
+            "value": step.value,
+            "topologies": topologies,
+            "data": data,
+        }
+
+    def consume(self, source: Source[B, F, S, T, Z], geometry: F) -> None:
+        props = source.properties
+
+        data: Dict = {
+            "source-properties": {
+                "instantaneous": props.instantaneous,
+                "globally_keyed": props.globally_keyed,
+                "discrete_topology": props.discrete_topology,
+                "single_basis": props.single_basis,
+                "single_zoned": props.single_zoned,
+                "step_interpretation": props.step_interpretation.name,
+            },
+            "bases": [
+                {
+                    "name": basis.name,
+                    "fields": [
+                        {
+                            "cellwise": field.cellwise,
+                            "name": field.name,
+                            "num_comps": field.num_comps,
+                            "is_scalar": field.is_scalar,
+                            "is_vector": field.is_vector,
+                            "is_geometry": field.is_geometry,
+                            "is_eigenmode": field.is_eigenmode,
+                            "is_displacement": field.is_displacement,
+                            "coords": str(field.coords) if field.is_geometry else None,
+                        }
+                        for field in [*source.geometries(basis), *source.fields(basis)]
+                    ],
+                }
+                for basis in source.bases()
+            ],
+            "zones": [
+                {
+                    "shape": zone.shape.name,
+                    "coords": zone.coords,
+                    "key": zone.key,
+                }
+                for zone in source.zones()
+            ],
+            "steps": [],
+        }
+
+        for step in source.steps():
+            data["steps"].append(self.consume_timestep(step, source, geometry))
+
+        self.data = data

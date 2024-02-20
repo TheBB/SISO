@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy import integer
-from numpy.typing import NDArray
 
-from ..api import CellOrdering, CellType
+from siso.api import CellOrdering, CellType
 
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
-NUMBERINGS: Dict[Tuple[CellType, int], Dict[CellOrdering, NDArray[integer]]] = {
+NUMBERINGS: dict[tuple[CellType, int], dict[CellOrdering, NDArray[integer]]] = {
     # Linear line
     (CellType.Line, 1): {
         CellOrdering.Siso: np.arange(2),
@@ -68,26 +69,26 @@ NUMBERINGS: Dict[Tuple[CellType, int], Dict[CellOrdering, NDArray[integer]]] = {
 }
 
 
-def _invert(permutation: List[int]) -> List[int]:
+def _invert(permutation: list[int]) -> list[int]:
     retval = [0] * len(permutation)
     for i, j in enumerate(permutation):
         retval[j] = i
     return retval
 
 
-def _compose(a: List[int], b: List[int]) -> List[int]:
+def _compose(a: list[int], b: list[int]) -> list[int]:
     return [a[j] for j in b]
 
 
-def permute_from(celltype: CellType, degree: int, ordering: CellOrdering) -> List[int]:
+def permute_from(celltype: CellType, degree: int, ordering: CellOrdering) -> list[int]:
     return list(NUMBERINGS[celltype, degree][ordering].flatten())
 
 
-def permute_to(celltype: CellType, degree: int, ordering: CellOrdering) -> List[int]:
+def permute_to(celltype: CellType, degree: int, ordering: CellOrdering) -> list[int]:
     return _invert(permute_from(celltype, degree, ordering))
 
 
-def permute_from_to(celltype: CellType, degree: int, src: CellOrdering, tgt: CellOrdering) -> List[int]:
+def permute_from_to(celltype: CellType, degree: int, src: CellOrdering, tgt: CellOrdering) -> list[int]:
     return _compose(
         permute_from(celltype, degree, src),
         permute_to(celltype, degree, tgt),

@@ -1,13 +1,14 @@
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Generic, Iterator, List
+from typing import Generic
 
 from attrs import define
 from numpy import floating
 
-from .. import api, coord
-from ..api import Points, T, Zone, ZoneShape
-from ..impl import Basis, Field, Step
-from ..util import FieldData
+from siso import api, coord
+from siso.api import Points, T, Zone, ZoneShape
+from siso.impl import Basis, Field, Step
+from siso.util import FieldData
 
 
 @define
@@ -24,7 +25,7 @@ class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
     """
 
     filename: Path
-    zone_data: List[PureGeometryZone[T]]
+    zone_data: list[PureGeometryZone[T]]
 
     def __init__(self, filename: Path):
         self.filename = filename

@@ -23,19 +23,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     ClassVar,
     Generic,
-    Iterable,
-    Iterator,
-    List,
     NewType,
     Optional,
     Protocol,
-    Sequence,
-    Tuple,
     TypeVar,
     cast,
     overload,
@@ -47,15 +41,19 @@ from numpy import floating, integer
 from numpy.typing import NDArray
 from typing_extensions import Self
 
-
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator, Sequence
+    from pathlib import Path
+    from types import TracebackType
+    from typing import Any
+
     from .util import FieldData
 
 
-Point = NewType("Point", Tuple[float, ...])
-Points = NewType("Points", Tuple[Point, ...])
+Point = NewType("Point", tuple[float, ...])
+Points = NewType("Points", tuple[Point, ...])
 KnotVector = NewType("KnotVector", NDArray[floating])
-Knots = NewType("Knots", Tuple[KnotVector, ...])
+Knots = NewType("Knots", tuple[KnotVector, ...])
 
 
 class Nodal:
@@ -78,7 +76,7 @@ M = TypeVar("M", Nodal, Cellular)
 P = TypeVar("P", bound=Aritmetical)
 
 
-class ShapeTuple(Tuple[P, ...], Generic[M, P]):
+class ShapeTuple(tuple[P, ...], Generic[M, P]):
     @overload
     def __new__(cls, *args: P) -> Self:
         ...
@@ -87,11 +85,10 @@ class ShapeTuple(Tuple[P, ...], Generic[M, P]):
     def __new__(cls, arg: Iterable[P]) -> Self:
         ...
 
-    def __new__(cls, *args):
+    def __new__(cls, *args):  # type: ignore[no-untyped-def]
         if hasattr(args[0], "__iter__"):
             return super().__new__(cls, iter(args[0]))
-        else:
-            return super().__new__(cls, args)
+        return super().__new__(cls, args)
 
     @property
     def pardim(self) -> int:
@@ -182,7 +179,7 @@ class Endianness(Enum):
         """
         if self == Endianness.Native:
             return np.dtype(f"={root}")
-        elif self == Endianness.Little:
+        if self == Endianness.Little:
             return np.dtype(f"<{root}")
         return np.dtype(f">{root}")
 
@@ -251,7 +248,7 @@ class SplitFieldSpec:
 
     source_name: str
     new_name: str
-    components: List[int]
+    components: list[int]
     destroy: bool = True
     splittable: bool = False
 
@@ -269,7 +266,7 @@ class RecombineFieldSpec:
     - new_name: name of the new field
     """
 
-    source_names: List[str]
+    source_names: list[str]
     new_name: str
 
 
@@ -281,12 +278,12 @@ class StepInterpretation(Enum):
     EigenFrequency = auto()
 
     @property
-    def is_time(self):
+    def is_time(self) -> bool:
         """True if the 'time' axis should be interpreted as actual time."""
         return self == StepInterpretation.Time
 
     @property
-    def is_eigen(self):
+    def is_eigen(self) -> bool:
         """True if the 'time' axis should be interpreted as a sequence of
         eigenmodes.
         """
@@ -338,10 +335,10 @@ class SourceProperties:
     single_zoned: bool = False
     step_interpretation: StepInterpretation = StepInterpretation.Time
 
-    split_fields: List[SplitFieldSpec] = Factory(list)
-    recombine_fields: List[RecombineFieldSpec] = Factory(list)
+    split_fields: list[SplitFieldSpec] = Factory(list)
+    recombine_fields: list[RecombineFieldSpec] = Factory(list)
 
-    def update(self, **kwargs) -> SourceProperties:
+    def update(self, **kwargs: Any) -> SourceProperties:
         """Construct a new SourceProperties object by selectively updating some
         attributes.
         """
@@ -457,7 +454,7 @@ class Vector(FieldType):
         interpretation = self.interpretation.join(other.interpretation)
         return Vector(num_comps=self.num_comps + other.num_comps, interpretation=interpretation)
 
-    def update(self, **kwargs) -> Vector:
+    def update(self, **kwargs: Any) -> Vector:
         """Construct a new vector type by partially updating some attributes."""
         kwargs = {**asdict(self, recurse=False), **kwargs}
         return Vector(**kwargs)
@@ -516,7 +513,7 @@ class CoordinateSystem(ABC):
 
     @property
     @abstractmethod
-    def parameters(self) -> Tuple[str, ...]:
+    def parameters(self) -> tuple[str, ...]:
         """Return a sequence of parameters as strings (used for stringifying)."""
         ...
 
@@ -677,7 +674,7 @@ class TopologyMerger(Protocol):
     a filter for converting corresponding field data.
     """
 
-    def __call__(self, topology: Topology) -> Tuple[Topology, FieldDataFilter]:
+    def __call__(self, topology: Topology) -> tuple[Topology, FieldDataFilter]:
         ...
 
 
@@ -715,7 +712,7 @@ class Topology(ABC):
         ...
 
     @abstractmethod
-    def discretize(self, nvis: int) -> Tuple[DiscreteTopology, FieldDataFilter]:
+    def discretize(self, nvis: int) -> tuple[DiscreteTopology, FieldDataFilter]:
         """Return a discrete version of this topology, along with a field data
         filter that can be used to convert associated field data to be
         compatible with the discrete topology.
@@ -752,10 +749,9 @@ class CellType(Enum):
         """
         if self in {CellType.Line}:
             return 1
-        elif self in {CellType.Quadrilateral}:
+        if self in {CellType.Quadrilateral}:
             return 2
-        else:
-            return 3
+        return 3
 
 
 class CellOrdering(Enum):
@@ -840,7 +836,12 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         """Open the source data on disk."""
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Close the source data on disk."""
         return
 

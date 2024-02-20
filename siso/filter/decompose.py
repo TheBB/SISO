@@ -1,14 +1,22 @@
 """This module implements filters for splitting fields by component."""
 
-from typing import Generic, Iterator, List, Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Generic, Optional
 
 from attrs import define
-from numpy import floating
 
-from .. import api
-from ..api import B, F, S, T, Z
-from ..util import FieldData
+from siso import api
+from siso.api import B, F, S, T, Z
+
 from .passthrough import PassthroughBSTZ, WrappedField
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from numpy import floating
+
+    from siso.util import FieldData
 
 
 @define
@@ -25,7 +33,7 @@ class DecomposedField(WrappedField[F]):
     """
 
     wrapped_field: F
-    components: Optional[List[int]]
+    components: Optional[list[int]]
     splittable: bool
     name: str
 
@@ -97,9 +105,9 @@ class Split(DecomposeBase[B, F, S, T, Z]):
     that needs it.
     """
 
-    splits: List[api.SplitFieldSpec]
+    splits: list[api.SplitFieldSpec]
 
-    def __init__(self, source: api.Source, splits: List[api.SplitFieldSpec]):
+    def __init__(self, source: api.Source, splits: list[api.SplitFieldSpec]):
         super().__init__(source)
         self.splits = splits
 

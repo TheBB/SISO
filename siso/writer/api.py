@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 from enum import Enum
-from typing import Optional, Protocol
+from typing import TYPE_CHECKING, Optional, Protocol
 
 from attrs import define
 from typing_extensions import Self
 
-from ..api import B, Endianness, F, S, Source, T, Z
+from siso.api import B, Endianness, F, S, Source, T, Z
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 
 class OutputMode(Enum):
@@ -31,15 +36,20 @@ class Writer(Protocol):
     def __enter__(self) -> Self:
         ...
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         ...
 
     @property
     def properties(self) -> WriterProperties:
         ...
 
-    def configure(self, settings: WriterSettings):
+    def configure(self, settings: WriterSettings) -> None:
         ...
 
-    def consume(self, source: Source[B, F, S, T, Z], geometry: F):
+    def consume(self, source: Source[B, F, S, T, Z], geometry: F) -> None:
         ...

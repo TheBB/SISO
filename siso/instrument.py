@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from typing import Callable, Dict, Optional, Protocol, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
 
-from .api import Source
+if TYPE_CHECKING:
+    from .api import Source
 
 
 class Method(Protocol):
     __func__: Callable
     __name__: str
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        ...
 
 
 METHODS = [
@@ -20,11 +24,11 @@ class MethodInstrumenter:
     func: Method
     ncalls: int
 
-    def __init__(self, func: Method):
+    def __init__(self, func: Method) -> None:
         self.func = func
         self.ncalls = 0
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         self.ncalls += 1
         return self.func(*args, **kwargs)
 
@@ -40,8 +44,8 @@ class MethodInstrumenter:
 
 class Instrumenter:
     original_source: Source
-    sources: Dict[int, Source]
-    instrumenters: Dict[Tuple[int, str], MethodInstrumenter]
+    sources: dict[int, Source]
+    instrumenters: dict[tuple[int, str], MethodInstrumenter]
 
     def __init__(self, source: Source):
         self.original_source = source
@@ -50,19 +54,19 @@ class Instrumenter:
         self.discover_sources(source)
         self.plug_instrumenters()
 
-    def discover_sources(self, source: Source):
+    def discover_sources(self, source: Source) -> None:
         self.sources[id(source)] = source
         for src in source.children():
             self.discover_sources(src)
 
-    def plug_instrumenters(self):
+    def plug_instrumenters(self) -> None:
         for source in self.sources.values():
             for name in METHODS:
                 instrumenter = MethodInstrumenter(getattr(source, name))
                 self.instrumenters[(id(source), name)] = instrumenter
                 setattr(source, name, instrumenter)
 
-    def report(self, sprefix: str = "", prefix: str = "", source: Optional[Source] = None):
+    def report(self, sprefix: str = "", prefix: str = "", source: Optional[Source] = None) -> None:
         source = source or self.original_source
         children = list(source.children())
         line = "│" if children else " "

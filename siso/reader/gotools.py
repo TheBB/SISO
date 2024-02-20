@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from ..topology import SplineTopology
+from siso.topology import SplineTopology
+
 from .puregeometry import PureGeometry, PureGeometryZone
 
 
@@ -8,7 +9,7 @@ class GoTools(PureGeometry[SplineTopology]):
     """Reader class for .g2 files (GoTools geometries)."""
 
     def __enter__(self) -> GoTools:
-        with open(self.filename, "r") as f:
+        with self.filename.open() as f:
             data = f.read()
 
         # The heavy lifting is done by SplineTopology.

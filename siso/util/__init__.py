@@ -1,24 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Generator, Hashable, Iterable, Iterator
 from contextlib import contextmanager
 from functools import reduce
 from itertools import chain, count, product
-from pathlib import Path
 from typing import (
     IO,
+    TYPE_CHECKING,
     Callable,
     ClassVar,
-    Dict,
-    Generator,
     Generic,
-    Hashable,
-    Iterable,
-    Iterator,
-    List,
     Optional,
     Protocol,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     cast,
@@ -26,13 +19,20 @@ from typing import (
     runtime_checkable,
 )
 
-import lrspline as lr
 import numpy as np
 from numpy import integer
 from typing_extensions import Self
 
-from .. import api
+from siso import api
+
 from .field_data import FieldData
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from types import TracebackType
+    from typing import Any
+
+    import lrspline as lr
 
 
 @runtime_checkable
@@ -46,9 +46,9 @@ Q = TypeVar("Q", bound=HasName)
 
 
 class Registry(Generic[W]):
-    classes: Dict[str, W]
+    classes: dict[str, W]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.classes = {}
 
     @overload
@@ -56,13 +56,13 @@ class Registry(Generic[W]):
         ...
 
     @overload
-    def register(self, arg: Type[Q]) -> Type[Q]:
+    def register(self, arg: type[Q]) -> type[Q]:
         ...
 
-    def register(self, arg):
+    def register(self, arg):  # type: ignore[no-untyped-def]
         if not isinstance(arg, str):
             assert isinstance(arg, HasName)
-            self.classes[arg.name.casefold()] = arg
+            self.classes[arg.name.casefold()] = cast(W, arg)
             return arg
 
         def decorator(x: W) -> W:
@@ -77,7 +77,7 @@ class Registry(Generic[W]):
     def __contains__(self, key: str) -> bool:
         return key.casefold() in self.classes
 
-    def items(self) -> Iterable[Tuple[str, W]]:
+    def items(self) -> Iterable[tuple[str, W]]:
         return self.classes.items()
 
 
@@ -107,8 +107,8 @@ class RandomAccessFile(Generic[W, M]):
 
     wrapper: Callable[[IO], W]
 
-    markers: Dict[M, int]
-    marker_generator: Optional[Iterator[Tuple[M, int]]] = None
+    markers: dict[M, int]
+    marker_generator: Optional[Iterator[tuple[M, int]]] = None
 
     fp: IO
     fp_borrowed: bool = False
@@ -117,7 +117,7 @@ class RandomAccessFile(Generic[W, M]):
         self,
         fp: IO,
         wrapper: Optional[Callable[[IO], W]] = None,
-        marker_generator: Optional[Callable[[RandomAccessTracker[W, M]], Iterator[Tuple[M, int]]]] = None,
+        marker_generator: Optional[Callable[[RandomAccessTracker[W, M]], Iterator[tuple[M, int]]]] = None,
     ):
         assert fp.seekable()
         self.fp = fp
@@ -131,11 +131,16 @@ class RandomAccessFile(Generic[W, M]):
         self.fp = self.fp.__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
-        self.fp.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.fp.__exit__(exc_type, exc_val, exc_tb)
 
     @contextmanager
-    def borrow_fp(self) -> Generator[IO, None, None]:
+    def borrow_fp(self) -> Iterator[IO]:
         """Borrow the file pointer. This will error if the file pointer is
         already borrowed: only one borrower can use it at a time.
 
@@ -262,7 +267,7 @@ class RandomAccessTracker(Generic[W, M]):
             finally:
                 self.continue_from = fp.tell()
 
-    def origin_marker(self, name: M) -> Tuple[M, int]:
+    def origin_marker(self, name: M) -> tuple[M, int]:
         """Create a tuple of mark and location.
 
         Use with marker generators (see `RandomAccessFile`).
@@ -271,7 +276,7 @@ class RandomAccessTracker(Generic[W, M]):
 
 
 @contextmanager
-def save_excursion(fp: IO):
+def save_excursion(fp: IO) -> Iterator[None]:
     if not fp.seekable():
         raise api.Unsupported("Siso requires seekable file handles")
     ptr = fp.tell()
@@ -297,26 +302,32 @@ def transpose_butlast(array: np.ndarray) -> np.ndarray:
     return array.transpose(permutation)
 
 
-def _single_slice(ndims: int, axis: int, *args) -> Tuple[slice, ...]:
+def _single_slice(ndims: int, axis: int, *args: Any) -> tuple[slice, ...]:
     retval = [slice(None)] * ndims
     retval[axis] = slice(*args)
     return tuple(retval)
 
 
-def _single_index(ndims: int, axis: int, ix: int) -> Tuple[Union[slice, int], ...]:
-    retval: List[Union[slice, int]] = [slice(None)] * ndims
+def _single_index(ndims: int, axis: int, ix: int) -> tuple[Union[slice, int], ...]:
+    retval: list[Union[slice, int]] = [slice(None)] * ndims
     retval[axis] = ix
     return tuple(retval)
 
 
-def _expand_shape(shape: Tuple[int, ...], axis: int) -> Tuple[int, ...]:
+def _expand_shape(shape: tuple[int, ...], axis: int) -> tuple[int, ...]:
     retval = list(shape)
     retval[axis] += 1
     return tuple(retval)
 
 
 def unstagger(data: np.ndarray, axis: int) -> np.ndarray:
-    return (data[_single_slice(data.ndim, axis, 1, None)] + data[_single_slice(data.ndim, axis, 0, -1)]) / 2
+    return (
+        cast(
+            np.ndarray,
+            (data[_single_slice(data.ndim, axis, 1, None)] + data[_single_slice(data.ndim, axis, 0, -1)]),
+        )
+        / 2
+    )
 
 
 def stagger(data: np.ndarray, axis: int) -> np.ndarray:
@@ -338,7 +349,7 @@ def stagger(data: np.ndarray, axis: int) -> np.ndarray:
 T = TypeVar("T")
 
 
-def pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
+def pairwise(iterable: Iterable[T]) -> Iterator[tuple[T, T]]:
     it = iter(iterable)
     left = next(it)
     for right in it:
@@ -346,7 +357,7 @@ def pairwise(iterable: Iterable[T]) -> Iterator[Tuple[T, T]]:
         left = right
 
 
-def subdivide_linear(knots: Union[List[float], Tuple[float, ...]], nvis: int) -> np.ndarray:
+def subdivide_linear(knots: Union[list[float], tuple[float, ...], np.ndarray], nvis: int) -> np.ndarray:
     return np.fromiter(
         chain(
             chain.from_iterable(
@@ -359,7 +370,7 @@ def subdivide_linear(knots: Union[List[float], Tuple[float, ...]], nvis: int) ->
 
 
 def visit_face(
-    element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int
+    element: lr.Element, nodes: dict[tuple[float, ...], int], elements: list[list[int]], nvis: int
 ) -> None:
     lft, btm = element.start()
     rgt, top = element.end()
@@ -375,7 +386,7 @@ def visit_face(
 
 
 def visit_volume(
-    element: lr.Element, nodes: Dict[Tuple[float, ...], int], elements: List[List[int]], nvis: int
+    element: lr.Element, nodes: dict[tuple[float, ...], int], elements: list[list[int]], nvis: int
 ) -> None:
     umin, vmin, wmin = element.start()
     umax, vmax, wmax = element.end()
@@ -408,7 +419,7 @@ def prod(values: Iterable[int]) -> int:
     return reduce(lambda x, y: x * y, values, 1)
 
 
-def first_and_has_more(values: Iterable[T]) -> Tuple[T, bool]:
+def first_and_has_more(values: Iterable[T]) -> tuple[T, bool]:
     it = iter(values)
     first = next(it)
     try:
@@ -458,7 +469,7 @@ def structured_cells(
 
 
 def nodemap(
-    shape: Tuple[int, ...], strides: Tuple[int, ...], periodic: Tuple[int, ...] = (), init: int = 0
+    shape: tuple[int, ...], strides: tuple[int, ...], periodic: tuple[int, ...] = (), init: int = 0
 ) -> np.ndarray:
     indices = np.meshgrid(*(np.arange(s, dtype=int) for s in shape), indexing="ij")
     nodes = sum(i * s for i, s in zip(indices, strides)) + init
@@ -481,4 +492,4 @@ def filename_generator(basename: Path, instantaneous: bool) -> Iterator[Path]:
 def angular_mean(data: np.ndarray) -> np.ndarray:
     data = np.deg2rad(data)
     data = np.arctan2(np.mean(np.sin(data)), np.mean(np.cos(data)))
-    return np.rad2deg(data)
+    return cast(np.ndarray, np.rad2deg(data))

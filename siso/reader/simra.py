@@ -7,8 +7,17 @@ from contextlib import contextmanager
 from enum import Enum, auto
 from functools import lru_cache, partial
 from itertools import count
-from pathlib import Path
-from typing import Callable, ClassVar, Dict, Iterator, List, Literal, Optional, TextIO, Tuple, TypeVar, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    ClassVar,
+    Literal,
+    Optional,
+    TextIO,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import f90nml
 import numpy as np
@@ -17,14 +26,19 @@ from attrs import define
 from numpy import floating, generic
 from typing_extensions import Self
 
-from .. import api, util
-from ..api import CellShape, NodeShape, Points, Zone, ZoneShape
-from ..coord import Generic
-from ..impl import Basis, Field, Step
-from ..topology import CellType, StructuredTopology
-from ..util import FieldData
-from . import FindReaderSettings
+from siso import api, util
+from siso.api import CellShape, NodeShape, Points, Zone, ZoneShape
+from siso.coord import Generic
+from siso.impl import Basis, Field, Step
+from siso.topology import CellType, StructuredTopology
+from siso.util import FieldData
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+    from types import TracebackType
+
+    from . import FindReaderSettings
 
 G = TypeVar("G", bound=generic)
 
@@ -32,7 +46,7 @@ G = TypeVar("G", bound=generic)
 class FortranFile(scipy.io.FortranFile):
     """Subclass of Scipy's Fortran file reader with some utility methods."""
 
-    def skip_record(self):
+    def skip_record(self) -> None:
         """Skip the current record and advance to the next one."""
         size = self._read_size()
         self._fp.seek(size, 1)
@@ -43,7 +57,7 @@ class FortranFile(scipy.io.FortranFile):
         the next one.
         """
         size = self._read_size(eof_ok=True)
-        retval = np.fromfile(self._fp, dtype=dtype, count=1)[0]
+        retval = cast(G, np.fromfile(self._fp, dtype=dtype, count=1)[0])
         self._fp.seek(size - dtype.itemsize, 1)
         assert self._read_size() == size
         return retval
@@ -71,7 +85,7 @@ class FortranFile(scipy.io.FortranFile):
 RandomAccessFortranTracker = util.RandomAccessTracker[FortranFile, int]
 
 
-def fortran_marker_generator(tracker: RandomAccessFortranTracker) -> Iterator[Tuple[int, int]]:
+def fortran_marker_generator(tracker: RandomAccessFortranTracker) -> Iterator[tuple[int, int]]:
     """Marker generator for `RandomAccessFortranTracker`."""
 
     for i in count():
@@ -103,7 +117,7 @@ class RandomAccessFortranFile(util.RandomAccessFile[FortranFile, int]):
     def __init__(self, filename: Path, header_dtype: np.dtype):
         super().__init__(
             # No need to call __enter__ here, `RandomAccessFile` has an __enter__ method.
-            fp=open(filename, "rb"),
+            fp=filename.open("rb"),
             # We intend to use FortranFile objects as file wrappers.
             wrapper=partial(FortranFile, header_dtype=header_dtype),
             # A marker generator that marks blocks by index.
@@ -111,7 +125,7 @@ class RandomAccessFortranFile(util.RandomAccessFile[FortranFile, int]):
         )
 
 
-def transpose(array: np.ndarray, shape: Tuple[int, ...]):
+def transpose(array: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
     """Utility function for transposing SIMRA arrays, which are generally
     ordered with a nasty mix of row-major and column-major ordering (z-axis
     varying the quickest, y the slowest and x in between.)
@@ -129,10 +143,9 @@ def mesh_offset(root: Path, dim: Union[Literal[2], Literal[3]]) -> np.ndarray:
     if not filename.exists():
         logging.warning("Unable to find mesh origin info (info.txt) - coordinates may be unreliable")
         return np.zeros((dim,), dtype=np.float32)
-    else:
-        with open(filename, "r") as f:
-            dx, dy = map(float, next(f).split())
-        return np.array((dx, dy)) if dim == 2 else np.array((dx, dy, 0.0))
+    with filename.open() as f:
+        dx, dy = map(float, next(f).split())
+    return np.array((dx, dy)) if dim == 2 else np.array((dx, dy, 0.0))
 
 
 T = TypeVar("T", int, float)
@@ -150,13 +163,13 @@ def read_many(lines: Iterator[str], n: int, tp: Callable[[str], T], skip: bool =
     """
     if skip:
         next(lines)
-    values: List[T] = []
+    values: list[T] = []
     while len(values) < n:
         values.extend(map(tp, next(lines).split()))
     return np.array(values)
 
 
-def split_sparse(values: np.ndarray, ncomps: int = 1) -> Tuple[np.ndarray, ...]:
+def split_sparse(values: np.ndarray, ncomps: int = 1) -> tuple[np.ndarray, ...]:
     """Split the entries of an array by interpreting every nth element
     (beginning with the first one) as an index, and the intermediate elements as
     components (values to be placed at those indexes). Analogous to common
@@ -200,7 +213,7 @@ class SimraScales:
     def from_path(root: Path) -> SimraScales:
         filename = root.with_name("simra.in")
 
-        params: Dict[str, float]
+        params: dict[str, float]
         if filename.exists():
             params = f90nml.read(filename)["param_data"]
         else:
@@ -319,7 +332,7 @@ class SimraMap(SimraMeshBase):
     def applicable(path: Path) -> bool:
         """Return true if `path` points to what is probably a SIMRA map file."""
         try:
-            with open(path, "r") as f:
+            with path.open() as f:
                 line = next(f)
             assert len(line) == 17
             assert re.match(r"[ ]*[0-9]*", line[:8])
@@ -330,7 +343,7 @@ class SimraMap(SimraMeshBase):
             return False
 
     def __enter__(self) -> Self:
-        self.mesh = open(self.filename, "r").__enter__()
+        self.mesh = self.filename.open().__enter__()
 
         # Extract the shape without moving the file pointer
         with self.save_excursion():
@@ -339,20 +352,25 @@ class SimraMap(SimraMeshBase):
 
         return self
 
-    def __exit__(self, *args):
-        self.mesh.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
     @contextmanager
-    def save_excursion(self):
+    def save_excursion(self) -> Iterator[None]:
         """Context manager for saving and restoring a file pointer."""
         with util.save_excursion(self.mesh):
             yield
 
-    def coords(self) -> Iterator[Tuple[float, ...]]:
+    def coords(self) -> Iterator[tuple[float, ...]]:
         """Consume the file and generate all the points in sequence."""
         with self.save_excursion():
             next(self.mesh)
-            values: Tuple[float, ...] = ()
+            values: tuple[float, ...] = ()
             while True:
                 if values:
                     point, values = values[:3], values[3:]
@@ -391,14 +409,14 @@ class Simra2dMesh(SimraMeshBase):
         file.
         """
         try:
-            with open(path, "r") as f:
+            with path.open() as f:
                 assert next(f) == "text\n"
             return True
         except (AssertionError, UnicodeDecodeError):
             return False
 
     def __enter__(self) -> Self:
-        self.mesh = open(self.filename, "r").__enter__()
+        self.mesh = self.filename.open().__enter__()
 
         # Extract the shape without moving the file pointer
         with self.save_excursion():
@@ -408,11 +426,16 @@ class Simra2dMesh(SimraMeshBase):
 
         return self
 
-    def __exit__(self, *args):
-        self.mesh.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
     @contextmanager
-    def save_excursion(self):
+    def save_excursion(self) -> Iterator[None]:
         """Context manager for saving and restoring a file pointer."""
         with util.save_excursion(self.mesh):
             yield
@@ -472,8 +495,13 @@ class Simra3dMesh(SimraMeshBase):
 
         return self
 
-    def __exit__(self, *args) -> None:
-        self.mesh.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
     @lru_cache(maxsize=1)
     def nodes(self) -> FieldData[floating]:
@@ -509,8 +537,13 @@ class SimraHasMesh(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]]
         self.mesh.__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
-        self.mesh.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
     def configure(self, settings: api.ReaderSettings) -> None:
         self.mesh.configure(settings)
@@ -554,7 +587,7 @@ class SimraBoundary(SimraHasMesh):
         file.
         """
         try:
-            with open(path, "r") as f:
+            with path.open() as f:
                 assert next(f).startswith("Boundary conditions")
             assert SimraHasMesh.applicable(path, settings)
             return True
@@ -567,15 +600,20 @@ class SimraBoundary(SimraHasMesh):
 
     def __enter__(self) -> Self:
         super().__enter__()
-        self.boundary = open(self.filename, "r").__enter__()
+        self.boundary = self.filename.open().__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
-        super().__exit__(*args)
-        self.boundary.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        super().__exit__(exc_type, exc_val, exc_tb)
+        self.boundary.__exit__(exc_type, exc_val, exc_tb)
 
     @contextmanager
-    def save_excursion(self):
+    def save_excursion(self) -> Iterator[None]:
         """Context manager for saving and restoring a file pointer."""
         with util.save_excursion(self.boundary):
             yield
@@ -826,9 +864,14 @@ class SimraContinuation(SimraHasMesh):
                 pass
         return self
 
-    def __exit__(self, *args) -> None:
-        super().__exit__(*args)
-        self.source.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        super().__exit__(exc_type, exc_val, exc_tb)
+        self.source.__exit__(exc_type, exc_val, exc_tb)
 
     def fields(self, basis: Basis) -> Iterator[Field]:
         # 11 or 12 nodal components, depending on whether the stratification
@@ -851,7 +894,7 @@ class SimraContinuation(SimraHasMesh):
         yield Step(index=0, value=time)
 
     @lru_cache(maxsize=1)
-    def data(self) -> Tuple[FieldData[floating], Optional[FieldData[floating]]]:
+    def data(self) -> tuple[FieldData[floating], Optional[FieldData[floating]]]:
         """Return a tuple of nodal data and optional cellwise data."""
         cells = None
         with self.source.leap(0) as f:
@@ -979,9 +1022,14 @@ class SimraHistory(SimraHasMesh):
         self.source = RandomAccessFortranFile(self.filename, header_dtype=self.u4_type).__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
-        super().__exit__(*args)
-        self.source.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        super().__exit__(exc_type, exc_val, exc_tb)
+        self.source.__exit__(exc_type, exc_val, exc_tb)
 
     def fields(self, basis: Basis) -> Iterator[Field]:
         yield Field("nodal", type=api.Vector(12))
@@ -1009,7 +1057,7 @@ class SimraHistory(SimraHasMesh):
         return ndata
 
     @lru_cache(maxsize=1)
-    def data(self, index: int) -> Tuple[FieldData[floating], FieldData[floating]]:
+    def data(self, index: int) -> tuple[FieldData[floating], FieldData[floating]]:
         """Return a tuple of nodal data and cellwise data."""
 
         # The first timestep uses block 1 and 2, the second uses blocks 3 and 4,

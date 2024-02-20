@@ -3,12 +3,10 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from pathlib import Path
-from typing import IO, Tuple, TypeVar, Union
+from typing import IO, TYPE_CHECKING, Optional, TypeVar, Union
 
 from numpy import number
 from typing_extensions import Self
-
 from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import (
@@ -23,11 +21,16 @@ from vtkmodules.vtkCommonDataModel import (
 from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUnstructuredGridWriter
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
-from .. import api, util
-from ..api import B, CellOrdering, DiscreteTopology, F, NodeShape, S, Source, T, Z
-from ..topology import CellType, StructuredTopology
-from ..util import FieldData
+from siso import api, util
+from siso.api import B, CellOrdering, DiscreteTopology, F, NodeShape, S, Source, T, Z
+from siso.topology import CellType, StructuredTopology
+from siso.util import FieldData
+
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from types import TracebackType
 
 
 class Behavior(Enum):
@@ -52,7 +55,7 @@ def transpose(data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) ->
 
 def get_grid(
     topology: DiscreteTopology, legacy: bool, behavior: Behavior
-) -> Tuple[vtkPointSet, BackendWriter]:
+) -> tuple[vtkPointSet, BackendWriter]:
     if isinstance(topology, StructuredTopology) and behavior != Behavior.OnlyUnstructured:
         sgrid = vtkStructuredGrid()
         shape = tuple(topology.cellshape)
@@ -61,8 +64,7 @@ def get_grid(
         sgrid.SetDimensions(*(s + 1 for s in shape))
         if legacy:
             return sgrid, vtkStructuredGridWriter()
-        else:
-            return sgrid, vtkXMLStructuredGridWriter()
+        return sgrid, vtkXMLStructuredGridWriter()
 
     if behavior == Behavior.OnlyStructured:
         raise api.Unexpected("Unstructured topology passed to structured-only context")
@@ -90,8 +92,7 @@ def get_grid(
 
     if legacy:
         return ugrid, vtkUnstructuredGridWriter()
-    else:
-        return ugrid, vtkXMLUnstructuredGridWriter()
+    return ugrid, vtkXMLUnstructuredGridWriter()
 
 
 def apply_output_mode(writer: Union[vtkXMLWriter, vtkDataWriter], mode: OutputMode) -> None:
@@ -120,7 +121,12 @@ class VtkWriterBase(ABC, Writer):
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         return
 
     @property
@@ -138,7 +144,7 @@ class VtkWriterBase(ABC, Writer):
             self.output_mode = settings.output_mode
 
     @abstractmethod
-    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
         ...
 
     def consume_timestep(
@@ -193,7 +199,7 @@ class VtkWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
         return get_grid(topology, legacy=True, behavior=Behavior.Whatever)
 
 
@@ -203,7 +209,7 @@ class VtuWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
         return get_grid(topology, legacy=False, behavior=Behavior.OnlyUnstructured)
 
 
@@ -213,7 +219,7 @@ class VtsWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(self, topology: DiscreteTopology) -> Tuple[vtkPointSet, BackendWriter]:
+    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
         return get_grid(topology, legacy=False, behavior=Behavior.OnlyStructured)
 
 
@@ -234,11 +240,16 @@ class PvdWriter(VtuWriter):
         self.pvd.write("  <Collection>\n")
         return super().__enter__()
 
-    def __exit__(self, *args) -> None:
-        super().__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        super().__exit__(exc_type, exc_val, exc_tb)
         self.pvd.write("  </Collection>\n")
         self.pvd.write("</VTKFile>\n")
-        self.pvd.__exit__(*args)
+        self.pvd.__exit__(exc_type, exc_val, exc_tb)
         logging.info(self.pvd_filename)
 
     def consume_timestep(
@@ -246,8 +257,5 @@ class PvdWriter(VtuWriter):
     ) -> None:
         super().consume_timestep(timestep, filename, source, geometry)
         relative_filename = filename.relative_to(self.pvd_filename.parent)
-        if timestep.value is not None:
-            time = timestep.value
-        else:
-            time = timestep.index
+        time = timestep.value if timestep.value is not None else timestep.index
         self.pvd.write(f'    <DataSet timestep="{time}" part="0" file="{relative_filename}" />\n')

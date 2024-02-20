@@ -6,7 +6,7 @@ import sys
 from functools import partial, wraps
 from itertools import chain
 from pathlib import Path
-from typing import Any, Callable, List, Literal, Optional, Sequence, Tuple, Type, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Generic, Literal, Optional, TypeVar
 
 import click
 from click_option_group import MutuallyExclusiveOptionGroup, optgroup
@@ -21,6 +21,8 @@ from .reader import FindReaderSettings, find_reader
 from .writer import OutputFormat, find_writer
 from .writer.api import OutputMode, WriterSettings
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 S = TypeVar("S")
 
@@ -30,7 +32,7 @@ def coord_callback(
     param: click.Parameter,
     value: S,
     constructor: Callable[[S], CoordinateSystem],
-):
+) -> Optional[CoordinateSystem]:
     """Callback used for converting a CLI argument to a coordinate system and
     assigning it to the 'out_coords' parameter being passed to the main
     function.
@@ -39,13 +41,13 @@ def coord_callback(
     slightly different ways.
     """
     if not value:
-        return
+        return None
     system = constructor(value)
     ctx.params["out_coords"] = system
     return system
 
 
-def defaults(**def_kwargs):
+def defaults(**def_kwargs: Any) -> Callable[[Callable], Callable]:
     """Utility decorator for assigning default values to the main function after
     the CLI arguments have been processed but right before execution.
 
@@ -53,9 +55,9 @@ def defaults(**def_kwargs):
     click, for whatever reason.
     """
 
-    def decorator(func):
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def inner(**in_kwargs):
+        def inner(**in_kwargs: Any) -> Any:
             for k, v in def_kwargs.items():
                 if in_kwargs.get(k) is None:
                     in_kwargs[k] = v
@@ -66,9 +68,9 @@ def defaults(**def_kwargs):
     return decorator
 
 
-def catch(func):
+def catch(func: Callable) -> Callable:
     @wraps(func)
-    def inner(**kwargs):
+    def inner(**kwargs: Any) -> Any:
         try:
             return func(**kwargs)
         except api.BadInput as e:
@@ -84,16 +86,19 @@ def catch(func):
     return inner
 
 
-class Enum(click.Choice):
+E = TypeVar("E", bound=enum.Enum)
+
+
+class Enum(click.Choice, Generic[E]):
     """Parameter type for selecting one choice from an enum."""
 
-    _enum: Type[enum.Enum]
+    _enum: type[E]
 
-    def __init__(self, enum: Type[enum.Enum], case_sensitive: bool = False):
+    def __init__(self, enum: type[E], case_sensitive: bool = False):
         self._enum = enum
         super().__init__(choices=[item.value for item in enum], case_sensitive=case_sensitive)
 
-    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]):
+    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]) -> E:
         name = super().convert(value, param, ctx)
         return self._enum(name)
 
@@ -103,7 +108,9 @@ class SliceType(click.ParamType):
 
     name = "[START:]STOP[:STEP]"
 
-    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]):
+    def convert(
+        self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]
+    ) -> Optional[tuple[Optional[int], ...]]:
         if value is None or isinstance(value, tuple):
             return value
         try:
@@ -123,17 +130,17 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
             logging.critical(f"Unable to determine type of {inpath[0]}")
             sys.exit(2)
         return source
-    else:
-        # If there's multiple input files, find readers for each and bundle them
-        # in a MultiSource object.
-        sources: List[Source] = []
-        for path in inpath:
-            source = find_reader(path, settings)
-            if source is None:
-                logging.critical(f"Unable to determine type of {path}")
-                sys.exit(2)
-            sources.append(source)
-        return MultiSource(sources)
+
+    # If there's multiple input files, find readers for each and bundle them
+    # in a MultiSource object.
+    sources: list[Source] = []
+    for path in inpath:
+        source = find_reader(path, settings)
+        if source is None:
+            logging.critical(f"Unable to determine type of {path}")
+            sys.exit(2)
+        sources.append(source)
+    return MultiSource(sources)
 
 
 # Main entry-point for the Siso application.
@@ -144,7 +151,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     name="Siso",
     help="Convert between various scientific data formats.",
 )
-
 # Output options
 @optgroup.group("Output")
 @optgroup.option(
@@ -170,7 +176,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     type=Enum(OutputMode),
     help="Mode of output, for those formats which support them.",
 )
-
 # Output coordinate systems
 #
 # It's not possible to assign all of these options to the 'out_coords'
@@ -178,7 +183,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 # expose_value=False to hide the parsed value from the main function, and
 # instead assign the value to the correct parameter using a callback function.
 @optgroup.group("Output coordinate systems", cls=MutuallyExclusiveOptionGroup)
-
 # This is the most general option
 @optgroup.option(
     "--out-coords",
@@ -194,7 +198,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
         "Note: 'utm:33s' will be interpreted as zone 33S, which is north of the equator."
     ),
 )
-
 # Each of these options are quick and easy versions for various more specific
 # coordinate systems.
 @optgroup.option(
@@ -226,7 +229,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     help="Quick option for UTM output coordinates with zone number and hemisphere.",
     metavar="ZONE [north|south]",
 )
-
 # Input coordinate systems
 @optgroup.group("Input coordinate systems")
 @optgroup.option(
@@ -237,7 +239,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
         "if there are multiple that can convert to the provided output coordinate system."
     ),
 )
-
 # Time slicing
 @optgroup.group("Time slicing", cls=MutuallyExclusiveOptionGroup)
 @optgroup.option(
@@ -260,7 +261,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     is_flag=True,
     help="Only extract the last timestep.",
 )
-
 # Field filtering
 @optgroup.group("Field filtering", cls=MutuallyExclusiveOptionGroup)
 @optgroup.option(
@@ -280,7 +280,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     ),
     metavar="NAME[,NAME]*",
 )
-
 # Endianness
 @optgroup.group("Endianness")
 @optgroup.option(
@@ -298,7 +297,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     default="native",
     help="Override the endianness of the output.",
 )
-
 # Reader options
 @optgroup.group("Input processing")
 @optgroup.option("--staggering", type=Enum(Staggering), default="inner")
@@ -313,7 +311,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     default=1,
     help="Number of subdivisions to use when sampling superlinear geometries.",
 )
-
 # Dimensionality
 @optgroup.group("Dimensionality", cls=MutuallyExclusiveOptionGroup)
 @optgroup.option(
@@ -338,7 +335,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     type=click.UNPROCESSED,
     help="Extract volumetric data, and extrude planar data so that it becomes volumetric.",
 )
-
 # Rationality
 @optgroup.group("Rationality")
 @optgroup.option(
@@ -355,7 +351,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     type=click.UNPROCESSED,
     help="Assume ambiguous spline objects are never rational.",
 )
-
 # Miscellaneous options
 @optgroup.group("Miscellaneous")
 @optgroup.option(
@@ -394,7 +389,6 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
         "This option can be provided multiple times, or you can supply a comma-separated list of basis names."
     ),
 )
-
 # Verbosity
 @optgroup.group("Verbosity", cls=MutuallyExclusiveOptionGroup)
 @optgroup.option("--debug", "verbosity", flag_value="debug", help="Print debug messages.")
@@ -402,16 +396,13 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
 @optgroup.option("--warning", "verbosity", flag_value="warning", help="Only print warnings or errors.")
 @optgroup.option("--error", "verbosity", flag_value="error", help="Only print errors.")
 @optgroup.option("--critical", "verbosity", flag_value="critical", help="Only print critical errors.")
-
 # Colors
 @optgroup.group("Log formatting")
 @optgroup.option("--rich/--no-rich", default=True, help="Use rich output formatting.")
-
 # Debugging
 @optgroup.group("Debugging")
 @optgroup.option("--verify-strict", is_flag=True, help="Add extra assertions for debugging purposes.")
 @optgroup.option("--instrument", is_flag=True, help="Add instrumentation for profiling purposes.")
-
 # Input
 @click.argument(
     "inpath",
@@ -420,12 +411,10 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     required=True,
     metavar="INPUT...",
 )
-
 # Final step befor execution: apply defaults that are not provided by the click machinery.
 @defaults(
     out_coords=coord.Generic(),
 )
-
 # Catch Siso errors and log them to stdout.
 @catch
 
@@ -438,12 +427,12 @@ def main(
     eigenmodes_are_displacement: bool,
     out_coords: CoordinateSystem,
     in_coords: Optional[str],
-    timestep_slice: Tuple[Optional[int]],
+    timestep_slice: tuple[Optional[int]],
     timestep_index: Optional[int],
     only_final_timestep: bool,
     nvis: int,
     no_fields: bool,
-    field_filter: Tuple[str],
+    field_filter: tuple[str],
     # Writer options
     output_mode: Optional[OutputMode],
     out_endianness: Endianness,
@@ -453,14 +442,14 @@ def main(
     staggering: Staggering,
     rationality: Optional[Rationality],
     mesh_filename: Optional[Path],
-    basis_filter: Tuple[str],
+    basis_filter: tuple[str],
     # Logging, verbosity and testing
     verify_strict: bool,
     instrument: bool,
     verbosity: str,
     rich: bool,
     # Input and output
-    inpath: Tuple[Path, ...],
+    inpath: tuple[Path, ...],
     outpath: Optional[Path],
     fmt: Optional[OutputFormat],
 ) -> None:

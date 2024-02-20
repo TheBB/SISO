@@ -1,11 +1,10 @@
-from typing import Dict, Tuple
-
 from numpy import floating
 
-from .. import api, util
-from ..api import B, F, S, T, Z
-from ..coord import ConversionPath, convert_coords, convert_vectors
-from ..util import FieldData
+from siso import api, util
+from siso.api import B, F, S, T, Z
+from siso.coord import ConversionPath, convert_coords, convert_vectors
+from siso.util import FieldData
+
 from .passthrough import PassthroughAll
 
 
@@ -26,7 +25,7 @@ class CoordTransform(PassthroughAll[B, F, S, T, Z]):
     # Conversion of vector fields requires (in general) knowledge of the
     # coordinates of the points those vector fields are defined on. We store
     # them in this dict, mapping coordinate system name and zone to nodes.
-    cache: Dict[Tuple[str, Z], FieldData[floating]]
+    cache: dict[tuple[str, Z], FieldData[floating]]
 
     def __init__(self, source: api.Source[B, F, S, T, Z], path: ConversionPath):
         super().__init__(source)

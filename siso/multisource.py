@@ -1,12 +1,19 @@
-from typing import Iterator, List, Optional, Sequence
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional, cast
 
 from attrs import define
-from numpy import floating
 from typing_extensions import Self
 
 from .api import Basis, Field, ReaderSettings, Source, SourceProperties, Step, Zone
 from .topology import Topology
 from .util import FieldData, bisect
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+    from types import TracebackType
+
+    from numpy import floating
 
 
 @define
@@ -22,7 +29,7 @@ class MultiSourceStep:
 
 class MultiSource(Source):
     sources: Sequence[Source]
-    maxindex: List[int]
+    maxindex: list[int]
 
     def __init__(self, sources: Sequence[Source]):
         self.sources = sources
@@ -33,9 +40,14 @@ class MultiSource(Source):
             src.__enter__()
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         for src in self.sources:
-            src.__exit__(*args)
+            src.__exit__(exc_type, exc_val, exc_tb)
 
     @property
     def properties(self) -> SourceProperties:
@@ -48,7 +60,7 @@ class MultiSource(Source):
             source.configure(settings)
 
     def source_at(self, index: int) -> Source:
-        i = bisect.bisect_left(self.maxindex, index)
+        i: int = bisect.bisect_left(self.maxindex, index)
         return self.sources[i]
 
     def use_geometry(self, geometry: Field) -> None:
@@ -58,8 +70,8 @@ class MultiSource(Source):
     def bases(self) -> Iterator[Basis]:
         return self.sources[0].bases()
 
-    def basis_of(self, field: Field):
-        return self.sources[0].basis_of(field)
+    def basis_of(self, field: Field) -> Basis:
+        return cast(Basis, self.sources[0].basis_of(field))
 
     def geometries(self, basis: Basis) -> Iterator[Field]:
         return self.sources[0].geometries(basis)
@@ -81,7 +93,7 @@ class MultiSource(Source):
 
     def topology(self, step: MultiSourceStep, basis: Basis, zone: Zone) -> Topology:
         source = self.source_at(step.index)
-        return source.topology(step.original, basis, zone)
+        return cast(Topology, source.topology(step.original, basis, zone))
 
     def topology_updates(self, step: MultiSourceStep, basis: Basis) -> bool:
         source = self.source_at(step.index)

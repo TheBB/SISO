@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator, MutableMapping
 from functools import reduce
 from operator import itemgetter
-from typing import Dict, Iterator, List, MutableMapping, Optional, Set, Tuple, TypeVar, cast
+from typing import TYPE_CHECKING, Optional, TypeVar, cast
 
-from numpy import floating
+from siso import api
+from siso.api import B, F, Point, S, Source, SourceProperties, T, Z, Zone, ZoneShape
+from siso.util import FieldData, bisect
 
-from .. import api
-from ..api import B, F, Point, S, Source, SourceProperties, T, Z, Zone, ZoneShape
-from ..util import FieldData, bisect
 from .passthrough import PassthroughBFST
+
+if TYPE_CHECKING:
+    from numpy import floating
 
 
 class KeyZones(PassthroughBFST[B, F, S, T, Z, Zone[int]]):
     manager: ZoneManager
-    mapping: Dict[Zone[int], Z]
+    mapping: dict[Zone[int], Z]
 
     def __init__(self, source: Source):
         super().__init__(source)
@@ -46,12 +49,12 @@ class KeyZones(PassthroughBFST[B, F, S, T, Z, Zone[int]]):
 
 
 class ZoneManager:
-    lut: VertexDict[Set[int]]
-    shapes: Dict[int, ZoneShape]
+    lut: VertexDict[set[int]]
+    shapes: dict[int, ZoneShape]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.lut = VertexDict()
-        self.shapes = dict()
+        self.shapes = {}
 
     def lookup(self, zone: Zone) -> Zone[int]:
         keys = reduce(lambda x, y: x & y, (self.lut.get(pt, set()) for pt in zone.coords))
@@ -85,19 +88,19 @@ class VertexDict(MutableMapping[Point, Q]):
     rtol: float
     atol: float
 
-    _keys: List[Optional[Point]]
-    _values: List[Optional[Q]]
+    _keys: list[Optional[Point]]
+    _values: list[Optional[Q]]
 
-    lut: Dict[int, List[Tuple[int, float]]]
+    lut: dict[int, list[tuple[int, float]]]
 
     def __init__(self, rtol: float = 1e-5, atol: float = 1e-8):
         self.rtol = rtol
         self.atol = atol
         self._keys = []
         self._values = []
-        self.lut = dict()
+        self.lut = {}
 
-    def _bounds(self, key: float):
+    def _bounds(self, key: float) -> tuple[float, float]:
         if key >= self.atol:
             return (
                 (key - self.atol) / (1 + self.rtol),

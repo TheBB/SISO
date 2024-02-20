@@ -1,5 +1,6 @@
-from ..api import B, F, S, Z
-from ..topology import DiscreteTopology, UnstructuredTopology
+from siso.api import B, F, S, Z
+from siso.topology import DiscreteTopology, UnstructuredTopology
+
 from .passthrough import PassthroughBFSZ
 
 

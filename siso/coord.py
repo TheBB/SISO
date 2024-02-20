@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import Callable, ClassVar, Dict, List, Optional, Sequence, Tuple, Type, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, ClassVar, Optional, TypeVar, cast
 
 import erfa
 import numpy as np
@@ -13,9 +13,11 @@ from typing_extensions import Self
 from . import api, util
 from .util import FieldData, coord
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
-systems: util.Registry[Type[api.CoordinateSystem]] = util.Registry()
-ellpsoids: util.Registry[Type[Ellipsoid]] = util.Registry()
+systems: util.Registry[type[api.CoordinateSystem]] = util.Registry()
+ellpsoids: util.Registry[type[Ellipsoid]] = util.Registry()
 
 
 def find_system(code: str) -> api.CoordinateSystem:
@@ -41,8 +43,8 @@ class Generic(api.CoordinateSystem):
         return cls()
 
     @property
-    def parameters(self) -> Tuple[str, ...]:
-        return cast(Tuple[str], ())
+    def parameters(self) -> tuple[str, ...]:
+        return cast(tuple[str], ())
 
 
 @systems.register
@@ -63,10 +65,10 @@ class Named(api.CoordinateSystem):
         raise api.Unsupported("There is no default named coordinate system")
 
     @property
-    def parameters(self) -> Tuple[str, ...]:
+    def parameters(self) -> tuple[str, ...]:
         if self.identifier:
             return (self.identifier,)
-        return cast(Tuple[str], ())
+        return cast(tuple[str], ())
 
     def fits_system_name(self, code: str) -> bool:
         return code.casefold() == self.identifier.casefold()
@@ -91,7 +93,7 @@ class Geodetic(api.CoordinateSystem):
         return cls(Wgs84())
 
     @property
-    def parameters(self) -> Tuple[str, ...]:
+    def parameters(self) -> tuple[str, ...]:
         return (self.ellipsoid.name,)
 
     @property
@@ -119,10 +121,7 @@ class Utm(api.CoordinateSystem):
             raise ValueError(zone)
         zone_number = int(zone[:i])
         lat_band = zone[i:]
-        if len(lat_band) == 1:
-            northern = lat_band.casefold() >= "N"
-        else:
-            northern = not lat_band[0].casefold() == "S"
+        northern = lat_band.casefold() >= "N" if len(lat_band) == 1 else lat_band[0].casefold() != "S"
         return cls(zone_number, northern)
 
     @classmethod
@@ -130,14 +129,14 @@ class Utm(api.CoordinateSystem):
         raise api.Unsupported("There is no default UTM coordinate system")
 
     @property
-    def parameters(self) -> Tuple[str, ...]:
+    def parameters(self) -> tuple[str, ...]:
         return (str(self.zone_number), "north" if self.northern else "south")
 
 
 @systems.register
 class Geocentric(api.CoordinateSystem):
-    name = "Geocentric"
-    parameters = cast(Tuple[str], ())
+    name: ClassVar[str] = "Geocentric"
+    parameters = cast(tuple[str], ())
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Self:
@@ -167,7 +166,7 @@ class Ellipsoid(ABC):
 @ellpsoids.register
 @define
 class SphericalEarth(Ellipsoid):
-    name = "Sphere"
+    name: ClassVar[str] = "Sphere"
     flattening: float = 0.0
     semi_major_axis: float = 6_371_008.8
 
@@ -188,21 +187,21 @@ class ErfaEllipsoid(Ellipsoid):
 @define
 class Wgs84(ErfaEllipsoid):
     erfa_code = 1
-    name = "WGS84"
+    name: ClassVar[str] = "WGS84"
 
 
 @ellpsoids.register
 @define
 class Grs80(ErfaEllipsoid):
     erfa_code = 2
-    name = "GRS80"
+    name: ClassVar[str] = "GRS80"
 
 
 @ellpsoids.register
 @define
 class Wgs72(ErfaEllipsoid):
     erfa_code = 3
-    name = "WGS72"
+    name: ClassVar[str] = "WGS72"
 
 
 T = TypeVar("T", bound=api.CoordinateSystem)
@@ -211,16 +210,16 @@ S = TypeVar("S", bound=api.CoordinateSystem)
 
 CoordConverter = Callable[[T, S, FieldData[floating]], FieldData[floating]]
 VectorConverter = Callable[[T, S, FieldData[floating], FieldData[floating]], FieldData[floating]]
-ConversionPath = List[api.CoordinateSystem]
+ConversionPath = list[api.CoordinateSystem]
 
 
-NEIGHBORS: Dict[str, List[str]] = {}
-COORD_CONVERTERS: Dict[Tuple[str, str], CoordConverter] = {}
-VECTOR_CONVERTERS: Dict[Tuple[str, str], VectorConverter] = {}
+NEIGHBORS: dict[str, list[str]] = {}
+COORD_CONVERTERS: dict[tuple[str, str], CoordConverter] = {}
+VECTOR_CONVERTERS: dict[tuple[str, str], VectorConverter] = {}
 
 
 def register_coords(
-    src: Type[api.CoordinateSystem], tgt: Type[api.CoordinateSystem]
+    src: type[api.CoordinateSystem], tgt: type[api.CoordinateSystem]
 ) -> Callable[[CoordConverter[T, S]], CoordConverter[T, S]]:
     def decorator(conv: CoordConverter) -> CoordConverter:
         NEIGHBORS.setdefault(src.name, []).append(tgt.name)
@@ -231,7 +230,7 @@ def register_coords(
 
 
 def register_vectors(
-    src: Type[api.CoordinateSystem], tgt: Type[api.CoordinateSystem]
+    src: type[api.CoordinateSystem], tgt: type[api.CoordinateSystem]
 ) -> Callable[[VectorConverter[T, S]], VectorConverter[T, S]]:
     def decorator(conv: VectorConverter) -> VectorConverter:
         VECTOR_CONVERTERS[(src.name, tgt.name)] = conv
@@ -246,7 +245,7 @@ def conversion_path(src: api.CoordinateSystem, tgt: api.CoordinateSystem) -> Opt
     if isinstance(src, (Generic, Named)) and isinstance(tgt, Generic):
         return []
 
-    visited: Dict[str, str] = {}
+    visited: dict[str, str] = {}
     queue: deque[str] = deque((src.name,))
 
     def construct_backpath() -> ConversionPath:
@@ -273,8 +272,8 @@ def conversion_path(src: api.CoordinateSystem, tgt: api.CoordinateSystem) -> Opt
 
 def optimal_system(
     systems: Sequence[api.CoordinateSystem], target: api.CoordinateSystem
-) -> Optional[Tuple[int, ConversionPath]]:
-    optimal: Optional[Tuple[int, ConversionPath]] = None
+) -> Optional[tuple[int, ConversionPath]]:
+    optimal: Optional[tuple[int, ConversionPath]] = None
 
     for i, system in enumerate(systems):
         new_path = conversion_path(system, target)

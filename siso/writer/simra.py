@@ -1,16 +1,23 @@
+from __future__ import annotations
+
 import logging
-from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from numpy.linalg import norm
 from scipy.io import FortranFile
 from typing_extensions import Self
 
-from .. import api, util
-from ..api import B, CellShape, F, S, T, Z
-from ..topology import StructuredTopology
-from ..util import cell_numbering
+from siso import api, util
+from siso.api import B, CellShape, F, S, T, Z
+from siso.topology import StructuredTopology
+from siso.util import cell_numbering
+
 from .api import Writer, WriterProperties, WriterSettings
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from types import TracebackType
 
 
 class SimraWriter(Writer):
@@ -27,8 +34,13 @@ class SimraWriter(Writer):
         self.data = FortranFile(self.filename, "w", header_dtype=self.u4_type)
         return self
 
-    def __exit__(self, *args) -> None:
-        self.data.__exit__(*args)
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.data.__exit__(exc_type, exc_val, exc_tb)
         logging.info(self.filename)
 
     @property
@@ -39,11 +51,11 @@ class SimraWriter(Writer):
             require_instantaneous=True,
         )
 
-    def configure(self, settings: WriterSettings):
+    def configure(self, settings: WriterSettings) -> None:
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
-    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F):
+    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F) -> None:
         casted = source.cast_discrete_topology()
         step = casted.single_step()
         zone = casted.single_zone()

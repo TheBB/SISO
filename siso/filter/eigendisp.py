@@ -1,11 +1,12 @@
-from typing import Iterator
+from collections.abc import Iterator
 
 from attrs import define
 from numpy import floating
 
-from .. import api
-from ..api import B, F, S, T, Z
-from ..util import FieldData
+from siso import api
+from siso.api import B, F, S, T, Z
+from siso.util import FieldData
+
 from .passthrough import PassthroughBSTZ, WrappedField
 
 

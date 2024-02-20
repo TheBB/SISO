@@ -1,11 +1,12 @@
+from collections.abc import Iterator
 from copy import deepcopy
-from typing import Dict, Iterator
 
 from numpy import floating
 
-from .. import api, util
-from ..api import B, DiscreteTopology, F, S, T, Z
-from ..util import FieldData
+from siso import api, util
+from siso.api import B, DiscreteTopology, F, S, T, Z
+from siso.util import FieldData
+
 from .passthrough import PassthroughAll
 
 
@@ -15,7 +16,7 @@ class Strict(PassthroughAll[B, F, S, T, Z]):
     """
 
     # Keep track of all fields to ensure they don't change
-    field_specs: Dict[str, F]
+    field_specs: dict[str, F]
 
     # Keep track of the properties to ensure they don't change
     original_properties: api.SourceProperties
