@@ -176,11 +176,11 @@ class ErfaEllipsoid(Ellipsoid):
 
     @property
     def semi_major_axis(self) -> float:
-        return cast(float, erfa.eform(self.erfa_code)[0])
+        return erfa.eform(self.erfa_code)[0]
 
     @property
     def flattening(self) -> float:
-        return cast(float, erfa.eform(self.erfa_code)[1])
+        return erfa.eform(self.erfa_code)[1]
 
 
 @ellpsoids.register
