@@ -40,13 +40,6 @@ test: pytest mypy lint-check
 
 # Build targets (used from CI)
 
-.PHONY: sdist
-sdist:
-	pdm build --no-wheel
-
-.PHONY: wheel
-wheel:
-	pdm build --no-sdist
-
 .PHONY: build
-build: wheel sdist
+build:
+	pdm build
