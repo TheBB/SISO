@@ -91,6 +91,7 @@ dev = [
     "typing-protocol-intersection<1.0.0,>=0.2.3",
     "ruff<1.0.0,>=0.0.257",
     "bump-my-version>=0.17.4",
+    "vtfwriter-stubs>=1.1.0",
 ]
 
 [tool.pdm.build]
