@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:a0947e5f8a2eac7a25341ccbcabc7dfb88266d8e05d4be0c3ccbae2d0e69ed5f"
+content_hash = "sha256:3ade180599d03c51b96ec49cacd7b600efa02e9bde83aa07a5f08a703f37218c"
 
 [[package]]
 name = "annotated-types"
@@ -1251,6 +1251,20 @@ groups = ["dev"]
 files = [
     {file = "typing-protocol-intersection-0.3.10.tar.gz", hash = "sha256:36a09843f5f298188a3a8760b2c1b37166a1c4c98d8a3e2ff0f07205faa116ac"},
     {file = "typing_protocol_intersection-0.3.10-py3-none-any.whl", hash = "sha256:1530609a0898d440a5cfcf4bbd934228c03c29f5edc8af59647e5545dc8706b6"},
+]
+
+[[package]]
+name = "vtfwriter-stubs"
+version = "1.1.0"
+requires_python = "<4.0,>=3.9"
+summary = "Type stubs for the Python interface to libVTFExpressAPI"
+groups = ["dev"]
+dependencies = [
+    "typing-extensions>=4.9.0",
+]
+files = [
+    {file = "vtfwriter_stubs-1.1.0-py3-none-any.whl", hash = "sha256:f0098a86dd0fa17d6b908662dc9d958f68a5d8a2044191e5463eac952628f4fe"},
+    {file = "vtfwriter_stubs-1.1.0.tar.gz", hash = "sha256:eb292a3f3b9a5f22e3378713c12be3d1261c6d085b15b739925350d02dd8a6b7"},
 ]
 
 [[package]]
