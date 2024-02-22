@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:3ade180599d03c51b96ec49cacd7b600efa02e9bde83aa07a5f08a703f37218c"
+content_hash = "sha256:3d1ac7c0e15df759b3d4f100cdfdb1a671aabeb6eacfc1b8c2459d15e6d9ee06"
 
 [[package]]
 name = "annotated-types"
@@ -475,34 +475,35 @@ files = [
 
 [[package]]
 name = "lrsplines"
-version = "1.12.0"
+version = "1.13.0"
+requires_python = "<4.0,>=3.9"
 summary = "Python bindings for the LRSplines library"
 groups = ["default"]
 dependencies = [
-    "numpy",
+    "numpy>=1.23",
 ]
 files = [
-    {file = "LRSplines-1.12.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:20ab700e06030cf1959b247ba3cb94f7837701748b40e792b8ac99c36338de0e"},
-    {file = "LRSplines-1.12.0-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:505d15467f77704fb247c61b40977c00eab58d750d8c7b411ab1f251518b8bc4"},
-    {file = "LRSplines-1.12.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b87f03f4eea632f55f73446387fc207cc78b1fe82fa7ea16b95a000f8e95b689"},
-    {file = "LRSplines-1.12.0-cp310-cp310-win32.whl", hash = "sha256:7d26826ef223456b4c39f47492ff52a7d666446e9e67cfa8054c7c8dcef8b5fd"},
-    {file = "LRSplines-1.12.0-cp310-cp310-win_amd64.whl", hash = "sha256:7d1e5c6a8116793acf5762b67d5ca930eaecf73f8f8c7ec48f580ab771c32565"},
-    {file = "LRSplines-1.12.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:bc1f459ac8c93bf889e5cf4a884b466cca78ee765acf6bd7ef63d584544c9af3"},
-    {file = "LRSplines-1.12.0-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:3ab6890bfdd436457314b4c3fedd635488d4979d722dc845b87858ae34343ba5"},
-    {file = "LRSplines-1.12.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e7c63dff63ac45d7020a964ba5c3902fc1d913220dbfa13d39d44e19fecf1ecb"},
-    {file = "LRSplines-1.12.0-cp311-cp311-win32.whl", hash = "sha256:695e0a88f31326c2c25a9b213093a1df66e15d7314359a70dce9cd11bae3e9f2"},
-    {file = "LRSplines-1.12.0-cp311-cp311-win_amd64.whl", hash = "sha256:2f506c7608707763cc8e5e30b6956d4433bf59b3fbceba604edbc0ce62683961"},
-    {file = "LRSplines-1.12.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:b26610bb04ae343555fa0d920fcea6a54dec5f2c5b84eac665904da659e4c2eb"},
-    {file = "LRSplines-1.12.0-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1c114e537ca61abaa43a946c9f9e613dd71c0cf1f63dd5ea7fbf6ec092311e72"},
-    {file = "LRSplines-1.12.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:dd39e479fadc93814fe7d5572fafc922843302b13d2b67c6332354dd464604e0"},
-    {file = "LRSplines-1.12.0-cp312-cp312-win32.whl", hash = "sha256:027911e91ca03e5ff47c4a5a72155e8ca44ce391a1921a110fdbb04a54690a16"},
-    {file = "LRSplines-1.12.0-cp312-cp312-win_amd64.whl", hash = "sha256:3b99d157f396e8edbf029251e3c476bef2a0dcd7b5f07aeb12223f06c6758a84"},
-    {file = "LRSplines-1.12.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:aecf71f2ca26df9223f66b155efe22d8480fbb2bc2e82b59feacef41cf3badf6"},
-    {file = "LRSplines-1.12.0-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:652c945281400cdd1202bb67bd4da774c08d2c8280aac9cc916a27f9f76a13a4"},
-    {file = "LRSplines-1.12.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:84ad72bd25b621e711f733610fe618a6e5d0dbb2a43f5d5cd5b86aef8a48671c"},
-    {file = "LRSplines-1.12.0-cp39-cp39-win32.whl", hash = "sha256:5c06dfc3de504b5886585529336236bb40bb5a9dd78e6a2ac5612f03522be7d5"},
-    {file = "LRSplines-1.12.0-cp39-cp39-win_amd64.whl", hash = "sha256:90a347294ab163b6e387515c3c13c74481fa2aa9173f813693e29b7c3f55114a"},
-    {file = "LRSplines-1.12.0.tar.gz", hash = "sha256:22cf4ebee839380aab5a7952a7a9747f2859131ea561abbf9ad5af51e7f09092"},
+    {file = "lrsplines-1.13.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:3731c637f0406f37c760472738a16ab69e53e20be1a832922c15ae32e5462a81"},
+    {file = "lrsplines-1.13.0-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1f7fa050ee080bda1ae6ac97a040eb92af78a8173e4ba631e35d324096aa0766"},
+    {file = "lrsplines-1.13.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a80b7977cc8762d65a59555cb3978c7b9d274a917a9f47517890084172aa31ba"},
+    {file = "lrsplines-1.13.0-cp310-cp310-win32.whl", hash = "sha256:46b4b74d0e039d0f385939c8062e6875661bdb4f39a0848fb5ef38ff66a30349"},
+    {file = "lrsplines-1.13.0-cp310-cp310-win_amd64.whl", hash = "sha256:0becf2cf6931b8176b1cbbb334fead357ccc89fd3ed42d729591dfa9cd381edd"},
+    {file = "lrsplines-1.13.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:56548542a1699dacee89a86378921f364bdd11228650d8942aa12f1d8bbf2c90"},
+    {file = "lrsplines-1.13.0-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1878b822883bf6dad3a24f3856636c74c6e720ca210fb82bc5a466c980f02e8c"},
+    {file = "lrsplines-1.13.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e7f77f5b4e634c3907c28817f206e580511cae17d008db7fa3cae0756595d9a2"},
+    {file = "lrsplines-1.13.0-cp311-cp311-win32.whl", hash = "sha256:dcb67f5afdcd9fd5d2a2df89f5fefcd29f89c606606fe0fe47d1a45234afaa96"},
+    {file = "lrsplines-1.13.0-cp311-cp311-win_amd64.whl", hash = "sha256:b6e13e43fb7872167b688e55967680130828be064c61dd8ff205146fe368b513"},
+    {file = "lrsplines-1.13.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:d06952d7bfe3188f9ec58c58f96eaf7549c77ee501f8966d6e365e9a6690851f"},
+    {file = "lrsplines-1.13.0-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:6ea62a5ec972dfd5e758b9c5a6b1625fd5de984384a86df6b2cddffba4ac327a"},
+    {file = "lrsplines-1.13.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b192352e6e54f22d531aadc2663b83d80db274e4452e0dda584202a514d66b8f"},
+    {file = "lrsplines-1.13.0-cp312-cp312-win32.whl", hash = "sha256:b76e47edef7a82453852ef7146723ec7d893630af65bfcd5fd2a4cc89906bd75"},
+    {file = "lrsplines-1.13.0-cp312-cp312-win_amd64.whl", hash = "sha256:e8f99af3cb384168855925e5699c50789555d44049a8d8b10194ca0e3089973b"},
+    {file = "lrsplines-1.13.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:6623dae0dc85c4fb13eda51e133ce91a74784938ac91aa821788c5e1bca5a41a"},
+    {file = "lrsplines-1.13.0-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:75451153cd551c90a1a1e6b4118862bd374907f006fada4694b086f38d066d72"},
+    {file = "lrsplines-1.13.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c5a57c1eb38dd9b78502d86b6bd11d3db9e6a6239ce765217beea23c191ca1d5"},
+    {file = "lrsplines-1.13.0-cp39-cp39-win32.whl", hash = "sha256:d13740aaa96a04b2bd1ab1223de1b4fd469e56964fe630a67aae394faa0943c4"},
+    {file = "lrsplines-1.13.0-cp39-cp39-win_amd64.whl", hash = "sha256:8af6036b22f75daaf7f186013d5fda6a527f1276140fa98d465805e44bd4257b"},
+    {file = "lrsplines-1.13.0.tar.gz", hash = "sha256:8720cd6ef105ceb2da1e026c698eab06b93c1e45cb714ac1f33809b66d49ee3f"},
 ]
 
 [[package]]
