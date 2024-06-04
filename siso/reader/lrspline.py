@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from siso.api import ZoneShape
 from siso.topology import LrTopology
 
 from .puregeometry import PureGeometry, PureGeometryZone
@@ -28,5 +29,6 @@ class LrSpline(PureGeometry[LrTopology]):
 
         # The heavy lifting is done by LrTopology.
         for corners, topology, field_data in LrTopology.from_string(data, self.rationality):
-            self.zone_data.append(PureGeometryZone(corners, field_data, topology))
+            shape = [ZoneShape.Line, ZoneShape.Quatrilateral, ZoneShape.Hexahedron][topology.pardim - 1]
+            self.zone_data.append(PureGeometryZone(corners, field_data, topology, shape))
         return self

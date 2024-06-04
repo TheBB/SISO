@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from itertools import product
 from typing import TYPE_CHECKING, Generic, TypeVar, cast, overload
 
 import numpy as np
@@ -221,6 +222,14 @@ class FieldData(Generic[T]):
         corners = temp[tuple(slice(None, None, j - 1) for j in temp.shape[:-1])]
         corners = corners.reshape(-1, self.num_comps)
         return Points(tuple(Point(tuple(corner)) for corner in corners))
+
+    def bounding_corners(self: FieldData[floating]) -> Points:
+        """Return a bounding box as a sequence of corner points by interpreting
+        the array as a point cloud.
+        """
+        minima = tuple(np.min(comp) for comp in self.comps)
+        maxima = tuple(np.max(comp) for comp in self.comps)
+        return Points(tuple(map(Point, product(*zip(minima, maxima)))))
 
     def collapse_weights(self: FieldData[floating]) -> FieldData[floating]:
         """Reduce the number of components by one, by dividing the first ncomps-1
