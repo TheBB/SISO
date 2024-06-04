@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .api import Source
 
 
@@ -66,7 +68,7 @@ class Instrumenter:
                 self.instrumenters[(id(source), name)] = instrumenter
                 setattr(source, name, instrumenter)
 
-    def report(self, sprefix: str = "", prefix: str = "", source: Optional[Source] = None) -> None:
+    def report(self, sprefix: str = "", prefix: str = "", source: Source | None = None) -> None:
         source = source or self.original_source
         children = list(source.children())
         line = "│" if children else " "

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from attrs import define
 
@@ -19,19 +19,19 @@ class FindReaderSettings:
     """
 
     endianness: Endianness
-    mesh_filename: Optional[Path]
+    mesh_filename: Path | None
 
 
 # A callable that accepts a path and settings and determines whether this path
 # can be opened with a given reader class, returning it if so.
-ReaderCheck = Callable[[Path, FindReaderSettings], Optional[Source]]
+ReaderCheck = Callable[[Path, FindReaderSettings], Source | None]
 
 
 # Registry of reader functions.
 readers: Registry[ReaderCheck] = Registry()
 
 
-def find_reader(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def find_reader(path: Path, settings: FindReaderSettings) -> Source | None:
     """Find a source object that can read the dataset at the given path with the
     given settings, if possible.
     """
@@ -65,7 +65,7 @@ def find_reader(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("IFEM Eigenmodes")
-def ifem_modes(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def ifem_modes(path: Path, settings: FindReaderSettings) -> Source | None:
     from .ifem import IfemModes
 
     if IfemModes.applicable(path):
@@ -74,7 +74,7 @@ def ifem_modes(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("IFEM")
-def ifem(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def ifem(path: Path, settings: FindReaderSettings) -> Source | None:
     from .ifem import Ifem
 
     if Ifem.applicable(path):
@@ -83,7 +83,7 @@ def ifem(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("SIMRA Map")
-def simra_map(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def simra_map(path: Path, settings: FindReaderSettings) -> Source | None:
     from .simra import SimraMap
 
     if SimraMap.applicable(path):
@@ -92,7 +92,7 @@ def simra_map(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("SIMRA 2D Mesh")
-def simra_2dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def simra_2dmesh(path: Path, settings: FindReaderSettings) -> Source | None:
     from .simra import Simra2dMesh
 
     if Simra2dMesh.applicable(path):
@@ -101,7 +101,7 @@ def simra_2dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("SIMRA 3D Mesh")
-def simra_3dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def simra_3dmesh(path: Path, settings: FindReaderSettings) -> Source | None:
     from .simra import Simra3dMesh
 
     if Simra3dMesh.applicable(path, settings):
@@ -110,7 +110,7 @@ def simra_3dmesh(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("SIMRA Boundary")
-def simra_boundary(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def simra_boundary(path: Path, settings: FindReaderSettings) -> Source | None:
     from .simra import SimraBoundary
 
     if SimraBoundary.applicable(path, settings):
@@ -119,7 +119,7 @@ def simra_boundary(path: Path, settings: FindReaderSettings) -> Optional[Source]
 
 
 @readers.register("SIMRA Continuation")
-def simra_cont(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def simra_cont(path: Path, settings: FindReaderSettings) -> Source | None:
     from .simra import SimraContinuation
 
     if SimraContinuation.applicable(path, settings):
@@ -128,7 +128,7 @@ def simra_cont(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("SIMRA History")
-def simra_hist(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def simra_hist(path: Path, settings: FindReaderSettings) -> Source | None:
     from .simra import SimraHistory
 
     if SimraHistory.applicable(path, settings):
@@ -137,7 +137,7 @@ def simra_hist(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("WRF")
-def wrf(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def wrf(path: Path, settings: FindReaderSettings) -> Source | None:
     from .wrf import Wrf
 
     if Wrf.applicable(path):
@@ -146,7 +146,7 @@ def wrf(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("GeoGrid")
-def geogrid(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def geogrid(path: Path, settings: FindReaderSettings) -> Source | None:
     from .wrf import GeoGrid
 
     if GeoGrid.applicable(path):
@@ -155,7 +155,7 @@ def geogrid(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("GoTools")
-def gotools(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def gotools(path: Path, settings: FindReaderSettings) -> Source | None:
     if path.suffix.casefold() != ".g2":
         return None
     from .gotools import GoTools
@@ -164,7 +164,7 @@ def gotools(path: Path, settings: FindReaderSettings) -> Optional[Source]:
 
 
 @readers.register("LRSpline")
-def lrspline(path: Path, settings: FindReaderSettings) -> Optional[Source]:
+def lrspline(path: Path, settings: FindReaderSettings) -> Source | None:
     if path.suffix.casefold() != ".lr":
         return None
     from .lrspline import LrSpline

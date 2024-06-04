@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import TYPE_CHECKING, Callable, ClassVar, Optional, TypeVar, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, ClassVar, TypeVar, cast
 
 import erfa
 import numpy as np
@@ -239,10 +240,10 @@ def register_vectors(
     return decorator
 
 
-def conversion_path(src: api.CoordinateSystem, tgt: api.CoordinateSystem) -> Optional[ConversionPath]:
+def conversion_path(src: api.CoordinateSystem, tgt: api.CoordinateSystem) -> ConversionPath | None:
     if src == tgt:
         return []
-    if isinstance(src, (Generic, Named)) and isinstance(tgt, Generic):
+    if isinstance(src, Generic | Named) and isinstance(tgt, Generic):
         return []
 
     visited: dict[str, str] = {}
@@ -272,8 +273,8 @@ def conversion_path(src: api.CoordinateSystem, tgt: api.CoordinateSystem) -> Opt
 
 def optimal_system(
     systems: Sequence[api.CoordinateSystem], target: api.CoordinateSystem
-) -> Optional[tuple[int, ConversionPath]]:
-    optimal: Optional[tuple[int, ConversionPath]] = None
+) -> tuple[int, ConversionPath] | None:
+    optimal: tuple[int, ConversionPath] | None = None
 
     for i, system in enumerate(systems):
         new_path = conversion_path(system, target)

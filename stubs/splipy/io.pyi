@@ -1,5 +1,5 @@
 from types import TracebackType
-from typing import Optional, TextIO
+from typing import TextIO
 
 from splipy import SplineObject
 from typing_extensions import Self
@@ -11,8 +11,8 @@ class G2:
     def __enter__(self) -> Self: ...
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None: ...
     def read(self) -> list[SplineObject]: ...

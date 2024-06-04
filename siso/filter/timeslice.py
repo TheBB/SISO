@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from itertools import count, islice
-from typing import TYPE_CHECKING, Generic, Optional, TypeVar, overload
+from typing import TYPE_CHECKING, Generic, TypeVar, overload
 
 from attrs import define
 
@@ -18,12 +18,12 @@ if TYPE_CHECKING:
 
 
 @overload
-def islice_flag(stop: Optional[int], /) -> Iterator[bool]:
+def islice_flag(stop: int | None, /) -> Iterator[bool]:
     ...
 
 
 @overload
-def islice_flag(start: Optional[int], stop: Optional[int], step: Optional[int], /) -> Iterator[bool]:
+def islice_flag(start: int | None, stop: int | None, step: int | None, /) -> Iterator[bool]:
     ...
 
 
@@ -62,13 +62,13 @@ Q = TypeVar("Q")
 
 
 @overload
-def islice_group(it: Iterator[Q], stop: Optional[int], /) -> Iterator[list[Q]]:
+def islice_group(it: Iterator[Q], stop: int | None, /) -> Iterator[list[Q]]:
     ...
 
 
 @overload
 def islice_group(
-    it: Iterator[Q], start: Optional[int], stop: Optional[int], step: Optional[int], /
+    it: Iterator[Q], start: int | None, stop: int | None, step: int | None, /
 ) -> Iterator[list[Q]]:
     ...
 
@@ -111,7 +111,7 @@ class GroupedStep(Generic[S]):
     steps: list[S]
 
     @property
-    def value(self) -> Optional[float]:
+    def value(self) -> float | None:
         # Act as the last step of the group.
         return self.steps[-1].value
 
@@ -143,13 +143,13 @@ class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
         instantaneous (only one timestep).
     """
 
-    arguments: tuple[Optional[int]]
+    arguments: tuple[int | None]
     explicit_instantaneous: bool
 
     def __init__(
         self,
         source: api.Source[B, F, S, T, Z],
-        arguments: tuple[Optional[int]],
+        arguments: tuple[int | None],
         explicit_instantaneous: bool = False,
     ):
         super().__init__(source)

@@ -28,7 +28,6 @@ from typing import (
     ClassVar,
     Generic,
     NewType,
-    Optional,
     Protocol,
     TypeVar,
     cast,
@@ -65,10 +64,10 @@ class Cellular:
 
 
 class Aritmetical(Protocol):
-    def __add__(self, other: int) -> Self:
+    def __add__(self, other: int, /) -> Self:
         ...
 
-    def __sub__(self, other: int) -> Self:
+    def __sub__(self, other: int, /) -> Self:
         ...
 
 
@@ -475,7 +474,7 @@ class Geometry(FieldType):
         # Geometry fields should not be joined
         assert False
 
-    def fits_system_name(self, name: Optional[str]) -> bool:
+    def fits_system_name(self, name: str | None) -> bool:
         """Return true if the coordinate system name for this field is
         compatible with `name`.
         """
@@ -630,7 +629,7 @@ class Step(Protocol):
         ...
 
     @property
-    def value(self) -> Optional[float]:
+    def value(self) -> float | None:
         """The value associated with this step, if available. This will be time
         if the 'time axis' is actual time, or it may be eigenvalue if the 'time
         axis' is eigenmodes.
@@ -658,8 +657,8 @@ class ReaderSettings:
     dimensionality: Dimensionality
     staggering: Staggering
     periodic: bool
-    mesh_filename: Optional[Path]
-    rationality: Optional[Rationality]
+    mesh_filename: Path | None
+    rationality: Rationality | None
 
 
 class FieldDataFilter(Protocol):
@@ -838,9 +837,9 @@ class Source(ABC, Generic[B, F, S, T, Z]):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """Close the source data on disk."""
         return

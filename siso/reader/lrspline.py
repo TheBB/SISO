@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from siso.topology import LrTopology
 
@@ -16,7 +16,7 @@ class LrSpline(PureGeometry[LrTopology]):
     # LR-Splines don't natively support rationals. We try to deterime which
     # splines are rational based on the number of components, but this isn't
     # always possible. This setting can be set in the CLI to override this.
-    rationality: Optional[api.Rationality] = None
+    rationality: api.Rationality | None = None
 
     def configure(self, settings: api.ReaderSettings) -> None:
         super().configure(settings)

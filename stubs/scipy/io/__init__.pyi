@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
-from typing import BinaryIO, Literal, Optional
+from typing import BinaryIO, Literal
 
 from numpy import dtype, ndarray
 from typing_extensions import Self
@@ -16,9 +16,9 @@ class FortranFile:
     def __enter__(self) -> Self: ...
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None: ...
     def write_record(self, *items: ndarray) -> None: ...
     def read_ints(self, dtype: dtype) -> Sequence[int]: ...

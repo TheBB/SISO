@@ -6,7 +6,7 @@ import sys
 from functools import partial, wraps
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Generic, Literal, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 import click
 from click_option_group import MutuallyExclusiveOptionGroup, optgroup
@@ -22,7 +22,7 @@ from .writer import OutputFormat, find_writer
 from .writer.api import OutputMode, WriterSettings
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 S = TypeVar("S")
 
@@ -32,7 +32,7 @@ def coord_callback(
     param: click.Parameter,
     value: S,
     constructor: Callable[[S], CoordinateSystem],
-) -> Optional[CoordinateSystem]:
+) -> CoordinateSystem | None:
     """Callback used for converting a CLI argument to a coordinate system and
     assigning it to the 'out_coords' parameter being passed to the main
     function.
@@ -98,7 +98,7 @@ class Enum(click.Choice, Generic[E]):
         self._enum = enum
         super().__init__(choices=[item.value for item in enum], case_sensitive=case_sensitive)
 
-    def convert(self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]) -> E:
+    def convert(self, value: Any, param: click.Parameter | None, ctx: click.Context | None) -> E:
         name = super().convert(value, param, ctx)
         return self._enum(name)
 
@@ -109,8 +109,8 @@ class SliceType(click.ParamType):
     name = "[START:]STOP[:STEP]"
 
     def convert(
-        self, value: Any, param: Optional[click.Parameter], ctx: Optional[click.Context]
-    ) -> Optional[tuple[Optional[int], ...]]:
+        self, value: Any, param: click.Parameter | None, ctx: click.Context | None
+    ) -> tuple[int | None, ...] | None:
         if value is None or isinstance(value, tuple):
             return value
         try:
@@ -426,22 +426,22 @@ def main(
     periodic: bool,
     eigenmodes_are_displacement: bool,
     out_coords: CoordinateSystem,
-    in_coords: Optional[str],
-    timestep_slice: tuple[Optional[int]],
-    timestep_index: Optional[int],
+    in_coords: str | None,
+    timestep_slice: tuple[int | None],
+    timestep_index: int | None,
     only_final_timestep: bool,
     nvis: int,
     no_fields: bool,
     field_filter: tuple[str],
     # Writer options
-    output_mode: Optional[OutputMode],
+    output_mode: OutputMode | None,
     out_endianness: Endianness,
     # Reader options
     in_endianness: Endianness,
     dimensionality: Dimensionality,
     staggering: Staggering,
-    rationality: Optional[Rationality],
-    mesh_filename: Optional[Path],
+    rationality: Rationality | None,
+    mesh_filename: Path | None,
     basis_filter: tuple[str],
     # Logging, verbosity and testing
     verify_strict: bool,
@@ -450,11 +450,11 @@ def main(
     rich: bool,
     # Input and output
     inpath: tuple[Path, ...],
-    outpath: Optional[Path],
-    fmt: Optional[OutputFormat],
+    outpath: Path | None,
+    fmt: OutputFormat | None,
 ) -> None:
     # Configure logging
-    color_system: Optional[Literal["auto"]] = "auto" if rich else None
+    color_system: Literal["auto"] | None = "auto" if rich else None
     logging.basicConfig(
         level=verbosity.upper(),
         style="{",
@@ -697,7 +697,7 @@ def main(
             source = filter.CoordTransform(source, path)
 
         # Debugging option: apply an instrumentation object for profiling if required.
-        instrumenter: Optional[Instrumenter] = None
+        instrumenter: Instrumenter | None = None
         if instrument:
             instrumenter = Instrumenter(source)
 

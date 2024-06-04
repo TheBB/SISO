@@ -9,13 +9,10 @@ from functools import lru_cache, partial
 from itertools import count
 from typing import (
     TYPE_CHECKING,
-    Callable,
     ClassVar,
     Literal,
-    Optional,
     TextIO,
     TypeVar,
-    Union,
     cast,
 )
 
@@ -34,7 +31,7 @@ from siso.topology import CellType, StructuredTopology
 from siso.util import FieldData
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
     from types import TracebackType
 
@@ -133,7 +130,7 @@ def transpose(array: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
     return array.reshape(*shape, -1).transpose(1, 0, 2, 3).reshape(util.prod(shape), -1)
 
 
-def mesh_offset(root: Path, dim: Union[Literal[2], Literal[3]]) -> np.ndarray:
+def mesh_offset(root: Path, dim: Literal[2] | Literal[3]) -> np.ndarray:
     """Read the info.txt file in the same folder as the root path, and return a
     mesh offset, either a two- or three-element array.
 
@@ -183,7 +180,7 @@ def split_sparse(values: np.ndarray, ncomps: int = 1) -> tuple[np.ndarray, ...]:
     return (indexes, *comps)
 
 
-def make_mask(n: int, indices: np.ndarray, values: Union[float, np.ndarray] = 1.0) -> np.ndarray:
+def make_mask(n: int, indices: np.ndarray, values: float | np.ndarray = 1.0) -> np.ndarray:
     """Return an array of length n, all zeros except placing `values` at
     `indices`. This is essentially just a converter from sparse to dense array
     formats.
@@ -354,9 +351,9 @@ class SimraMap(SimraMeshBase):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
@@ -428,9 +425,9 @@ class Simra2dMesh(SimraMeshBase):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
@@ -497,9 +494,9 @@ class Simra3dMesh(SimraMeshBase):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
@@ -539,9 +536,9 @@ class SimraHasMesh(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]]
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
@@ -605,9 +602,9 @@ class SimraBoundary(SimraHasMesh):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         super().__exit__(exc_type, exc_val, exc_tb)
         self.boundary.__exit__(exc_type, exc_val, exc_tb)
@@ -671,7 +668,7 @@ class SimraBoundary(SimraHasMesh):
             # If there is anything between nfixk and nlog, it's nwalle, for
             # parallel SIMRA.
             is_parallel = bool(rest)
-            nwalle: Optional[int] = None
+            nwalle: int | None = None
             if is_parallel:
                 nwalle = rest[0]
 
@@ -866,9 +863,9 @@ class SimraContinuation(SimraHasMesh):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         super().__exit__(exc_type, exc_val, exc_tb)
         self.source.__exit__(exc_type, exc_val, exc_tb)
@@ -894,7 +891,7 @@ class SimraContinuation(SimraHasMesh):
         yield Step(index=0, value=time)
 
     @lru_cache(maxsize=1)
-    def data(self) -> tuple[FieldData[floating], Optional[FieldData[floating]]]:
+    def data(self) -> tuple[FieldData[floating], FieldData[floating] | None]:
         """Return a tuple of nodal data and optional cellwise data."""
         cells = None
         with self.source.leap(0) as f:
@@ -1024,9 +1021,9 @@ class SimraHistory(SimraHasMesh):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         super().__exit__(exc_type, exc_val, exc_tb)
         self.source.__exit__(exc_type, exc_val, exc_tb)

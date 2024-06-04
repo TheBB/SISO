@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Optional
 
 from .api import Writer
 
@@ -35,7 +35,7 @@ def register_writer(fmt: OutputFormat) -> Callable[[MakeWriter], MakeWriter]:
     return inner
 
 
-def find_writer(fmt: OutputFormat, path: Path) -> Optional[Writer]:
+def find_writer(fmt: OutputFormat, path: Path) -> Writer | None:
     constructor = WRITERS[fmt]
     try:
         return constructor(path)

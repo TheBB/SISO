@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from attrs import define, field
 
 from . import api
@@ -15,7 +13,7 @@ class Basis(api.Basis):
 @define(frozen=True)
 class Step(api.Step):
     index: int
-    value: Optional[float] = None
+    value: float | None = None
 
 
 @define(frozen=True)

@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Generator, Hashable, Iterable, Iterator
+from collections.abc import Callable, Generator, Hashable, Iterable, Iterator
 from contextlib import contextmanager
 from functools import reduce
 from itertools import chain, count, product
 from typing import (
     IO,
     TYPE_CHECKING,
-    Callable,
     ClassVar,
     Generic,
-    Optional,
     Protocol,
     TypeVar,
-    Union,
     cast,
     overload,
     runtime_checkable,
@@ -108,7 +105,7 @@ class RandomAccessFile(Generic[W, M]):
     wrapper: Callable[[IO], W]
 
     markers: dict[M, int]
-    marker_generator: Optional[Iterator[tuple[M, int]]] = None
+    marker_generator: Iterator[tuple[M, int]] | None = None
 
     fp: IO
     fp_borrowed: bool = False
@@ -116,8 +113,8 @@ class RandomAccessFile(Generic[W, M]):
     def __init__(
         self,
         fp: IO,
-        wrapper: Optional[Callable[[IO], W]] = None,
-        marker_generator: Optional[Callable[[RandomAccessTracker[W, M]], Iterator[tuple[M, int]]]] = None,
+        wrapper: Callable[[IO], W] | None = None,
+        marker_generator: Callable[[RandomAccessTracker[W, M]], Iterator[tuple[M, int]]] | None = None,
     ):
         assert fp.seekable()
         self.fp = fp
@@ -133,9 +130,9 @@ class RandomAccessFile(Generic[W, M]):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.fp.__exit__(exc_type, exc_val, exc_tb)
 
@@ -163,7 +160,7 @@ class RandomAccessFile(Generic[W, M]):
         finally:
             self.fp_borrowed = False
 
-    def mark(self, name: M, loc: Optional[int] = None) -> None:
+    def mark(self, name: M, loc: int | None = None) -> None:
         """Mark the location at `loc` with the name `name`. If `loc` is not
         given, this will use the current position of the file pointer.
         """
@@ -204,7 +201,7 @@ class RandomAccessFile(Generic[W, M]):
             fp.seek(loc)
             yield self.wrapper(fp)
 
-    def tracker(self, mark: Optional[M] = None) -> RandomAccessTracker[W, M]:
+    def tracker(self, mark: M | None = None) -> RandomAccessTracker[W, M]:
         """Create a new tracker object initialized at a given mark (or at the
         beginning of the file, if not given).
 
@@ -308,8 +305,8 @@ def _single_slice(ndims: int, axis: int, *args: Any) -> tuple[slice, ...]:
     return tuple(retval)
 
 
-def _single_index(ndims: int, axis: int, ix: int) -> tuple[Union[slice, int], ...]:
-    retval: list[Union[slice, int]] = [slice(None)] * ndims
+def _single_index(ndims: int, axis: int, ix: int) -> tuple[slice | int, ...]:
+    retval: list[slice | int] = [slice(None)] * ndims
     retval[axis] = ix
     return tuple(retval)
 
@@ -357,7 +354,7 @@ def pairwise(iterable: Iterable[T]) -> Iterator[tuple[T, T]]:
         left = right
 
 
-def subdivide_linear(knots: Union[list[float], tuple[float, ...], np.ndarray], nvis: int) -> np.ndarray:
+def subdivide_linear(knots: list[float] | tuple[float, ...] | np.ndarray, nvis: int) -> np.ndarray:
     return np.fromiter(
         chain(
             chain.from_iterable(
@@ -436,7 +433,7 @@ def only(values: Iterable[T]) -> T:
 def structured_cells(
     cellshape: api.CellShape,
     pardim: int,
-    nodemap: Optional[np.ndarray] = None,
+    nodemap: np.ndarray | None = None,
 ) -> FieldData[integer]:
     nodeshape = tuple(cellshape.nodal)
     ranges = [range(k) for k in cellshape]

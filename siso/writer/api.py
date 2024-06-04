@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from attrs import define
 from typing_extensions import Self
@@ -20,7 +20,7 @@ class OutputMode(Enum):
 
 @define
 class WriterSettings:
-    output_mode: Optional[OutputMode] = None
+    output_mode: OutputMode | None = None
     endianness: Endianness = Endianness.Native
 
 
@@ -38,9 +38,9 @@ class Writer(Protocol):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         ...
 

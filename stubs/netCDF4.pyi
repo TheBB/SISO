@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from numpy.ma import masked_array
 from typing_extensions import Self
@@ -19,9 +19,9 @@ class Dataset:
     def __enter__(self) -> Self: ...
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None: ...
     def __getitem__(self, name: str) -> Variable: ...
     def __getattr__(self, name: str) -> Any: ...

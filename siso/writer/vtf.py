@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING
 
 import vtfwriter as vtf
 from attrs import define
@@ -13,13 +13,14 @@ from siso.api import B, CellOrdering, DiscreteTopology, F, S, Step, StepInterpre
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from types import TracebackType
 
 
 @define
 class FieldInfo:
-    blocktype: Callable[[], Union[vtf.ScalarBlock, vtf.VectorBlock, vtf.DisplacementBlock]]
+    blocktype: Callable[[], vtf.ScalarBlock | vtf.VectorBlock | vtf.DisplacementBlock]
     steps: dict[int, list[vtf.ResultBlock]]
 
 
@@ -66,9 +67,9 @@ class VtfWriter(Writer):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         for field_name, info in self.field_info.items():
             with info.blocktype() as field_block:
@@ -124,7 +125,7 @@ class VtfWriter(Writer):
                 result_block.SetResults(data.numpy().flatten())
                 result_block.BindBlock(element_block if field.cellwise else node_block)
 
-            blocktype: Callable[[], Union[vtf.ScalarBlock, vtf.VectorBlock, vtf.DisplacementBlock]]
+            blocktype: Callable[[], vtf.ScalarBlock | vtf.VectorBlock | vtf.DisplacementBlock]
             if field.name not in self.field_info:
                 if field.is_scalar:
                     blocktype = self.out.ScalarBlock
