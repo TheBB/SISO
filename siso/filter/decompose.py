@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, Optional
+from typing import TYPE_CHECKING, Generic
 
 from attrs import define
 
@@ -33,7 +33,7 @@ class DecomposedField(WrappedField[F]):
     """
 
     wrapped_field: F
-    components: Optional[list[int]]
+    components: list[int] | None
     splittable: bool
     name: str
 

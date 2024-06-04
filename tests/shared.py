@@ -7,7 +7,6 @@ from os import chdir
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
-    Optional,
 )
 
 import numpy as np
@@ -105,7 +104,7 @@ SUFFIX = {
 
 def testcase(
     sourcefile: Path,
-    nsteps: Optional[int],
+    nsteps: int | None,
     formats: Sequence[str],
     *extra_args: str,
     suffix: str = "",
@@ -139,7 +138,7 @@ def testcase(
         TESTIDS.setdefault(fmt, []).append(f"{sourcefile.name} {args}")
 
 
-def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
+def filename_maker(ext: str | None, multistep: bool) -> Iterator[Path]:
     """Return a function that creates correct filenames for output
     formats.  EXT should be the expected extension (possibly None) and
     MULTISTEP should be True if the format supports multiple timesteps
@@ -151,7 +150,7 @@ def filename_maker(ext: Optional[str], multistep: bool) -> Iterator[Path]:
     """
     ext = f".{ext}" if ext is not None else ""
 
-    def maker(base: Path, nsteps: Optional[int] = None):
+    def maker(base: Path, nsteps: int | None = None):
         if multistep or nsteps is None:
             return [Path(f"{base.stem}{ext}")]
         return [Path(f"{base.stem}-{i}{ext}") for i in range(1, nsteps + 1)]
@@ -318,7 +317,11 @@ def compare_vtk_unstructured(out, ref, case: PreparedTestCase):
 
 def compare_vtk_structured(out, ref, case: PreparedTestCase):
     """Helper function for comparing two vtkDataSet objects."""
-    assert out.GetDimensions() == ref.GetDimensions()
+    out_dims = [0, 0, 0]
+    ref_dims = [0, 0, 0]
+    out.GetDimensions(out_dims)
+    ref.GetDimensions(ref_dims)
+    assert out_dims == ref_dims
     print("Checking points")
     np.testing.assert_allclose(
         vtknp.vtk_to_numpy(out.GetPoints().GetData()),

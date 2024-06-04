@@ -25,7 +25,6 @@ from siso.api import B, F, InB, InF, InS, InT, InZ, OutB, OutF, OutS, OutT, OutZ
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from types import TracebackType
-    from typing import Optional
 
     from numpy import floating
 
@@ -67,9 +66,9 @@ class PassthroughBase(
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.source.__exit__(exc_type, exc_val, exc_tb)
 

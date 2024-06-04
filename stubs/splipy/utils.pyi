@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal
 
 from numpy import ndarray
 
@@ -6,5 +6,5 @@ def reshape(
     cps: ndarray,
     newshape: tuple[int, ...],
     order: Literal["F", "C"] = "C",
-    ncomps: Optional[int] = None,
+    ncomps: int | None = None,
 ) -> ndarray: ...

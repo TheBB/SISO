@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from functools import lru_cache
 from itertools import chain, count, repeat
-from typing import TYPE_CHECKING, ClassVar, Optional, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import h5py
 from attrs import define, field
@@ -369,7 +369,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     # LR-Splines don't natively support rationals. We try to deterime which
     # splines are rational based on the number of components, but this isn't
     # always possible. This setting can be set in the CLI to override this.
-    rationality: Optional[api.Rationality] = None
+    rationality: api.Rationality | None = None
 
     @staticmethod
     def applicable(path: Path) -> bool:
@@ -402,9 +402,9 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.h5.__exit__(exc_type, exc_val, exc_tb)
 

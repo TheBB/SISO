@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import IO, TYPE_CHECKING, Optional, TypeVar, Union
+from typing import IO, TYPE_CHECKING, TypeVar
 
 from numpy import number
 from typing_extensions import Self
@@ -40,16 +40,17 @@ class Behavior(Enum):
 
 
 Sc = TypeVar("Sc", bound=number)
-BackendWriter = Union[vtkXMLWriter, vtkDataWriter]
+BackendWriter = vtkXMLWriter | vtkDataWriter
 
 
 def transpose(data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) -> FieldData[Sc]:
     if not isinstance(grid, vtkStructuredGrid):
         return data
-    shape = grid.GetDimensions()
+    shape = [0, 0, 0]
+    grid.GetDimensions(shape)
     if cellwise:
         i, j, k = shape
-        shape = (max(i - 1, 1), max(j - 1, 1), max(k - 1, 1))
+        shape = [max(i - 1, 1), max(j - 1, 1), max(k - 1, 1)]
     return data.transpose(NodeShape(shape), (2, 1, 0))
 
 
@@ -95,7 +96,7 @@ def get_grid(
     return ugrid, vtkXMLUnstructuredGridWriter()
 
 
-def apply_output_mode(writer: Union[vtkXMLWriter, vtkDataWriter], mode: OutputMode) -> None:
+def apply_output_mode(writer: vtkXMLWriter | vtkDataWriter, mode: OutputMode) -> None:
     if isinstance(writer, vtkDataWriter):
         if mode == OutputMode.Binary:
             writer.SetFileTypeToBinary()
@@ -123,9 +124,9 @@ class VtkWriterBase(ABC, Writer):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         return
 
@@ -242,9 +243,9 @@ class PvdWriter(VtuWriter):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         super().__exit__(exc_type, exc_val, exc_tb)
         self.pvd.write("  </Collection>\n")

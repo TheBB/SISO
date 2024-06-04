@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 from io import BytesIO, StringIO
-from typing import TYPE_CHECKING, Optional, TextIO, overload
+from typing import TYPE_CHECKING, TextIO, overload
 
 import lrspline as lr
 import numpy as np
@@ -138,8 +138,8 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         """
         iterable: Iterable[DiscreteTopology] = other if isinstance(other[0], DiscreteTopology) else other[0]
         num_nodes = 0
-        celltype: Optional[CellType] = None
-        degree: Optional[int] = None
+        celltype: CellType | None = None
+        degree: int | None = None
 
         # Utility function for producing cell arrays. Keeps internal track of
         # the number of nodes seen so far, and adjusts the cell indices
@@ -388,7 +388,7 @@ class SplineTopology(Topology):
     """A B-Spline or NURBS topology as represented by Splipy."""
 
     bases: list[BSplineBasis]
-    weights: Optional[np.ndarray]
+    weights: np.ndarray | None
 
     @staticmethod
     def from_splineobject(obj: SplineObject) -> tuple[Points, SplineTopology, FieldData[floating]]:
@@ -538,12 +538,12 @@ class LrTopology(Topology):
     """A LR-Spline topology as represented by LRSplines (possibly rational)."""
 
     obj: lr.LRSplineObject
-    weights: Optional[np.ndarray]
+    weights: np.ndarray | None
 
     @staticmethod
     def from_lrobject(
         obj: lr.LRSplineObject,
-        rationality: Optional[Rationality],
+        rationality: Rationality | None,
     ) -> tuple[Points, LrTopology, FieldData[floating]]:
         """Construct an LR topology from an LRSplineObject.
 
@@ -589,7 +589,7 @@ class LrTopology(Topology):
     @staticmethod
     def from_bytes(
         data: bytes,
-        rationality: Optional[Rationality],
+        rationality: Rationality | None,
     ) -> Iterator[tuple[Points, LrTopology, FieldData[floating]]]:
         """Special constructor parsing bytestring in LR-format."""
         yield from LrTopology.from_string(data.decode(), rationality)
@@ -597,7 +597,7 @@ class LrTopology(Topology):
     @staticmethod
     def from_string(
         data: str,
-        rationality: Optional[Rationality],
+        rationality: Rationality | None,
     ) -> Iterator[tuple[Points, LrTopology, FieldData[floating]]]:
         """Special constructor parsing string in LR-format."""
         for obj in lr.LRSplineObject.read_many(StringIO(data)):
@@ -646,10 +646,10 @@ class LrTesselator(api.TopologyMerger):
 
     nodes: np.ndarray
     cells: FieldData[integer]
-    weights: Optional[np.ndarray]
+    weights: np.ndarray | None
     nvis: int
 
-    def __init__(self, obj: lr.LRSplineObject, weights: Optional[np.ndarray], nvis: int):
+    def __init__(self, obj: lr.LRSplineObject, weights: np.ndarray | None, nvis: int):
         # Dictionary mapping parametric values to node index
         nodes: dict[tuple[float, ...], int] = {}
 

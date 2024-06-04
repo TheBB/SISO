@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum, auto
 from functools import lru_cache
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 from netCDF4 import Dataset
@@ -52,9 +52,9 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.dataset.__exit__(exc_type, exc_val, exc_tb)
 
@@ -164,8 +164,8 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
             data = data[index, ...]
             dimensions = dimensions[1:]
 
-        south: Optional[np.ndarray] = None
-        north: Optional[np.ndarray] = None
+        south: np.ndarray | None = None
+        north: np.ndarray | None = None
         if include_poles_if_periodic and self.periodic:
             if name in (self.longitude_name, self.latitude_name):
                 south = util.angular_mean(data[0])
@@ -418,8 +418,8 @@ class Wrf(NetCdf):
 
         vectors = local.spherical_to_cartesian_vector_field(points).numpy(-1, *self.wrf_planar_nodeshape)
 
-        south: Optional[np.ndarray] = None
-        north: Optional[np.ndarray] = None
+        south: np.ndarray | None = None
+        north: np.ndarray | None = None
         if self.periodic:
             south = np.mean(vectors[:, 0, ...], axis=-2)[:, np.newaxis, :]
             north = np.mean(vectors[:, -1, ...], axis=-2)[:, np.newaxis, :]

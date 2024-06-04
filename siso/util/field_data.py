@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import TYPE_CHECKING, Generic, Optional, TypeVar, Union, cast, overload
+from typing import TYPE_CHECKING, Generic, TypeVar, cast, overload
 
 import numpy as np
 from attrs import define
@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 
 T = TypeVar("T", bound=number)
 S = TypeVar("S", bound=number)
-Index = Union[int, slice, None, NDArray[integer]]
-Indices = Union[Index, tuple[Index, ...]]
+Index = int | slice | None | NDArray[integer]
+Indices = Index | tuple[Index, ...]
 
 
 def ensure_2d_dof(array: NDArray[T]) -> NDArray[T]:
@@ -63,12 +63,12 @@ class FieldData(Generic[T]):
 
     @overload
     @staticmethod
-    def join_comps(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
+    def join_comps(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]:
         ...
 
     @overload
     @staticmethod
-    def join_comps(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
+    def join_comps(*other: FieldData[T] | NDArray[T]) -> FieldData[T]:
         ...
 
     @staticmethod
@@ -78,18 +78,18 @@ class FieldData(Generic[T]):
         Supports an arbitrary number of field data or numpy arrays, or a single
         iterable of such.
         """
-        iterable = other if isinstance(other[0], (FieldData, np.ndarray)) else other[0]
+        iterable = other if isinstance(other[0], FieldData | np.ndarray) else other[0]
         data = np.hstack([ensure_2d_dof(x.numpy() if isinstance(x, FieldData) else x) for x in iterable])
         return FieldData(data)
 
     @overload
     @staticmethod
-    def join_dofs(other: Iterable[Union[FieldData[T], NDArray[T]]], /) -> FieldData[T]:
+    def join_dofs(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]:
         ...
 
     @overload
     @staticmethod
-    def join_dofs(*other: Union[FieldData[T], NDArray[T]]) -> FieldData[T]:
+    def join_dofs(*other: FieldData[T] | NDArray[T]) -> FieldData[T]:
         ...
 
     @staticmethod
@@ -99,15 +99,13 @@ class FieldData(Generic[T]):
         Supports an arbitrary number field data or numpy arrays, or a single
         iterable of such.
         """
-        iterable = other if isinstance(other[0], (FieldData, np.ndarray)) else other[0]
+        iterable = other if isinstance(other[0], FieldData | np.ndarray) else other[0]
         data = np.vstack([ensure_2d_comp(x.numpy() if isinstance(x, FieldData) else x) for x in iterable])
         return FieldData(data)
 
     @overload
     @staticmethod
-    def from_iter(
-        iterable: Iterable[Iterable[Union[float, int]]], dtype: DTypeLike = float
-    ) -> FieldData[floating]:
+    def from_iter(iterable: Iterable[Iterable[float | int]], dtype: DTypeLike = float) -> FieldData[floating]:
         ...
 
     @overload
@@ -173,15 +171,15 @@ class FieldData(Generic[T]):
         """Take the average over the dof axis."""
         return cast(NDArray[T], self.data.mean(axis=0))
 
-    def slice_comps(self, index: Union[int, list[int]]) -> FieldData[T]:
+    def slice_comps(self, index: int | list[int]) -> FieldData[T]:
         """Extract a subset of components as a new field data object."""
         return FieldData(ensure_2d_comp(self.data[:, index]))
 
-    def slice_dofs(self, index: Union[int, list[int]]) -> FieldData[T]:
+    def slice_dofs(self, index: int | list[int]) -> FieldData[T]:
         """Extract a subset of dofs as a new field data object."""
         return FieldData(ensure_2d_dof(self.data[index, :]))
 
-    def nan_filter(self, fill: Optional[T] = None) -> FieldData[T]:
+    def nan_filter(self, fill: T | None = None) -> FieldData[T]:
         """Fill NANs with a specified value. If set to None, will use the
         appropriate zero.
         """
@@ -257,13 +255,13 @@ class FieldData(Generic[T]):
 
     @overload
     def constant_like(
-        self, value: int, ndofs: Optional[int] = None, ncomps: Optional[int] = None, dtype: DTypeLike = None
+        self, value: int, ndofs: int | None = None, ncomps: int | None = None, dtype: DTypeLike = None
     ) -> FieldData[integer]:
         ...
 
     @overload
     def constant_like(
-        self, value: float, ndofs: Optional[int] = None, ncomps: Optional[int] = None, dtype: DTypeLike = None
+        self, value: float, ndofs: int | None = None, ncomps: int | None = None, dtype: DTypeLike = None
     ) -> FieldData[floating]:
         ...
 
@@ -401,13 +399,13 @@ class FieldData(Generic[T]):
 
     @overload
     def __mul__(
-        self: FieldData[integer], other: Union[int, NDArray[integer], FieldData[integer]]
+        self: FieldData[integer], other: int | NDArray[integer] | FieldData[integer]
     ) -> FieldData[integer]:
         ...
 
     @overload
     def __mul__(
-        self: FieldData[floating], other: Union[int, float, NDArray[number], FieldData[number]]
+        self: FieldData[floating], other: int | float | NDArray[number] | FieldData[number]
     ) -> FieldData[floating]:
         ...
 
@@ -418,14 +416,14 @@ class FieldData(Generic[T]):
         return FieldData(self.data * other)
 
     def __floordiv__(
-        self: FieldData[integer], other: Union[int, NDArray[integer], FieldData[integer]]
+        self: FieldData[integer], other: int | NDArray[integer] | FieldData[integer]
     ) -> FieldData[integer]:
         """Implement the '//' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data // other.data)
         return FieldData(self.data // other)
 
-    def __truediv__(self, other: Union[int, float, NDArray[number], FieldData[number]]) -> FieldData:
+    def __truediv__(self, other: int | float | NDArray[number] | FieldData[number]) -> FieldData:
         """Implement the '/' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data / other.data)

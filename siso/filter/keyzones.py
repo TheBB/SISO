@@ -4,7 +4,7 @@ import logging
 from collections.abc import Iterator, MutableMapping
 from functools import reduce
 from operator import itemgetter
-from typing import TYPE_CHECKING, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, TypeVar, cast
 
 from siso import api
 from siso.api import B, F, Point, S, Source, SourceProperties, T, Z, Zone, ZoneShape
@@ -88,8 +88,8 @@ class VertexDict(MutableMapping[Point, Q]):
     rtol: float
     atol: float
 
-    _keys: list[Optional[Point]]
-    _values: list[Optional[Q]]
+    _keys: list[Point | None]
+    _values: list[Q | None]
 
     lut: dict[int, list[tuple[int, float]]]
 

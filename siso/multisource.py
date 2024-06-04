@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, cast
 
 from attrs import define
 from typing_extensions import Self
@@ -23,7 +23,7 @@ class MultiSourceStep:
     source: Source
 
     @property
-    def value(self) -> Optional[float]:
+    def value(self) -> float | None:
         return self.original.value
 
 
@@ -42,9 +42,9 @@ class MultiSource(Source):
 
     def __exit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         for src in self.sources:
             src.__exit__(exc_type, exc_val, exc_tb)
