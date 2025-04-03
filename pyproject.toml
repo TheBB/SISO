@@ -21,7 +21,7 @@ dependencies = [
     "lrspline>=1.15.1",
 ]
 name = "siso"
-version = "4.1.0"
+version = "4.2.0"
 description = ""
 readme = "README.rst"
 
@@ -100,7 +100,7 @@ dev = [
 includes = []
 
 [tool.bumpversion]
-current_version = "4.1.0"
+current_version = "4.2.0"
 allow_dirty = false
 commit = true
 tag = true
