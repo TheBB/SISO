@@ -1100,19 +1100,19 @@ files = [
 
 [[package]]
 name = "rich-click"
-version = "1.7.3"
+version = "1.8.8"
 requires_python = ">=3.7"
 summary = "Format click help output nicely with rich"
 groups = ["dev"]
 dependencies = [
     "click>=7",
     "importlib-metadata; python_version < \"3.8\"",
-    "rich>=10.7.0",
-    "typing-extensions",
+    "rich>=10.7",
+    "typing-extensions>=4",
 ]
 files = [
-    {file = "rich-click-1.7.3.tar.gz", hash = "sha256:bced1594c497dc007ab49508ff198bb437c576d01291c13a61658999066481f4"},
-    {file = "rich_click-1.7.3-py3-none-any.whl", hash = "sha256:bc4163d4e2a3361e21c4d72d300eca6eb8896dfc978667923cb1d4937b8769a3"},
+    {file = "rich_click-1.8.8-py3-none-any.whl", hash = "sha256:205aabd5a98e64ab2c105dee9e368be27480ba004c7dfa2accd0ed44f9f1550e"},
+    {file = "rich_click-1.8.8.tar.gz", hash = "sha256:547c618dea916620af05d4a6456da797fbde904c97901f44d2f32f89d85d6c84"},
 ]
 
 [[package]]
