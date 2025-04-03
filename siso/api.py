@@ -29,6 +29,7 @@ from typing import (
     Generic,
     NewType,
     Protocol,
+    Self,
     TypeVar,
     cast,
     overload,
@@ -38,7 +39,6 @@ import numpy as np
 from attrs import Factory, asdict, define
 from numpy import floating, integer
 from numpy.typing import NDArray
-from typing_extensions import Self
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -55,20 +55,16 @@ KnotVector = NewType("KnotVector", NDArray[floating])
 Knots = NewType("Knots", tuple[KnotVector, ...])
 
 
-class Nodal:
-    ...
+class Nodal: ...
 
 
-class Cellular:
-    ...
+class Cellular: ...
 
 
 class Aritmetical(Protocol):
-    def __add__(self, other: int, /) -> Self:
-        ...
+    def __add__(self, other: int, /) -> Self: ...
 
-    def __sub__(self, other: int, /) -> Self:
-        ...
+    def __sub__(self, other: int, /) -> Self: ...
 
 
 M = TypeVar("M", Nodal, Cellular)
@@ -77,12 +73,10 @@ P = TypeVar("P", bound=Aritmetical)
 
 class ShapeTuple(tuple[P, ...], Generic[M, P]):
     @overload
-    def __new__(cls, *args: P) -> Self:
-        ...
+    def __new__(cls, *args: P) -> Self: ...
 
     @overload
-    def __new__(cls, arg: Iterable[P]) -> Self:
-        ...
+    def __new__(cls, arg: Iterable[P]) -> Self: ...
 
     def __new__(cls, *args):  # type: ignore[no-untyped-def]
         if hasattr(args[0], "__iter__"):
@@ -114,16 +108,13 @@ class SisoError(Exception):
         return self.msg
 
 
-class Unsupported(SisoError):
-    ...
+class Unsupported(SisoError): ...
 
 
-class BadInput(SisoError):
-    ...
+class BadInput(SisoError): ...
 
 
-class Unexpected(SisoError):
-    ...
+class Unexpected(SisoError): ...
 
 
 class ZoneShape(Enum):
@@ -604,7 +595,7 @@ class Field(ABC):
         """Return the coordinate system of this field. Will crash for
         non-geometry fields.
         """
-        return cast(Geometry, self.type).coords
+        return cast("Geometry", self.type).coords
 
     def fits_system_name(self, code: str) -> bool:
         """True if the coordinate system of this field is compatible with
@@ -664,8 +655,7 @@ class ReaderSettings:
 class FieldDataFilter(Protocol):
     """Callable that modifies field data."""
 
-    def __call__(self, field: Field, field_data: FieldData[floating]) -> FieldData[floating]:
-        ...
+    def __call__(self, field: Field, field_data: FieldData[floating]) -> FieldData[floating]: ...
 
 
 class TopologyMerger(Protocol):
@@ -673,8 +663,7 @@ class TopologyMerger(Protocol):
     a filter for converting corresponding field data.
     """
 
-    def __call__(self, topology: Topology) -> tuple[Topology, FieldDataFilter]:
-        ...
+    def __call__(self, topology: Topology) -> tuple[Topology, FieldDataFilter]: ...
 
 
 class Topology(ABC):
@@ -948,13 +937,13 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         """Cast the Z type to Zone[int] based on runtime check."""
         if not self.properties.globally_keyed:
             raise Unexpected("Source is not globally keyed")
-        return cast(Source[B, F, S, T, Zone[int]], self)
+        return cast("Source[B, F, S, T, Zone[int]]", self)
 
     def cast_discrete_topology(self) -> Source[B, F, S, DiscreteTopology, Z]:
         """Cast the T type to DiscreteTopology based on runtime check."""
         if not self.properties.discrete_topology:
             raise Unexpected("Source does not guarantee discrete topologies")
-        return cast(Source[B, F, S, DiscreteTopology, Z], self)
+        return cast("Source[B, F, S, DiscreteTopology, Z]", self)
 
     def single_basis(self) -> B:
         """Singleton version of `basis()`."""

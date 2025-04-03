@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, Self
 
 from attrs import define
-from typing_extensions import Self
 
 from siso.api import B, Endianness, F, S, Source, T, Z
 
@@ -33,23 +32,18 @@ class WriterProperties:
 
 
 class Writer(Protocol):
-    def __enter__(self) -> Self:
-        ...
+    def __enter__(self) -> Self: ...
 
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @property
-    def properties(self) -> WriterProperties:
-        ...
+    def properties(self) -> WriterProperties: ...
 
-    def configure(self, settings: WriterSettings) -> None:
-        ...
+    def configure(self, settings: WriterSettings) -> None: ...
 
-    def consume(self, source: Source[B, F, S, T, Z], geometry: F) -> None:
-        ...
+    def consume(self, source: Source[B, F, S, T, Z], geometry: F) -> None: ...

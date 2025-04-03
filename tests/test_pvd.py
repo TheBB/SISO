@@ -1,11 +1,16 @@
+from __future__ import annotations
+
 import xml.etree.ElementTree as ET
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 import vtk
 
 from .shared import TESTCASES, TESTIDS, PreparedTestCase, compare_vtk_unstructured
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def load_grid(filename: Path):

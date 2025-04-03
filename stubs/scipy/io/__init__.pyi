@@ -1,10 +1,9 @@
 from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
-from typing import BinaryIO, Literal
+from typing import BinaryIO, Literal, Self
 
 from numpy import dtype, ndarray
-from typing_extensions import Self
 
 class FortranEOFError(TypeError, OSError): ...
 class FortranFormattingError(TypeError, OSError): ...

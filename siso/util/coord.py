@@ -1,13 +1,17 @@
-from typing import ClassVar
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from attrs import define, field
-from jax.typing import ArrayLike as JaxArray
 from numpy import floating
 from numpy.polynomial import Polynomial
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from jax.typing import ArrayLike as JaxArray
 
 Array = NDArray[floating]
 
@@ -43,21 +47,21 @@ class UtmConverter:
         self.A = self.semi_major_axis / (1 + self.n) * (1 + self.n**2 / 4 + self.n**4 / 64)
 
         self.alpha = (
-            Polynomial([0, 1 / 2, -2 / 3, 5 / 16])(self.n),
-            Polynomial([0, 0, 13 / 48, -3 / 5])(self.n),
-            Polynomial([0, 0, 0, 61 / 240])(self.n),
+            cast("float", Polynomial([0, 1 / 2, -2 / 3, 5 / 16])(self.n)),
+            cast("float", Polynomial([0, 0, 13 / 48, -3 / 5])(self.n)),
+            cast("float", Polynomial([0, 0, 0, 61 / 240])(self.n)),
         )
 
         self.beta = (
-            Polynomial([0, 1 / 2, -2 / 3, 37 / 96])(self.n),
-            Polynomial([0, 0, 1 / 48, 1 / 15])(self.n),
-            Polynomial([0, 0, 0, 17 / 480])(self.n),
+            cast("float", Polynomial([0, 1 / 2, -2 / 3, 37 / 96])(self.n)),
+            cast("float", Polynomial([0, 0, 1 / 48, 1 / 15])(self.n)),
+            cast("float", Polynomial([0, 0, 0, 17 / 480])(self.n)),
         )
 
         self.delta = (
-            Polynomial([0, 2, -2 / 3, -2])(self.n),
-            Polynomial([0, 0, 7 / 3, -8 / 5])(self.n),
-            Polynomial([0, 0, 0, 56 / 15])(self.n),
+            cast("float", Polynomial([0, 2, -2 / 3, -2])(self.n)),
+            cast("float", Polynomial([0, 0, 7 / 3, -8 / 5])(self.n)),
+            cast("float", Polynomial([0, 0, 0, 56 / 15])(self.n)),
         )
 
     def to_utm(self, lon: Array, lat: Array) -> tuple[Array, Array]:

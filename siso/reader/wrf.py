@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from enum import Enum, auto
 from functools import lru_cache
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
 from netCDF4 import Dataset
 from numpy import floating, integer
 from scipy.spatial.transform import Rotation
-from typing_extensions import Self
 
 from siso import api, util
 from siso.api import CellShape, NodeShape, Zone, ZoneShape

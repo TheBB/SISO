@@ -1,13 +1,19 @@
-from collections.abc import Iterator
-from copy import deepcopy
+from __future__ import annotations
 
-from numpy import floating
+from copy import deepcopy
+from typing import TYPE_CHECKING
 
 from siso import api, util
 from siso.api import B, DiscreteTopology, F, S, T, Z
-from siso.util import FieldData
 
 from .passthrough import PassthroughAll
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from numpy import floating
+
+    from siso.util import FieldData
 
 
 class Strict(PassthroughAll[B, F, S, T, Z]):

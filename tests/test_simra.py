@@ -1,11 +1,16 @@
+from __future__ import annotations
+
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 from scipy.io import FortranFile
 
 from .shared import TESTCASES, TESTIDS, PreparedTestCase
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def to_native(arr: np.ndarray) -> np.ndarray:

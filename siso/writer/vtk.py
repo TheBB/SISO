@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import IO, TYPE_CHECKING, TypeVar
+from typing import IO, TYPE_CHECKING, Self, TypeVar
 
 from numpy import number
-from typing_extensions import Self
 from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import (
@@ -145,8 +144,7 @@ class VtkWriterBase(ABC, Writer):
             self.output_mode = settings.output_mode
 
     @abstractmethod
-    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
-        ...
+    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]: ...
 
     def consume_timestep(
         self, step: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F

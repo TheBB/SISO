@@ -1,5 +1,7 @@
 """Bisection algorithms."""
 
+from __future__ import annotations
+
 
 def insort_right(a, x, lo=0, hi=None, *, key=None):
     """Insert item x in list a, and keep it sorted assuming a is sorted.

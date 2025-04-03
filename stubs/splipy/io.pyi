@@ -1,8 +1,7 @@
 from types import TracebackType
-from typing import TextIO
+from typing import Self, TextIO
 
 from splipy import SplineObject
-from typing_extensions import Self
 
 class G2:
     fstream: TextIO

@@ -1,10 +1,9 @@
 from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from numpy.ma import masked_array
-from typing_extensions import Self
 
 class Dimension: ...
 

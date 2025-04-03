@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .basis_filter import BasisFilter
 from .basismerge import BasisMerge
 from .coordtransform import CoordTransform

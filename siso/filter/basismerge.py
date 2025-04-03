@@ -1,13 +1,19 @@
-from collections.abc import Iterator
+from __future__ import annotations
 
-from numpy import floating
+from typing import TYPE_CHECKING
 
 from siso import api
 from siso.api import F, InB, InT, S, Z
 from siso.impl import Basis
-from siso.util import FieldData
 
 from .passthrough import PassthroughFSZ
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from numpy import floating
+
+    from siso.util import FieldData
 
 # The singleton basis object to yield.
 BASIS = Basis("mesh")

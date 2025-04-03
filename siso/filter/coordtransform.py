@@ -1,11 +1,17 @@
-from numpy import floating
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from siso import api, util
 from siso.api import B, F, S, T, Z
 from siso.coord import ConversionPath, convert_coords, convert_vectors
-from siso.util import FieldData
 
 from .passthrough import PassthroughAll
+
+if TYPE_CHECKING:
+    from numpy import floating
+
+    from siso.util import FieldData
 
 
 class CoordTransform(PassthroughAll[B, F, S, T, Z]):

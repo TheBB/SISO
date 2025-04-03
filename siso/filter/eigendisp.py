@@ -1,13 +1,20 @@
-from collections.abc import Iterator
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from attrs import define
-from numpy import floating
 
 from siso import api
 from siso.api import B, F, S, T, Z
-from siso.util import FieldData
 
 from .passthrough import PassthroughBSTZ, WrappedField
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from numpy import floating
+
+    from siso.util import FieldData
 
 
 @define

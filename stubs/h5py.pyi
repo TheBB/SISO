@@ -1,10 +1,9 @@
 from collections.abc import Iterator
 from pathlib import Path
 from types import TracebackType
-from typing import Literal, TypeVar, overload
+from typing import Literal, Self, TypeVar, overload
 
 from numpy import ndarray
-from typing_extensions import Self
 
 T = TypeVar("T")
 
