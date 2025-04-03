@@ -153,7 +153,7 @@ class VertexDict(MutableMapping[Point, Q]):
 
     def __getitem__(self, key: Point) -> Q:
         c = self._candidate(key)
-        return cast(Q, self._values[c])
+        return cast("Q", self._values[c])
 
     def __delitem__(self, key: Point) -> None:
         try:

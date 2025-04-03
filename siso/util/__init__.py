@@ -10,6 +10,7 @@ from typing import (
     ClassVar,
     Generic,
     Protocol,
+    Self,
     TypeVar,
     cast,
     overload,
@@ -18,7 +19,6 @@ from typing import (
 
 import numpy as np
 from numpy import integer
-from typing_extensions import Self
 
 from siso import api
 
@@ -49,17 +49,15 @@ class Registry(Generic[W]):
         self.classes = {}
 
     @overload
-    def register(self, arg: str) -> Callable[[W], W]:
-        ...
+    def register(self, arg: str) -> Callable[[W], W]: ...
 
     @overload
-    def register(self, arg: type[Q]) -> type[Q]:
-        ...
+    def register(self, arg: type[Q]) -> type[Q]: ...
 
     def register(self, arg):  # type: ignore[no-untyped-def]
         if not isinstance(arg, str):
             assert isinstance(arg, HasName)
-            self.classes[arg.name.casefold()] = cast(W, arg)
+            self.classes[arg.name.casefold()] = cast("W", arg)
             return arg
 
         def decorator(x: W) -> W:
@@ -78,8 +76,7 @@ class Registry(Generic[W]):
         return self.classes.items()
 
 
-class NoSuchMarkError(Exception):
-    ...
+class NoSuchMarkError(Exception): ...
 
 
 class RandomAccessFile(Generic[W, M]):
@@ -118,7 +115,7 @@ class RandomAccessFile(Generic[W, M]):
     ):
         assert fp.seekable()
         self.fp = fp
-        self.wrapper = wrapper or cast(Callable[[IO], W], (lambda fp: fp))
+        self.wrapper = wrapper or cast("Callable[[IO], W]", (lambda fp: fp))
         self.markers = {}
 
         if marker_generator:
@@ -320,7 +317,7 @@ def _expand_shape(shape: tuple[int, ...], axis: int) -> tuple[int, ...]:
 def unstagger(data: np.ndarray, axis: int) -> np.ndarray:
     return (
         cast(
-            np.ndarray,
+            "np.ndarray",
             (data[_single_slice(data.ndim, axis, 1, None)] + data[_single_slice(data.ndim, axis, 0, -1)]),
         )
         / 2
@@ -489,4 +486,4 @@ def filename_generator(basename: Path, instantaneous: bool) -> Iterator[Path]:
 def angular_mean(data: np.ndarray) -> np.ndarray:
     data = np.deg2rad(data)
     data = np.arctan2(np.mean(np.sin(data)), np.mean(np.cos(data)))
-    return cast(np.ndarray, np.rad2deg(data))
+    return cast("np.ndarray", np.rad2deg(data))

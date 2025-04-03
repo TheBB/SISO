@@ -12,8 +12,7 @@ class Method(Protocol):
     __func__: Callable
     __name__: str
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 METHODS = [
@@ -40,7 +39,7 @@ class MethodInstrumenter:
         if hasattr(func, "cache_info"):
             info = func.cache_info()
             hitrate = info.hits / (info.hits + info.misses)
-            desc = f"{desc} ({hitrate*100:.2g}% cache hit rate)"
+            desc = f"{desc} ({hitrate * 100:.2g}% cache hit rate)"
         return desc
 
 

@@ -117,13 +117,11 @@ class UnstructuredTopology(DiscreteTopologyImpl):
 
     @overload
     @staticmethod
-    def join(other: Iterable[DiscreteTopology], /) -> UnstructuredTopology:
-        ...
+    def join(other: Iterable[DiscreteTopology], /) -> UnstructuredTopology: ...
 
     @overload
     @staticmethod
-    def join(*other: DiscreteTopology) -> UnstructuredTopology:
-        ...
+    def join(*other: DiscreteTopology) -> UnstructuredTopology: ...
 
     @staticmethod
     def join(*other: UnstructuredTopology) -> UnstructuredTopology:
@@ -569,7 +567,7 @@ class LrTopology(Topology):
                     f"and physical dimension {obj.dimension} as rational"
                 )
                 logging.warning(
-                    "Use --rational/--non-rational to override this behavior " "or suppress this warning"
+                    "Use --rational/--non-rational to override this behavior or suppress this warning"
                 )
 
         # Separate weights and control points (weights belong to the topology)

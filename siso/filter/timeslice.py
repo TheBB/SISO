@@ -18,13 +18,11 @@ if TYPE_CHECKING:
 
 
 @overload
-def islice_flag(stop: int | None, /) -> Iterator[bool]:
-    ...
+def islice_flag(stop: int | None, /) -> Iterator[bool]: ...
 
 
 @overload
-def islice_flag(start: int | None, stop: int | None, step: int | None, /) -> Iterator[bool]:
-    ...
+def islice_flag(start: int | None, stop: int | None, step: int | None, /) -> Iterator[bool]: ...
 
 
 def islice_flag(*args):  # type: ignore[no-untyped-def]
@@ -62,15 +60,13 @@ Q = TypeVar("Q")
 
 
 @overload
-def islice_group(it: Iterator[Q], stop: int | None, /) -> Iterator[list[Q]]:
-    ...
+def islice_group(it: Iterator[Q], stop: int | None, /) -> Iterator[list[Q]]: ...
 
 
 @overload
 def islice_group(
     it: Iterator[Q], start: int | None, stop: int | None, step: int | None, /
-) -> Iterator[list[Q]]:
-    ...
+) -> Iterator[list[Q]]: ...
 
 
 def islice_group(it, *args):  # type: ignore[no-untyped-def]

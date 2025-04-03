@@ -1,11 +1,17 @@
-from numpy import floating
+from __future__ import annotations
 
-from siso import api
+from typing import TYPE_CHECKING
+
 from siso.api import B, F, S, T, Z
 from siso.topology import DiscreteTopology
-from siso.util import FieldData
 
 from .passthrough import PassthroughBFSZ
+
+if TYPE_CHECKING:
+    from numpy import floating
+
+    from siso import api
+    from siso.util import FieldData
 
 
 class Discretize(PassthroughBFSZ[B, F, S, Z, T, DiscreteTopology]):

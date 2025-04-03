@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Self, cast
 
 from attrs import define
-from typing_extensions import Self
 
 from .api import Basis, Field, ReaderSettings, Source, SourceProperties, Step, Zone
-from .topology import Topology
 from .util import FieldData, bisect
 
 if TYPE_CHECKING:
@@ -14,6 +12,8 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from numpy import floating
+
+    from .topology import Topology
 
 
 @define
@@ -71,7 +71,7 @@ class MultiSource(Source):
         return self.sources[0].bases()
 
     def basis_of(self, field: Field) -> Basis:
-        return cast(Basis, self.sources[0].basis_of(field))
+        return cast("Basis", self.sources[0].basis_of(field))
 
     def geometries(self, basis: Basis) -> Iterator[Field]:
         return self.sources[0].geometries(basis)
@@ -93,7 +93,7 @@ class MultiSource(Source):
 
     def topology(self, step: MultiSourceStep, basis: Basis, zone: Zone) -> Topology:
         source = self.source_at(step.index)
-        return cast(Topology, source.topology(step.original, basis, zone))
+        return cast("Topology", source.topology(step.original, basis, zone))
 
     def topology_updates(self, step: MultiSourceStep, basis: Basis) -> bool:
         source = self.source_at(step.index)

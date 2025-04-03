@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import vtfwriter as vtf
 from attrs import define
-from typing_extensions import Self
 
 from siso import api
 from siso.api import B, CellOrdering, DiscreteTopology, F, S, Step, StepInterpretation, T, Z, Zone

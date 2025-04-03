@@ -24,14 +24,12 @@ from .writer.api import OutputMode, WriterSettings
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-S = TypeVar("S")
-
 
 def coord_callback(
     ctx: click.Context,
     param: click.Parameter,
-    value: S,
-    constructor: Callable[[S], CoordinateSystem],
+    value: Any,
+    constructor: Callable[[Any], CoordinateSystem],
 ) -> CoordinateSystem | None:
     """Callback used for converting a CLI argument to a coordinate system and
     assigning it to the 'out_coords' parameter being passed to the main
@@ -287,8 +285,7 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     type=Enum(Endianness),
     default="native",
     help=(
-        "Override the assumed endianness of the input. "
-        "Useful for raw data dump formats with little metadata."
+        "Override the assumed endianness of the input. Useful for raw data dump formats with little metadata."
     ),
 )
 @optgroup.option(

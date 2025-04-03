@@ -1,9 +1,15 @@
-from collections.abc import Iterator
+from __future__ import annotations
 
-from siso import api
+from typing import TYPE_CHECKING
+
 from siso.api import B, F, S, T, Z
 
 from .passthrough import PassthroughAll
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from siso import api
 
 
 class BasisFilter(PassthroughAll[B, F, S, T, Z]):

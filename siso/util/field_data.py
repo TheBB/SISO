@@ -19,7 +19,6 @@ from attrs import define
 from numpy import floating, integer, number
 from numpy.typing import DTypeLike, NDArray
 from vtkmodules.util.numpy_support import numpy_to_vtk
-from vtkmodules.vtkCommonCore import vtkDataArray
 
 from siso.api import NodeShape, Point, Points
 
@@ -28,6 +27,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from scipy.spatial.transform import Rotation
+    from vtkmodules.vtkCommonCore import vtkDataArray
 
 T = TypeVar("T", bound=number)
 S = TypeVar("S", bound=number)
@@ -63,13 +63,11 @@ class FieldData(Generic[T]):
 
     @overload
     @staticmethod
-    def join_comps(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]:
-        ...
+    def join_comps(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]: ...
 
     @overload
     @staticmethod
-    def join_comps(*other: FieldData[T] | NDArray[T]) -> FieldData[T]:
-        ...
+    def join_comps(*other: FieldData[T] | NDArray[T]) -> FieldData[T]: ...
 
     @staticmethod
     def join_comps(*other):  # type: ignore[no-untyped-def]
@@ -84,13 +82,11 @@ class FieldData(Generic[T]):
 
     @overload
     @staticmethod
-    def join_dofs(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]:
-        ...
+    def join_dofs(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]: ...
 
     @overload
     @staticmethod
-    def join_dofs(*other: FieldData[T] | NDArray[T]) -> FieldData[T]:
-        ...
+    def join_dofs(*other: FieldData[T] | NDArray[T]) -> FieldData[T]: ...
 
     @staticmethod
     def join_dofs(*other):  # type: ignore[no-untyped-def]
@@ -105,13 +101,13 @@ class FieldData(Generic[T]):
 
     @overload
     @staticmethod
-    def from_iter(iterable: Iterable[Iterable[float | int]], dtype: DTypeLike = float) -> FieldData[floating]:
-        ...
+    def from_iter(
+        iterable: Iterable[Iterable[float | int]], dtype: DTypeLike = float
+    ) -> FieldData[floating]: ...
 
     @overload
     @staticmethod
-    def from_iter(iterable: Iterable[Iterable[T]], dtype: DTypeLike = float) -> FieldData[T]:
-        ...
+    def from_iter(iterable: Iterable[Iterable[T]], dtype: DTypeLike = float) -> FieldData[T]: ...
 
     @staticmethod
     def from_iter(iterable, dtype: DTypeLike = float):  # type: ignore[no-untyped-def]
@@ -169,13 +165,13 @@ class FieldData(Generic[T]):
 
     def mean(self) -> NDArray[T]:
         """Take the average over the dof axis."""
-        return cast(NDArray[T], self.data.mean(axis=0))
+        return cast("NDArray[T]", self.data.mean(axis=0))
 
     def slice_comps(self, index: int | list[int]) -> FieldData[T]:
         """Extract a subset of components as a new field data object."""
         return FieldData(ensure_2d_comp(self.data[:, index]))
 
-    def slice_dofs(self, index: int | list[int]) -> FieldData[T]:
+    def slice_dofs(self, index: int | list[int] | NDArray[integer]) -> FieldData[T]:
         """Extract a subset of dofs as a new field data object."""
         return FieldData(ensure_2d_dof(self.data[index, :]))
 
@@ -211,7 +207,9 @@ class FieldData(Generic[T]):
         """Ensure the data array has native byte order."""
         if self.data.dtype.byteorder in ("=", sys.byteorder):
             return self
-        return FieldData(self.data.byteswap().newbyteorder())
+        swapped = self.data.byteswap()
+        new_array = swapped.view(swapped.dtype.newbyteorder())
+        return FieldData(new_array)
 
     def corners(self: FieldData[floating], shape: NodeShape) -> Points:
         """Return a sequence of corner points by interpreting the array as a
@@ -256,14 +254,12 @@ class FieldData(Generic[T]):
     @overload
     def constant_like(
         self, value: int, ndofs: int | None = None, ncomps: int | None = None, dtype: DTypeLike = None
-    ) -> FieldData[integer]:
-        ...
+    ) -> FieldData[integer]: ...
 
     @overload
     def constant_like(
         self, value: float, ndofs: int | None = None, ncomps: int | None = None, dtype: DTypeLike = None
-    ) -> FieldData[floating]:
-        ...
+    ) -> FieldData[floating]: ...
 
     def constant_like(self, value, ndofs=None, ncomps=None, dtype=None):  # type: ignore[no-untyped-def]
         """Return a new constant FieldData array.
@@ -389,7 +385,7 @@ class FieldData(Generic[T]):
 
     def vtk(self) -> vtkDataArray:
         """Return the wrapped array as a VTK array."""
-        return cast(vtkDataArray, numpy_to_vtk(self.data, deep=1))
+        return cast("vtkDataArray", numpy_to_vtk(self.data, deep=1))
 
     def __add__(self, other: Any) -> FieldData:
         """Implement the '+' operator."""
@@ -400,14 +396,12 @@ class FieldData(Generic[T]):
     @overload
     def __mul__(
         self: FieldData[integer], other: int | NDArray[integer] | FieldData[integer]
-    ) -> FieldData[integer]:
-        ...
+    ) -> FieldData[integer]: ...
 
     @overload
     def __mul__(
         self: FieldData[floating], other: int | float | NDArray[number] | FieldData[number]
-    ) -> FieldData[floating]:
-        ...
+    ) -> FieldData[floating]: ...
 
     def __mul__(self, other):  # type: ignore[no-untyped-def]
         """Implement the '*' operator."""

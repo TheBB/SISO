@@ -11,6 +11,7 @@ from typing import (
     TYPE_CHECKING,
     ClassVar,
     Literal,
+    Self,
     TextIO,
     TypeVar,
     cast,
@@ -21,7 +22,6 @@ import numpy as np
 import scipy.io
 from attrs import define
 from numpy import floating, generic
-from typing_extensions import Self
 
 from siso import api, util
 from siso.api import CellShape, NodeShape, Points, Zone, ZoneShape
@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
     from types import TracebackType
+
+    from numpy.typing import NDArray
 
     from . import FindReaderSettings
 
@@ -54,7 +56,7 @@ class FortranFile(scipy.io.FortranFile):
         the next one.
         """
         size = self._read_size(eof_ok=True)
-        retval = cast(G, np.fromfile(self._fp, dtype=dtype, count=1)[0])
+        retval = cast("G", np.fromfile(self._fp, dtype=dtype, count=1)[0])
         self._fp.seek(size - dtype.itemsize, 1)
         assert self._read_size() == size
         return retval
@@ -896,7 +898,7 @@ class SimraContinuation(SimraHasMesh):
         cells = None
         with self.source.leap(0) as f:
             # First block of nodal data: ignore the timestep value
-            nodals = f.read_but_first(dtype=self.f4_type).reshape(-1, 11)
+            nodals: NDArray[floating] = f.read_but_first(dtype=self.f4_type).reshape(-1, 11)
             if not self.is_init:
                 # Continuation files with stratification field: add it to the
                 # nodal array.

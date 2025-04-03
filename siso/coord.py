@@ -3,13 +3,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Callable
-from typing import TYPE_CHECKING, ClassVar, TypeVar, cast
+from typing import TYPE_CHECKING, ClassVar, Self, TypeVar, cast
 
 import erfa
 import numpy as np
 from attrs import define
 from numpy import floating
-from typing_extensions import Self
 
 from . import api, util
 from .util import FieldData, coord
@@ -45,7 +44,7 @@ class Generic(api.CoordinateSystem):
 
     @property
     def parameters(self) -> tuple[str, ...]:
-        return cast(tuple[str], ())
+        return cast("tuple[str]", ())
 
 
 @systems.register
@@ -69,7 +68,7 @@ class Named(api.CoordinateSystem):
     def parameters(self) -> tuple[str, ...]:
         if self.identifier:
             return (self.identifier,)
-        return cast(tuple[str], ())
+        return cast("tuple[str]", ())
 
     def fits_system_name(self, code: str) -> bool:
         return code.casefold() == self.identifier.casefold()
@@ -137,7 +136,7 @@ class Utm(api.CoordinateSystem):
 @systems.register
 class Geocentric(api.CoordinateSystem):
     name: ClassVar[str] = "Geocentric"
-    parameters = cast(tuple[str], ())
+    parameters = cast("tuple[str]", ())
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Self:
@@ -155,13 +154,11 @@ class Ellipsoid(ABC):
 
     @property
     @abstractmethod
-    def semi_major_axis(self) -> float:
-        ...
+    def semi_major_axis(self) -> float: ...
 
     @property
     @abstractmethod
-    def flattening(self) -> float:
-        ...
+    def flattening(self) -> float: ...
 
 
 @ellpsoids.register

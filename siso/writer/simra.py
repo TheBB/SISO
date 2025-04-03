@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import numpy as np
 from numpy.linalg import norm
 from scipy.io import FortranFile
-from typing_extensions import Self
 
 from siso import api, util
 from siso.api import B, CellShape, F, S, T, Z

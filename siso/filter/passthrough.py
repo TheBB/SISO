@@ -15,9 +15,7 @@ implementations for the methods that make sense. I.e. PassthroughBFS implements
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING, Generic
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Generic, Self
 
 from siso import api
 from siso.api import B, F, InB, InF, InS, InT, InZ, OutB, OutF, OutS, OutT, OutZ, S, T, Z
@@ -265,8 +263,7 @@ class WrappedField(api.Field, Generic[F]):
 
     @property
     @abstractmethod
-    def wrapped_field(self) -> F:
-        ...
+    def wrapped_field(self) -> F: ...
 
     @property
     def cellwise(self) -> bool:

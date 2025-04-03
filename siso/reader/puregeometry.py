@@ -1,14 +1,20 @@
-from collections.abc import Iterator
-from pathlib import Path
-from typing import Generic
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Generic
 
 from attrs import define
-from numpy import floating
 
 from siso import api, coord
 from siso.api import Points, T, Zone, ZoneShape
 from siso.impl import Basis, Field, Step
-from siso.util import FieldData
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from numpy import floating
+
+    from siso.util import FieldData
 
 
 @define

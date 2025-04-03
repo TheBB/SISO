@@ -9,11 +9,10 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from functools import lru_cache
 from itertools import chain, count, repeat
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, Self, cast
 
 import h5py
 from attrs import define, field
-from typing_extensions import Self
 
 from siso import api, util
 from siso.api import Topology, Zone, ZoneShape
@@ -91,7 +90,7 @@ class EigenLocator(Locator):
         return f"0/{name}/basis"
 
     def coeff_root(self, basis_name: str, field_name: str, step: int, cellwise: bool) -> str:
-        return f"0/{basis_name}/Eigenmode/{step+1}"
+        return f"0/{basis_name}/Eigenmode/{step + 1}"
 
 
 def is_legal_group_name(name: str) -> bool:
@@ -161,7 +160,7 @@ class IfemBasis(Basis):
         # class. We discriminate based on the first few bytes.
         patchdata = source.h5[self.patch_path(step, patch)][:]
         initial = patchdata[:20].tobytes()
-        raw_data = memoryview(cast(bytes, patchdata)).tobytes()
+        raw_data = memoryview(cast("bytes", patchdata)).tobytes()
         topology: api.Topology
         if initial.startswith(b"# LAGRANGIAN"):
             corners, topology, cps = UnstructuredTopology.from_ifem(raw_data)
@@ -392,7 +391,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
         self.discover_bases()
         for basis in self._bases.values():
             logging.debug(
-                f"Basis {basis.name} with " f"{util.pluralize(basis.num_patches(self), 'patch', 'patches')}"
+                f"Basis {basis.name} with {util.pluralize(basis.num_patches(self), 'patch', 'patches')}"
             )
 
         # Find all fields
@@ -618,7 +617,7 @@ class IfemModes(Ifem):
     def step_groups(self) -> Iterator[h5py.Group]:
         basis = util.only(self._bases.values())
         for index in range(self.num_steps):
-            yield self.h5[f"0/{basis.name}/Eigenmode/{index+1}"]
+            yield self.h5[f"0/{basis.name}/Eigenmode/{index + 1}"]
 
     def steps(self) -> Iterator[Step]:
         for i, group in enumerate(self.step_groups()):
