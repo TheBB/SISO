@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:ec3df51dae66167bc5449a19e35825ef148b937fcfcb5b1ddc6ff53b2b4b1e2e"
+content_hash = "sha256:763a750c433e1917f7dfa5bdc850ece182b539b57825a91b1c50e7792313914a"
 
 [[metadata.targets]]
 requires_python = "~=3.11"
@@ -130,7 +130,7 @@ files = [
 
 [[package]]
 name = "click"
-version = "8.1.8"
+version = "8.1.3"
 requires_python = ">=3.7"
 summary = "Composable command line interface toolkit"
 groups = ["default", "dev"]
@@ -139,8 +139,8 @@ dependencies = [
     "importlib-metadata; python_version < \"3.8\"",
 ]
 files = [
-    {file = "click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2"},
-    {file = "click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a"},
+    {file = "click-8.1.3-py3-none-any.whl", hash = "sha256:bb4d8133cb15a609f44e8213d9b391b0809795062913b383c62be0ee95b1db48"},
+    {file = "click-8.1.3.tar.gz", hash = "sha256:7682dc8afb30297001674575ea00d1814d808d6a36af415a82bd481d37ba7b8e"},
 ]
 
 [[package]]
