@@ -477,7 +477,10 @@ class SplineTesselator(api.TopologyMerger):
         # ...and these will be used for cellwise fields (we take the center of
         # each parameter interval)
         self.cellwise_knots = [
-            ((knots := np.array(basis.knot_spans()))[:-1] + knots[1:]) / 2 for basis in topology.bases
+            np.repeat(
+                ((knots := np.array(basis.knot_spans()))[:-1] + knots[1:]) / 2,
+                nvis,
+             ) for basis in topology.bases
         ]
 
     # This method implements the interface for TopologyMerger
@@ -516,6 +519,7 @@ class SplineTesselator(api.TopologyMerger):
             knots = self.cellwise_knots
             coeffs = field_data.data
             rational = False
+
         else:
             bases = topology.bases
             shape = tuple(basis.num_functions() for basis in topology.bases)
