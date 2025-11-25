@@ -16,7 +16,7 @@ from .puregeometry import PureGeometry, PureGeometryZone
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from numpy.typing import DTypeLike, NDArray
+    from numpy.typing import NDArray
 
 IGNORED_CARDS = {
     "HDF5OUT",
@@ -50,19 +50,19 @@ class GrowableArray(Generic[T]):
         self.data = data
         self.highest_used = -1
 
-    def __setitem__(self, index: int, data) -> None:
+    def __setitem__(self, index: int, data: Any) -> None:
         while self.data.shape[0] <= index:
             self.data.resize((2 * self.data.shape[0], self.data.shape[1]))
-        self.data[index, :len(data)] = data
+        self.data[index, : len(data)] = data
         self.highest_used = max(self.highest_used, index)
 
 
 class GrowableGridArray(GrowableArray[np.double]):
     def __init__(self, ncomps: int) -> None:
-        super().__init__(np.empty((10, ncomps ), dtype=float))
+        super().__init__(np.empty((10, ncomps), dtype=float))
 
     def finalize(self) -> FieldData[np.floating]:
-        return FieldData(self.data[:self.highest_used + 1])
+        return FieldData(self.data[: self.highest_used + 1])
 
 
 class GrowableCellArray(GrowableArray[np.int_]):
@@ -73,11 +73,11 @@ class GrowableCellArray(GrowableArray[np.int_]):
         super().__setitem__(index, [len(data), *data])
 
     def triangles(self) -> FieldData[np.integer]:
-        indices, = np.where(self.data[:self.highest_used + 1, 0] == 3)
+        (indices,) = np.where(self.data[: self.highest_used + 1, 0] == 3)
         return FieldData(self.data[indices, 1:4])
 
     def quads(self) -> FieldData[np.integer]:
-        indices, = np.where(self.data[:self.highest_used + 1, 0] == 4)
+        (indices,) = np.where(self.data[: self.highest_used + 1, 0] == 4)
         return FieldData(self.data[indices, 1:5])
 
 
@@ -95,6 +95,8 @@ def decompose(line: str) -> list[str]:
     card_type = line[:8].strip()
     double_format = card_type.endswith("*")
     card_type = card_type.removesuffix("*")
+
+    args: tuple[str, ...]
     if double_format:
         args = line[8:24], line[24:40], line[40:56], line[56:72]
     else:
@@ -108,6 +110,7 @@ def decompose(line: str) -> list[str]:
             line[56:64],
             line[64:72],
         )
+
     stripped_args = (arg.strip() for arg in args)
     return [card_type, *stripped_args]
 
@@ -152,8 +155,7 @@ class Nastran(PureGeometry[UnstructuredTopology]):
                     cells[int(card.args[0]) - 1] = [int(c) - 1 for c in card.args[2:5]]
                 elif card.kind == "GRID":
                     grid[int(card.args[0]) - 1] = [
-                        float(re.sub("(.)([-+])", r"\1e\2", c))
-                        for c in card.args[2:5]
+                        float(re.sub("(.)([-+])", r"\1e\2", c)) for c in card.args[2:5]
                     ]
                 else:
                     print(card)
@@ -174,8 +176,10 @@ class Nastran(PureGeometry[UnstructuredTopology]):
         #     )
 
         quads = cells.quads()
-        def interchange(i, j):
+
+        def interchange(i: int, j: int) -> None:
             quads.data[:, i], quads.data[:, j] = quads.data[:, j].copy(), quads.data[:, i].copy()
+
         interchange(2, 3)
         if quads.num_dofs > 0:
             corners = points.slice_dofs(quads.data.flatten()).bounding_corners()

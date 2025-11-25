@@ -586,7 +586,7 @@ def main(
         # If the sink cannot handle more than one zone, apply the zone merge filter.
         if not source.properties.single_zoned and out_props.require_single_zone:
             logging.debug("Attaching ZoneMerge (sink requires single zone)")
-            source = filter.ZoneMerge(source)
+            source = filter.ZoneMerge(source)  # type: ignore[arg-type]
 
         # If the source recommends splitting some fields, do that now.
         if source.properties.split_fields:
@@ -607,7 +607,7 @@ def main(
         # discrete topologies.
         if require_unstructured:
             logging.debug("Attaching ForceUnstructured (--unstructured)")
-            source = filter.ForceUnstructured(source)
+            source = filter.ForceUnstructured(source)  # type: ignore[arg-type]
 
         # Convert eigenmode fields to displacements.
         if eigenmodes_are_displacement:

@@ -144,11 +144,11 @@ class FieldData(Generic[T]):
 
     @property
     def num_comps(self) -> int:
-        return self.data.shape[-1]
+        return cast("int", self.data.shape[-1])
 
     @property
     def num_dofs(self) -> int:
-        return self.data.shape[0]
+        return cast("int", self.data.shape[0])
 
     @property
     def comps(self) -> Iterable[NDArray[T]]:

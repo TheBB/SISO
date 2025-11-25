@@ -32,12 +32,15 @@ siso = "siso.__main__:main"
 vtf = ["vtfwriter"]
 
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+vtfwriter = { git = "https://github.com/TheBB/vtfwriter" }
 
 [tool.ruff]
 line-length = 110
-include = ["siso/**/*.py", "tests/**/*.py", "stubs/**/*.pyi"]
+include = ["src/**/*.py", "tests/**/*.py", "stubs/**/*.pyi"]
 
 [tool.ruff.lint]
 select = [
@@ -69,8 +72,7 @@ ignore = [
 required-imports = ["from __future__ import annotations"]
 
 [tool.mypy]
-plugins = ["numpy.typing.mypy_plugin"]
-files = ["siso/**/*.py"]
+files = ["src/**/*.py"]
 disallow_untyped_defs = true
 disallow_any_unimported = true
 no_implicit_optional = true
@@ -86,18 +88,6 @@ mypy_path = "$MYPY_CONFIG_FILE_DIR/stubs"
 [[tool.mypy.overrides]]
 module = "siso.util.bisect"
 ignore_errors = true
-
-[tool.pdm.dev-dependencies]
-dev = [
-    "pytest<9.0.0,>=8.3.5",
-    "mypy<2.0.0,>=1.15.0",
-    "ruff<1.0.0,>=0.11.2",
-    "bump-my-version>=1.1.1",
-    "vtfwriter-stubs>=1.1.0",
-]
-
-[tool.pdm.build]
-includes = []
 
 [tool.bumpversion]
 current_version = "4.2.0"
@@ -135,3 +125,12 @@ first_value = "1"
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
+
+[dependency-groups]
+dev = [
+    "bump-my-version>=1.2.4",
+    "mypy>=1.18.2",
+    "pytest>=9.0.1",
+    "ruff>=0.14.6",
+    "vtfwriter-stubs>=1.1.0",
+]

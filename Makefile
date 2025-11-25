@@ -3,36 +3,36 @@ package := siso
 
 # Convenience targets
 
-.PHONY: install
+.PHONY: sync
 install:
-	pdm install --dev
+	uv sync
 
 
 # Linting targets
 
 .PHONY: format
 format:
-	pdm run ruff format
+	uv run ruff format
 
 .PHONY: lint
 lint:
-	pdm run ruff check --fix
+	uv run ruff check --fix
 
 
 # Test targets
 
 .PHONY: pytest
 pytest:
-	pdm run pytest
+	uv run pytest
 
 .PHONY: mypy
 mypy:
-	pdm run mypy
+	uv run mypy
 
 .PHONY: lint-check
 lint-check:
-	pdm run ruff check
-	pdm run ruff format --check
+	uv run ruff check
+	uv run ruff format --check
 
 .PHONY: test
 test: pytest mypy lint-check
@@ -42,4 +42,4 @@ test: pytest mypy lint-check
 
 .PHONY: build
 build:
-	pdm build
+	uv build

@@ -480,7 +480,8 @@ class SplineTesselator(api.TopologyMerger):
             np.repeat(
                 ((knots := np.array(basis.knot_spans()))[:-1] + knots[1:]) / 2,
                 nvis,
-             ) for basis in topology.bases
+            )
+            for basis in topology.bases
         ]
 
     # This method implements the interface for TopologyMerger
