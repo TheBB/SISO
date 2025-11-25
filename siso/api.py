@@ -720,6 +720,7 @@ class CellType(Enum):
     """Enumerates the supported grid cell types for discrete topologies."""
 
     Line = auto()
+    Triangle = auto()
     Quadrilateral = auto()
     Hexahedron = auto()
 

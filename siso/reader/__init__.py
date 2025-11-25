@@ -170,3 +170,12 @@ def lrspline(path: Path, settings: FindReaderSettings) -> Source | None:
     from .lrspline import LrSpline
 
     return LrSpline(path)
+
+
+@readers.register("Nastran")
+def nastran(path: Path, settings: FindReaderSettings) -> Source | None:
+    if path.suffix.casefold() not in (".nas", ".bdf"):
+        return None
+    from .nastran import Nastran
+
+    return Nastran(path)

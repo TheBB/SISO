@@ -22,6 +22,7 @@ class PureGeometryZone(Generic[T]):
     corners: Points
     field_data: FieldData[floating]
     topology: T
+    shape: ZoneShape
 
 
 class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
@@ -65,8 +66,7 @@ class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
 
     def zones(self) -> Iterator[Zone[int]]:
         for i, zone in enumerate(self.zone_data):
-            shape = [ZoneShape.Line, ZoneShape.Quatrilateral, ZoneShape.Hexahedron][zone.topology.pardim - 1]
-            yield Zone(shape=shape, coords=zone.corners, key=i)
+            yield Zone(shape=zone.shape, coords=zone.corners, key=i)
 
     def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> T:
         return self.zone_data[zone.key].topology
