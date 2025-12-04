@@ -33,9 +33,19 @@ if TYPE_CHECKING:
 class ZoneKey:
     """Key type used for IFEM zones."""
 
-    name: str
-    step: int
-    patch: int
+    name: str  # Name of basis
+    step: int  # Timestep index
+    patch: int  # Patch ID
+    subblock: int  # Subblock index (in cases where patches contain multiple blocks)
+
+
+@define(frozen=True)
+class IfemPatch:
+    """Used as the return type of `IfemBasis.patch_at`."""
+
+    zone: Zone[ZoneKey]
+    topology: api.Topology
+    data: FieldData[floating]
 
 
 class Locator(ABC):
@@ -143,12 +153,12 @@ class IfemBasis(Basis):
         return self.locator.patch_path(self.name, step, patch)
 
     @lru_cache(maxsize=128)
-    def patch_at(
+    def patches_at(
         self,
         step: int,
         patch: int,
         source: Ifem,
-    ) -> tuple[Zone[ZoneKey], api.Topology, FieldData[floating]]:
+    ) -> tuple[IfemPatch, ...]:
         """Obtain the patch at the given step by index. This returns a tuple
         with three items: zone, topology and field data.
         """
@@ -162,27 +172,36 @@ class IfemBasis(Basis):
         initial = patchdata[:20].tobytes()
         raw_data = memoryview(cast("bytes", patchdata)).tobytes()
         topology: api.Topology
+
         if initial.startswith(b"# LAGRANGIAN"):
-            corners, topology, cps = UnstructuredTopology.from_ifem(raw_data)
-        elif initial.startswith(b"# LRSPLINE"):
+            # Lagrangian IFEM meshes may consist of multiple blocks. In case
+            # there are e.g. mixed quads and triangles, we get one block for
+            # each cell type. In this case, we return multiple zones.
+            retval: list[IfemPatch] = []
+            for i, (corners, topology, cps) in enumerate(UnstructuredTopology.from_ifem(raw_data)):
+                zone = Zone(shape=ZoneShape.Shapeless, coords=corners, key=ZoneKey(self.name, step, patch, i))
+                retval.append(IfemPatch(zone, topology, cps))
+            return tuple(retval)
+
+        if initial.startswith(b"# LRSPLINE"):
             corners, topology, cps = next(LrTopology.from_bytes(raw_data, source.rationality))
         else:
             # Shame! GoTools files don't have 'magic bytes' at the beginning.
             corners, topology, cps = next(SplineTopology.from_bytes(raw_data))
 
-        # IFEM patches never have irregular shapes.
+        # Spline patches never have irregular shapes.
         shape = [ZoneShape.Line, ZoneShape.Quatrilateral, ZoneShape.Hexahedron][topology.pardim - 1]
-        zone = Zone(shape=shape, coords=corners, key=ZoneKey(self.name, step, patch))
 
-        return zone, topology, cps
+        zone = Zone(shape=shape, coords=corners, key=ZoneKey(self.name, step, patch, 0))
+        return (IfemPatch(zone, topology, cps),)
 
     @lru_cache(maxsize=1)
     def ncomps(self, source: Ifem) -> int:
         """Calculate the number of components (physical dimensionality) of the
         basis.
         """
-        _, _, cps = self.patch_at(0, 0, source)
-        return cps.num_comps
+        patch = self.patches_at(0, 0, source)[0]
+        return patch.data.num_comps
 
 
 @define(frozen=True)
@@ -228,7 +247,7 @@ class IfemField(Field):
             )
 
     @abstractmethod
-    def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
+    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FieldData[floating]:
         """Return the control point data for this field at a given step and patch."""
         ...
 
@@ -256,9 +275,8 @@ class IfemGeometryField(IfemField):
             basis=basis,
         )
 
-    def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
-        _, _, cps = self.basis.patch_at(step, patch, source)
-        return cps
+    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FieldData[floating]:
+        return self.basis.patches_at(step, patch, source)[block].data
 
     def updates_at(self, step: int, source: Ifem) -> bool:
         return self.basis.updates_at(step, source)
@@ -280,10 +298,13 @@ class IfemStandardField(IfemField):
         # can't construct until we know the number of components. We can't
         # mutate the class post-initialization either, because it's frozen.
         # Oh well.
-        _, topology, _ = basis.patch_at(0, 0, source)
+        # topology = basis.patches_at(0, 0, source)[0].topology
         coeff_path = basis.locator.coeff_path(basis.name, name, 0, 0, cellwise)
         cps = source.h5[coeff_path][:]
-        divisor = topology.num_cells if cellwise else topology.num_nodes
+        if cellwise:
+            divisor = sum(blk.topology.num_cells for blk in basis.patches_at(0, 0, source))
+        else:
+            divisor = sum(blk.topology.num_nodes for blk in basis.patches_at(0, 0, source))
         ncomps, remainder = divmod(len(cps), divisor)
         assert remainder == 0
 
@@ -337,7 +358,7 @@ class IfemStandardField(IfemField):
             self.cellwise,
         )
 
-    def cps_at(self, step: int, patch: int, source: Ifem) -> FieldData[floating]:
+    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FieldData[floating]:
         """Return the control points for this field at a given step and
         patch.
         """
@@ -528,9 +549,9 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
             yield Step(index=i, value=time)
 
     def zones(self) -> Iterator[Zone]:
-        for patch in range(self.geometry.num_patches(self)):
-            zone, _, _ = self.geometry.patch_at(0, patch, self)
-            yield zone
+        for patch_id in range(self.geometry.num_patches(self)):
+            for patch in self.geometry.patches_at(0, patch_id, self):
+                yield patch.zone
 
     def bases(self) -> Iterator[IfemBasis]:
         return iter(self._bases.values())
@@ -545,14 +566,14 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
         return iter(basis.fields)
 
     def topology(self, step: Step, basis: IfemBasis, zone: Zone[ZoneKey]) -> api.Topology:
-        _, topology, _ = basis.patch_at(step.index, zone.key.patch, self)
-        return topology
+        block = basis.patches_at(step.index, zone.key.patch, self)[zone.key.subblock]
+        return block.topology
 
     def topology_updates(self, step: Step, basis: IfemBasis) -> bool:
         return basis.updates_at(step.index, self)
 
     def field_data(self, step: Step, field: IfemField, zone: Zone[ZoneKey]) -> FieldData[floating]:
-        return field.cps_at(step.index, zone.key.patch, self)
+        return field.cps_at(step.index, zone.key.patch, zone.key.subblock, self)
 
     def field_updates(self, step: Step, field: IfemField) -> bool:
         if field.is_geometry:

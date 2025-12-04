@@ -37,6 +37,13 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
 
+# Maps declared celltype + number of entries to actual celltype + degree
+KNOWN_CELLTYPES: dict[tuple[CellType, int], tuple[CellType, int]] = {
+    (CellType.Hexahedron, 8): (CellType.Hexahedron, 1),
+    (CellType.Hexahedron, 27): (CellType.Hexahedron, 2),
+}
+
+
 class DiscreteTopologyImpl(DiscreteTopology):
     def cells_as(self, ordering: CellOrdering) -> FieldData[integer]:
         permutation = cell_numbering.permute_to(self.celltype, self.degree, ordering)
@@ -59,7 +66,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
     degree: int
 
     @staticmethod
-    def from_ifem(data: bytes) -> tuple[Points, UnstructuredTopology, FieldData[floating]]:
+    def from_ifem(data: bytes) -> Iterator[tuple[Points, UnstructuredTopology, FieldData[floating]]]:
         """Special purpose constructor for parsing an IFEM Lagriangian patch
         with hexahedral cells.
 
@@ -81,39 +88,46 @@ class UnstructuredTopology(DiscreteTopologyImpl):
             raise api.BadInput("Expected 'elements='")
         if not typespec.startswith(b"type="):
             raise api.BadInput("Expected 'type='")
+
         num_nodes = int(nodespec.split(b"=", 1)[1])
         num_cells = int(elemspec.split(b"=", 1)[1])
         celltype_id = typespec.split(b"=", 1)[1]
+
         if not celltype_id == b"hexahedron":
             raise api.Unsupported(f"IFEM cell type '{celltype_id.decode()}'")
-        celltype = CellType.Hexahedron
+        declared_celltype = CellType.Hexahedron
 
         # Read nodal coordinates
-        nodes = np.zeros((num_nodes, 3), dtype=float)
+        nodes = np.zeros((num_nodes, 3), dtype=np.float64)
         for i in range(num_nodes):
             nodes[i] = list(map(float, next(io).split()))
 
-        # Read the first line of cells
-        cell_ids = list(map(int, next(io).split()))
-        num_nodes_per_cell = len(cell_ids)
+        # Multiple blocks for different cell types. The cell type in the file
+        # can lie: we can't guarantee that the file contains uniform cell types.
+        blocks: dict[tuple[CellType, int], FieldData[np.integer]] = {}
 
-        # Read cell indices
-        cells = np.zeros((num_cells, num_nodes_per_cell), dtype=int)
-        cells[0] = cell_ids
-        for i in range(1, num_cells):
-            cells[i] = list(map(int, next(io).split()))
-        cell_data = FieldData(cells)
+        for _ in range(num_cells):
+            cell_ids = list(map(int, next(io).split()))
 
-        if num_nodes_per_cell not in (8, 27):
-            raise api.Unsupported(f"Hexahedral cells with {num_nodes_per_cell} nodes")
-        degree = {8: 1, 27: 2}[num_nodes_per_cell]
+            # Figure out the actual cell type based on the declared cell type
+            # and the number of indices.
+            actual_celltype, degree = KNOWN_CELLTYPES[declared_celltype, len(cell_ids)]
 
-        permutation = cell_numbering.permute_from(celltype, degree, cell_numbering.CellOrdering.Ifem)
-        cell_data = cell_data.permute_components(permutation)
+            if (actual_celltype, degree) not in blocks:
+                blocks[actual_celltype, degree] = FieldData(np.empty((0, len(cell_ids)), dtype=np.int64))
 
-        corners = Points((Point(tuple(nodes[0])),))
-        topology = UnstructuredTopology(num_nodes, cell_data, celltype, degree)
-        return corners, topology, FieldData(nodes)
+            blocks[actual_celltype, degree] = FieldData.join_dofs(
+                blocks[actual_celltype, degree],
+                FieldData(np.array([cell_ids], dtype=np.int64))
+            )
+
+        # For each block, yield
+        for (celltype, degree), cell_data in blocks.items():
+            permutation = cell_numbering.permute_from(celltype, degree, cell_numbering.CellOrdering.Ifem)
+            cell_data = cell_data.permute_components(permutation)
+            corners = Points((Point(tuple(nodes[0])),))
+            topology = UnstructuredTopology(num_nodes, cell_data, celltype, degree)
+            yield (corners, topology, FieldData(nodes))
 
     @overload
     @staticmethod
