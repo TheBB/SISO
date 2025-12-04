@@ -5,8 +5,9 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import IO, TYPE_CHECKING, Self, TypeVar
 
-from numpy import number
-from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
+import numpy as np
+from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
+from vtkmodules.util.vtkConstants import VTK_UNSIGNED_CHAR
 from vtkmodules.vtkCommonCore import vtkPoints
 from vtkmodules.vtkCommonDataModel import (
     VTK_HEXAHEDRON,
@@ -38,7 +39,7 @@ class Behavior(Enum):
     Whatever = auto()
 
 
-Sc = TypeVar("Sc", bound=number)
+Sc = TypeVar("Sc", bound=np.number)
 BackendWriter = vtkXMLWriter | vtkDataWriter
 
 
@@ -53,42 +54,69 @@ def transpose(data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) ->
     return data.transpose(NodeShape(shape), (2, 1, 0))
 
 
-def get_grid(
-    topology: DiscreteTopology, legacy: bool, behavior: Behavior
+def get_grid_and_writer(
+    source: Source[B, F, S, DiscreteTopology, Z], geometry: F, step: S, legacy: bool, behavior: Behavior
 ) -> tuple[vtkPointSet, BackendWriter]:
-    if isinstance(topology, StructuredTopology) and behavior != Behavior.OnlyUnstructured:
-        sgrid = vtkStructuredGrid()
-        shape = tuple(topology.cellshape)
-        while len(shape) < 3:
-            shape = (*shape, 0)
-        sgrid.SetDimensions(*(s + 1 for s in shape))
-        if legacy:
-            return sgrid, vtkStructuredGridWriter()
-        return sgrid, vtkXMLStructuredGridWriter()
+    zones = list(source.zones())
+
+    # Special case: structured grids must consist of one zone, and that zone must be structured
+    if len(zones) == 1:
+        topology = source.topology(step, source.basis_of(geometry), zones[0])
+
+        if isinstance(topology, StructuredTopology) and behavior != Behavior.OnlyUnstructured:
+            sgrid = vtkStructuredGrid()
+            shape = tuple(topology.cellshape)
+            while len(shape) < 3:
+                shape = (*shape, 0)
+            sgrid.SetDimensions(*(s + 1 for s in shape))
+            if legacy:
+                return sgrid, vtkStructuredGridWriter()
+            return sgrid, vtkXMLStructuredGridWriter()
 
     if behavior == Behavior.OnlyStructured:
-        raise api.Unexpected("Unstructured topology passed to structured-only context")
-    if topology.celltype not in (CellType.Line, CellType.Quadrilateral, CellType.Hexahedron):
-        raise api.Unsupported("VTK writer only supports lines, quadrilaterals and hexahedra")
+        raise api.Unexpected("Unstructured or multi-zone topology passed to structured-only context")
 
     ugrid = vtkUnstructuredGrid()
-    cells = (
-        FieldData.join_comps(
-            topology.cells.constant_like(topology.cells.num_comps, ncomps=1, dtype=int),
-            topology.cells_as(CellOrdering.Vtk),
+    cells = np.empty((0,), dtype=np.int64)
+    celltypes = np.empty((0,), dtype=np.uint8)
+    total_nodes = 0
+    total_cells = 0
+
+    for zone in zones:
+        topology = source.topology(step, source.basis_of(geometry), zone)
+
+        if topology.celltype not in (CellType.Line, CellType.Quadrilateral, CellType.Hexahedron):
+            raise api.Unsupported("VTK writer only supports lines, quadrilaterals and hexahedra")
+
+        celltype = {
+            CellType.Line: VTK_LINE,
+            CellType.Quadrilateral: VTK_QUAD,
+            CellType.Hexahedron: VTK_HEXAHEDRON,
+        }[topology.celltype]
+        celltypes = np.hstack([celltypes, np.full((topology.num_cells,), celltype, dtype=np.uint8)])
+
+        cells = np.hstack(
+            [
+                cells,
+                FieldData.join_comps(
+                    topology.cells.constant_like(topology.cells.num_comps, ncomps=1, dtype=int),
+                    topology.cells_as(CellOrdering.Vtk) + total_nodes,
+                )
+                .numpy()
+                .ravel()
+                .astype("i8"),
+            ]
         )
-        .numpy()
-        .ravel()
-        .astype("i8")
-    )
+
+        total_nodes += topology.num_nodes
+        total_cells += topology.num_cells
+
     cellarray = vtkCellArray()
-    cellarray.SetCells(len(cells), numpy_to_vtkIdTypeArray(cells))
-    celltype = {
-        CellType.Line: VTK_LINE,
-        CellType.Quadrilateral: VTK_QUAD,
-        CellType.Hexahedron: VTK_HEXAHEDRON,
-    }[topology.celltype]
-    ugrid.SetCells(celltype, cellarray)
+    cellarray.SetCells(total_cells, numpy_to_vtkIdTypeArray(cells))
+
+    cell_types_vtk = numpy_to_vtk(celltypes, array_type=VTK_UNSIGNED_CHAR, deep=1)
+
+    ugrid.SetCells(cell_types_vtk, cellarray)
 
     if legacy:
         return ugrid, vtkUnstructuredGridWriter()
@@ -132,7 +160,6 @@ class VtkWriterBase(ABC, Writer):
     @property
     def properties(self) -> WriterProperties:
         return WriterProperties(
-            require_single_zone=True,
             require_single_basis=True,
             require_discrete_topology=True,
         )
@@ -144,40 +171,74 @@ class VtkWriterBase(ABC, Writer):
             self.output_mode = settings.output_mode
 
     @abstractmethod
-    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]: ...
+    def grid_and_writer(
+        self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
+    ) -> tuple[vtkPointSet, BackendWriter]: ...
 
     def consume_timestep(
         self, step: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F
     ) -> None:
-        zone = source.single_zone()
-        topology = source.topology(step, source.basis_of(geometry), zone)
-
-        grid, writer = self.grid_and_writer(topology)
+        grid, writer = self.grid_and_writer(source, step, geometry)
         apply_output_mode(writer, self.output_mode)
 
-        data = source.field_data(step, geometry, zone)
-        data = transpose(data, grid, geometry.cellwise)
+        data: FieldData[np.floating] = FieldData(np.empty((0, geometry.num_comps), dtype=np.float64))
+        for zone in source.zones():
+            new_data = source.field_data(step, geometry, zone)
+            data = FieldData.join_dofs(data, new_data)
 
+        data = transpose(data, grid, geometry.cellwise)
         points = vtkPoints()
-        p = data.ensure_ncomps(3, allow_scalar=False)
-        points.SetData(p.vtk())
+        points.SetData(data.ensure_ncomps(3, allow_scalar=False).vtk())
         grid.SetPoints(points)
 
         for field in source.fields(source.single_basis()):
             if field.is_geometry:
                 continue
             target = grid.GetCellData() if field.cellwise else grid.GetPointData()
-            data = source.field_data(step, field, zone)
+
+            data = FieldData(np.empty((0, field.num_comps), dtype=np.float64))
+            for zone in source.zones():
+                new_data = source.field_data(step, field, zone)
+                data = FieldData.join_dofs(data, new_data)
+
             if field.is_displacement:
                 data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
             else:
                 data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
             data = transpose(data, grid, field.cellwise)
+
             if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
                 data = data.nan_filter()
+
             array = data.vtk()
             array.SetName(field.name)
             target.AddArray(array)
+
+        # grid, writer = self.grid_and_writer(topology)
+
+        # data = source.field_data(step, geometry, zone)
+        # data = transpose(data, grid, geometry.cellwise)
+
+        # points = vtkPoints()
+        # p = data.ensure_ncomps(3, allow_scalar=False)
+        # points.SetData(p.vtk())
+        # grid.SetPoints(points)
+
+        # for field in source.fields(source.single_basis()):
+        #     if field.is_geometry:
+        #         continue
+        #     target = grid.GetCellData() if field.cellwise else grid.GetPointData()
+        #     data = source.field_data(step, field, zone)
+        #     if field.is_displacement:
+        #         data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
+        #     else:
+        #         data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
+        #     data = transpose(data, grid, field.cellwise)
+        #     if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
+        #         data = data.nan_filter()
+        #     array = data.vtk()
+        #     array.SetName(field.name)
+        #     target.AddArray(array)
 
         writer.SetFileName(str(filename))
         writer.SetInputData(grid)
@@ -198,8 +259,10 @@ class VtkWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
-        return get_grid(topology, legacy=True, behavior=Behavior.Whatever)
+    def grid_and_writer(
+        self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
+    ) -> tuple[vtkPointSet, BackendWriter]:
+        return get_grid_and_writer(source, geometry, step, legacy=True, behavior=Behavior.Whatever)
 
 
 class VtuWriter(VtkWriterBase):
@@ -208,8 +271,10 @@ class VtuWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
-        return get_grid(topology, legacy=False, behavior=Behavior.OnlyUnstructured)
+    def grid_and_writer(
+        self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
+    ) -> tuple[vtkPointSet, BackendWriter]:
+        return get_grid_and_writer(source, geometry, step, legacy=False, behavior=Behavior.OnlyUnstructured)
 
 
 class VtsWriter(VtkWriterBase):
@@ -218,8 +283,10 @@ class VtsWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(self, topology: DiscreteTopology) -> tuple[vtkPointSet, BackendWriter]:
-        return get_grid(topology, legacy=False, behavior=Behavior.OnlyStructured)
+    def grid_and_writer(
+        self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
+    ) -> tuple[vtkPointSet, BackendWriter]:
+        return get_grid_and_writer(source, geometry, step, legacy=False, behavior=Behavior.OnlyStructured)
 
 
 class PvdWriter(VtuWriter):

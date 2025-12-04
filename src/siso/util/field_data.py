@@ -52,6 +52,13 @@ def ensure_2d_comp(array: NDArray[T]) -> NDArray[T]:
     return array
 
 
+def pad_comps(array: NDArray[T], ncomps: int, value: T) -> NDArray[T]:
+    """Add extra components to an array."""
+    if array.shape[1] == ncomps:
+        return array
+    return np.hstack([array, np.full((array.shape[0], ncomps - array.shape[1]), value, dtype=array.dtype)])
+
+
 @define
 class FieldData(Generic[T]):
     """Wrapper for a numpy array with a dof and a comp axis."""
@@ -78,26 +85,33 @@ class FieldData(Generic[T]):
         iterable of such.
         """
         iterable = other if isinstance(other[0], FieldData | np.ndarray) else other[0]
-        data = np.hstack([ensure_2d_dof(x.numpy() if isinstance(x, FieldData) else x) for x in iterable])
+        stack = [ensure_2d_dof(x.numpy() if isinstance(x, FieldData) else x) for x in iterable]
+        data = np.hstack(stack)
         return FieldData(data)
 
     @overload
     @staticmethod
-    def join_dofs(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]: ...
+    def join_dofs(
+        other: Iterable[FieldData[T] | NDArray[T]], /, *, pad_with: T | None = None
+    ) -> FieldData[T]: ...
 
     @overload
     @staticmethod
-    def join_dofs(*other: FieldData[T] | NDArray[T]) -> FieldData[T]: ...
+    def join_dofs(*other: FieldData[T] | NDArray[T], pad_with: T | None = None) -> FieldData[T]: ...
 
     @staticmethod
-    def join_dofs(*other):  # type: ignore[no-untyped-def]
+    def join_dofs(*other, pad_with=None):  # type: ignore[no-untyped-def]
         """Join two or more arrays along the dof axis.
 
         Supports an arbitrary number field data or numpy arrays, or a single
         iterable of such.
         """
         iterable = other if isinstance(other[0], FieldData | np.ndarray) else other[0]
-        data = np.vstack([ensure_2d_comp(x.numpy() if isinstance(x, FieldData) else x) for x in iterable])
+        stack = [ensure_2d_comp(x.numpy() if isinstance(x, FieldData) else x) for x in iterable]
+        if pad_with is not None:
+            ncomps = max(x.shape[1] for x in stack)
+            stack = [pad_comps(x, ncomps, pad_with) for x in stack]
+        data = np.vstack(stack)
         return FieldData(data)
 
     @overload
