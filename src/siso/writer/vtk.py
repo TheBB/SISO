@@ -44,7 +44,7 @@ Sc = TypeVar("Sc", bound=np.number)
 BackendWriter = vtkXMLWriter | vtkDataWriter
 
 
-def transpose(data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) -> FieldData[Sc]:
+def transpose[Sc: np.number](data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) -> FieldData[Sc]:
     if not isinstance(grid, vtkStructuredGrid):
         return data
     shape = [0, 0, 0]

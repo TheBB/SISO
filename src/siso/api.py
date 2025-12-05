@@ -26,7 +26,6 @@ from enum import Enum, auto
 from typing import (
     TYPE_CHECKING,
     ClassVar,
-    Generic,
     NewType,
     Protocol,
     Self,
@@ -71,7 +70,7 @@ M = TypeVar("M", Nodal, Cellular)
 P = TypeVar("P", bound=Aritmetical)
 
 
-class ShapeTuple(tuple[P, ...], Generic[M, P]):
+class ShapeTuple[M: (Nodal, Cellular), P: Aritmetical](tuple[P, ...]):
     @overload
     def __new__(cls, *args: P) -> Self: ...
 
@@ -138,7 +137,7 @@ K = TypeVar("K")
 
 
 @define(frozen=True)
-class Zone(Generic[K]):
+class Zone[K]:
     """A zone is a distinct and identified region of the spatial domain.
 
     Most sources provide only one zone (a single grid for the entire domain),
@@ -803,7 +802,7 @@ OutT = TypeVar("OutT", bound=Topology)
 OutZ = TypeVar("OutZ", bound=Zone)
 
 
-class Source(ABC, Generic[B, F, S, T, Z]):
+class Source[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](ABC):
     """The primary object for representing a data source.
 
     This type is parametrized on the type of basis, field, step, topology and

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from itertools import count, islice
-from typing import TYPE_CHECKING, Generic, TypeVar, overload
+from typing import TYPE_CHECKING, TypeVar, overload
 
 from attrs import define
 
-from siso.api import B, F, S, T, Z
+from siso.api import B, Basis, F, Field, S, Step, T, Topology, Z, Zone
 
 from .passthrough import PassthroughBFTZ
 
@@ -60,11 +60,11 @@ Q = TypeVar("Q")
 
 
 @overload
-def islice_group(it: Iterator[Q], stop: int | None, /) -> Iterator[list[Q]]: ...
+def islice_group[Q](it: Iterator[Q], stop: int | None, /) -> Iterator[list[Q]]: ...
 
 
 @overload
-def islice_group(
+def islice_group[Q](
     it: Iterator[Q], start: int | None, stop: int | None, step: int | None, /
 ) -> Iterator[list[Q]]: ...
 
@@ -100,7 +100,7 @@ def islice_group(it, *args):  # type: ignore[no-untyped-def]
 
 
 @define
-class GroupedStep(Generic[S]):
+class GroupedStep[S: Step]:
     """A step composed of a multiple steps in sequence."""
 
     index: int
@@ -112,7 +112,9 @@ class GroupedStep(Generic[S]):
         return self.steps[-1].value
 
 
-class GroupedTimeSource(PassthroughBFTZ[B, F, T, Z, S, GroupedStep[S]], Generic[B, F, S, T, Z]):
+class GroupedTimeSource[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+    PassthroughBFTZ[B, F, T, Z, S, GroupedStep[S]]
+):
     """Base class for all filters that group timesteps into `GroupedStep`."""
 
     def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> T:

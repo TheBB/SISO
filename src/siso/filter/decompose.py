@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING
 
 from attrs import define
 
 from siso import api
-from siso.api import B, F, S, T, Z
+from siso.api import B, Basis, F, Field, S, Step, T, Topology, Z, Zone
 
 from .passthrough import PassthroughBSTZ, WrappedField
 
@@ -52,7 +52,9 @@ class DecomposedField(WrappedField[F]):
         return self.wrapped_field.type
 
 
-class DecomposeBase(PassthroughBSTZ[B, S, T, Z, F, DecomposedField[F]], Generic[B, F, S, T, Z]):
+class DecomposeBase[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+    PassthroughBSTZ[B, S, T, Z, F, DecomposedField[F]]
+):
     """Base class for decomposition filters."""
 
     def use_geometry(self, geometry: DecomposedField[F]) -> None:

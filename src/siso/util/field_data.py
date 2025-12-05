@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import sys
 from itertools import product
-from typing import TYPE_CHECKING, Generic, TypeVar, cast, overload
+from typing import TYPE_CHECKING, TypeVar, cast, overload
 
 import numpy as np
 from attrs import define
@@ -36,7 +36,7 @@ Index = int | slice | None | NDArray[integer]
 Indices = Index | tuple[Index, ...]
 
 
-def ensure_2d_dof(array: NDArray[T]) -> NDArray[T]:
+def ensure_2d_dof[T: number](array: NDArray[T]) -> NDArray[T]:
     """Ensure an array is 2D, potentially adding a dof axis."""
     if array.ndim < 2:
         return array.reshape(-1, 1)
@@ -44,7 +44,7 @@ def ensure_2d_dof(array: NDArray[T]) -> NDArray[T]:
     return array
 
 
-def ensure_2d_comp(array: NDArray[T]) -> NDArray[T]:
+def ensure_2d_comp[T: number](array: NDArray[T]) -> NDArray[T]:
     """Ensure an array is 2D, potentially adding a comp axis."""
     if array.ndim < 2:
         return array.reshape(1, -1)
@@ -52,7 +52,7 @@ def ensure_2d_comp(array: NDArray[T]) -> NDArray[T]:
     return array
 
 
-def pad_comps(array: NDArray[T], ncomps: int, value: T) -> NDArray[T]:
+def pad_comps[T: number](array: NDArray[T], ncomps: int, value: T) -> NDArray[T]:
     """Add extra components to an array."""
     if array.shape[1] == ncomps:
         return array
@@ -60,7 +60,7 @@ def pad_comps(array: NDArray[T], ncomps: int, value: T) -> NDArray[T]:
 
 
 @define
-class FieldData(Generic[T]):
+class FieldData[T: number]:
     """Wrapper for a numpy array with a dof and a comp axis."""
 
     data: NDArray[T]

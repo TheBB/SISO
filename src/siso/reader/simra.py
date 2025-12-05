@@ -150,7 +150,9 @@ def mesh_offset(root: Path, dim: Literal[2] | Literal[3]) -> np.ndarray:
 T = TypeVar("T", int, float)
 
 
-def read_many(lines: Iterator[str], n: int, tp: Callable[[str], T], skip: bool = True) -> np.ndarray:
+def read_many[T: (int, float)](
+    lines: Iterator[str], n: int, tp: Callable[[str], T], skip: bool = True
+) -> np.ndarray:
     """Read n elements of type T from a sequence of lines, with potentially
     multiple elements per line, separated by space.
 

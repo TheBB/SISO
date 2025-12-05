@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING
 
 from attrs import define
 
 from siso import api, coord
-from siso.api import Points, T, Zone, ZoneShape
+from siso.api import Points, T, Topology, Zone, ZoneShape
 from siso.impl import Basis, Field, Step
 
 if TYPE_CHECKING:
@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 
 @define
-class PureGeometryZone(Generic[T]):
+class PureGeometryZone[T: Topology]:
     corners: Points
     field_data: FieldData[floating]
     topology: T
     shape: ZoneShape
 
 
-class PureGeometry(api.Source[Basis, Field, Step, T, Zone[int]], Generic[T]):
+class PureGeometry[T: Topology](api.Source[Basis, Field, Step, T, Zone[int]]):
     """Base class for a source that reads from a file that only has geometry.
 
     Subclasses should populate the `zone_data` list when `__enter__` is called.

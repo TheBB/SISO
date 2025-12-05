@@ -7,7 +7,7 @@ import traceback
 from functools import partial, wraps
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import click
 from click_option_group import MutuallyExclusiveOptionGroup, optgroup
@@ -89,7 +89,7 @@ def catch(func: Callable) -> Callable:
 E = TypeVar("E", bound=enum.Enum)
 
 
-class Enum(click.Choice, Generic[E]):
+class Enum[E: enum.Enum](click.Choice):
     """Parameter type for selecting one choice from an enum."""
 
     _enum: type[E]

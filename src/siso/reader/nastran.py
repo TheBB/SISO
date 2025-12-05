@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generic, TextIO, TypeVar
+from typing import TYPE_CHECKING, Any, TextIO, TypeVar
 
 import numpy as np
 from more_itertools import peekable
@@ -40,7 +40,7 @@ class Card:
 T = TypeVar("T", bound=np.generic)
 
 
-class GrowableArray(Generic[T]):
+class GrowableArray[T: np.generic]:
     __slots__ = ["data", "highest_used"]
 
     data: NDArray[T]
