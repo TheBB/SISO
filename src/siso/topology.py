@@ -36,11 +36,24 @@ from .util import FieldData, cell_numbering
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
+    from numpy.typing import NDArray
+
+
+# Map of supported declared celltypes
+KNOWN_DECLARED_CELLTYPES: dict[bytes, CellType] = {
+    b"hexahedron": CellType.Hexahedron,
+    b"line": CellType.Line,
+    b"quad": CellType.Quadrilateral,
+}
 
 # Maps declared celltype + number of entries to actual celltype + degree
-KNOWN_CELLTYPES: dict[tuple[CellType, int], tuple[CellType, int]] = {
+KNOWN_CELLTYPES: dict[tuple[CellType, int], tuple[CellType, int] | None] = {
+    (CellType.Line, 2): (CellType.Line, 1),
     (CellType.Hexahedron, 8): (CellType.Hexahedron, 1),
     (CellType.Hexahedron, 27): (CellType.Hexahedron, 2),
+    (CellType.Quadrilateral, 1): None,
+    (CellType.Quadrilateral, 3): (CellType.Triangle, 1),
+    (CellType.Quadrilateral, 4): (CellType.Quadrilateral, 1),
 }
 
 
@@ -66,7 +79,13 @@ class UnstructuredTopology(DiscreteTopologyImpl):
     degree: int
 
     @staticmethod
-    def from_ifem(data: bytes) -> Iterator[tuple[Points, UnstructuredTopology, FieldData[floating]]]:
+    def from_ifem(
+        data: bytes,
+    ) -> Iterator[
+        tuple[
+            Points, UnstructuredTopology, FieldData[floating], NDArray[np.int64], NDArray[np.int64], int, int
+        ]
+    ]:
         """Special purpose constructor for parsing an IFEM Lagriangian patch
         with hexahedral cells.
 
@@ -93,9 +112,9 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         num_cells = int(elemspec.split(b"=", 1)[1])
         celltype_id = typespec.split(b"=", 1)[1]
 
-        if not celltype_id == b"hexahedron":
+        if celltype_id not in KNOWN_DECLARED_CELLTYPES:
             raise api.Unsupported(f"IFEM cell type '{celltype_id.decode()}'")
-        declared_celltype = CellType.Hexahedron
+        declared_celltype = KNOWN_DECLARED_CELLTYPES[celltype_id]
 
         # Read nodal coordinates
         nodes = np.zeros((num_nodes, 3), dtype=np.float64)
@@ -104,30 +123,65 @@ class UnstructuredTopology(DiscreteTopologyImpl):
 
         # Multiple blocks for different cell types. The cell type in the file
         # can lie: we can't guarantee that the file contains uniform cell types.
-        blocks: dict[tuple[CellType, int], FieldData[np.integer]] = {}
+        blocks: dict[tuple[CellType, int], tuple[FieldData[np.integer], list[int]]] = {}
 
-        for _ in range(num_cells):
-            cell_ids = list(map(int, next(io).split()))
+        for cellno in range(num_cells):
+            line = next(io)
+            cell_ids = list(map(int, line.split()))
 
             # Figure out the actual cell type based on the declared cell type
             # and the number of indices.
-            actual_celltype, degree = KNOWN_CELLTYPES[declared_celltype, len(cell_ids)]
+            d_celltype = KNOWN_CELLTYPES[declared_celltype, len(cell_ids)]
+            if d_celltype is None:
+                continue
+            actual_celltype, degree = d_celltype
 
             if (actual_celltype, degree) not in blocks:
-                blocks[actual_celltype, degree] = FieldData(np.empty((0, len(cell_ids)), dtype=np.int64))
+                blocks[actual_celltype, degree] = (
+                    FieldData(np.empty((0, len(cell_ids)), dtype=np.int64)),
+                    [],
+                )
 
-            blocks[actual_celltype, degree] = FieldData.join_dofs(
-                blocks[actual_celltype, degree],
-                FieldData(np.array([cell_ids], dtype=np.int64))
-            )
+            origdata, cellnos = blocks[actual_celltype, degree]
+            cellnos.append(cellno)
+            origdata = FieldData.join_dofs(origdata, FieldData(np.array([cell_ids], dtype=np.int64)))
+            blocks[actual_celltype, degree] = (origdata, cellnos)
+
+            # blocks[actual_celltype, degree][0] = FieldData.join_dofs(
+            #     blocks[actual_celltype, degree][0],
+            #     FieldData(np.array([cell_ids], dtype=np.int64))
+            # )
+
+            # blocks[actual_celltype, degree][1].append(cellno)
 
         # For each block, yield
-        for (celltype, degree), cell_data in blocks.items():
+        for (celltype, degree), (cell_data, cellnos) in blocks.items():
             permutation = cell_numbering.permute_from(celltype, degree, cell_numbering.CellOrdering.Ifem)
             cell_data = cell_data.permute_components(permutation)
-            corners = Points((Point(tuple(nodes[0])),))
-            topology = UnstructuredTopology(num_nodes, cell_data, celltype, degree)
-            yield (corners, topology, FieldData(nodes))
+
+            # Get the corners of the block
+            corners = FieldData(nodes).slice_dofs(list(set(cell_data.data.flatten()))).bounding_corners()  # type: ignore[misc]
+
+            # Get the unique node IDs that this block references
+            node_ids = np.array(sorted(set(cell_data.data.flatten())), dtype=np.int64)
+
+            # Reverse the mapping
+            rev_node_ids = np.empty((num_nodes,), dtype=np.int64)
+            rev_node_ids[node_ids] = np.arange(len(node_ids))
+
+            # Apply the mapping
+            cell_data.data.flat[:] = rev_node_ids[cell_data.data.flat]
+
+            topology = UnstructuredTopology(len(node_ids), cell_data, celltype, degree)
+            yield (
+                corners,
+                topology,
+                FieldData(nodes),
+                node_ids,
+                np.array(cellnos, dtype=np.int64),
+                num_nodes,
+                num_cells,
+            )
 
     @overload
     @staticmethod

@@ -26,7 +26,13 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import TracebackType
 
+    import numpy as np
     from numpy import floating
+    from numpy.typing import NDArray
+
+
+class InvalidNcompsError(Exception):
+    pass
 
 
 @define(frozen=True)
@@ -46,6 +52,10 @@ class IfemPatch:
     zone: Zone[ZoneKey]
     topology: api.Topology
     data: FieldData[floating]
+    node_mapping: NDArray[np.int64] | None
+    cell_mapping: NDArray[np.int64] | None
+    original_ndofs: int
+    original_ncells: int
 
 
 class Locator(ABC):
@@ -178,9 +188,21 @@ class IfemBasis(Basis):
             # there are e.g. mixed quads and triangles, we get one block for
             # each cell type. In this case, we return multiple zones.
             retval: list[IfemPatch] = []
-            for i, (corners, topology, cps) in enumerate(UnstructuredTopology.from_ifem(raw_data)):
+            for i, (
+                corners,
+                topology,
+                cps,
+                node_mapping,
+                cell_mapping,
+                original_ndofs,
+                original_ncells,
+            ) in enumerate(UnstructuredTopology.from_ifem(raw_data)):
                 zone = Zone(shape=ZoneShape.Shapeless, coords=corners, key=ZoneKey(self.name, step, patch, i))
-                retval.append(IfemPatch(zone, topology, cps))
+                retval.append(
+                    IfemPatch(
+                        zone, topology, cps, node_mapping, cell_mapping, original_ndofs, original_ncells
+                    )
+                )
             return tuple(retval)
 
         if initial.startswith(b"# LRSPLINE"):
@@ -193,7 +215,7 @@ class IfemBasis(Basis):
         shape = [ZoneShape.Line, ZoneShape.Quatrilateral, ZoneShape.Hexahedron][topology.pardim - 1]
 
         zone = Zone(shape=shape, coords=corners, key=ZoneKey(self.name, step, patch, 0))
-        return (IfemPatch(zone, topology, cps),)
+        return (IfemPatch(zone, topology, cps, None, None, topology.num_nodes, topology.num_cells),)
 
     @lru_cache(maxsize=1)
     def ncomps(self, source: Ifem) -> int:
@@ -276,7 +298,10 @@ class IfemGeometryField(IfemField):
         )
 
     def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FieldData[floating]:
-        return self.basis.patches_at(step, patch, source)[block].data
+        p = self.basis.patches_at(step, patch, source)[block]
+        if p.node_mapping is not None:
+            return p.data.slice_dofs(p.node_mapping)
+        return p.data
 
     def updates_at(self, step: int, source: Ifem) -> bool:
         return self.basis.updates_at(step, source)
@@ -298,15 +323,29 @@ class IfemStandardField(IfemField):
         # can't construct until we know the number of components. We can't
         # mutate the class post-initialization either, because it's frozen.
         # Oh well.
-        # topology = basis.patches_at(0, 0, source)[0].topology
-        coeff_path = basis.locator.coeff_path(basis.name, name, 0, 0, cellwise)
+
+        # Find a patch to get the number of coefficients from
+        root_path = basis.locator.coeff_root(basis.name, name, 0, cellwise)
+        patch_id = int(next(iter(source.h5[root_path].keys()))) - 1  # type: ignore[attr-defined]
+        coeff_path = basis.locator.coeff_path(basis.name, name, 0, patch_id, cellwise)
         cps = source.h5[coeff_path][:]
-        if cellwise:
-            divisor = sum(blk.topology.num_cells for blk in basis.patches_at(0, 0, source))
-        else:
-            divisor = sum(blk.topology.num_nodes for blk in basis.patches_at(0, 0, source))
+
+        p = basis.patches_at(0, patch_id, source)[0]
+        cps = cps.reshape(p.original_ncells if cellwise else p.original_ndofs, -1)
+        if not cellwise and p.node_mapping is not None:
+            cps = cps[p.node_mapping, ...]
+        elif cellwise and p.cell_mapping is not None:
+            cps = cps[p.cell_mapping, ...]
+        cps = cps.flatten()
+
+        divisor = p.topology.num_cells if cellwise else p.topology.num_nodes
+
         ncomps, remainder = divmod(len(cps), divisor)
-        assert remainder == 0
+        if remainder != 0:
+            raise InvalidNcompsError(
+                f"Field '{name}': inconsistent number of components: "
+                f"{len(cps)}/{divisor} = {ncomps} (remainder {remainder})"
+            )
 
         # Construct the field type based on the number of components. We get the
         # default interpretation from the source object (generally either
@@ -362,8 +401,16 @@ class IfemStandardField(IfemField):
         """Return the control points for this field at a given step and
         patch.
         """
+        p = self.basis.patches_at(step, patch, source)[block]
         cps = source.h5[self.coeff_path(step, patch)][:]
-        return FieldData(data=cps.reshape(-1, self.num_comps))
+        cps = cps.reshape(-1, self.num_comps)
+
+        if not self.cellwise and p.node_mapping is not None:
+            cps = cps[p.node_mapping, ...]
+        elif self.cellwise and p.cell_mapping is not None:
+            cps = cps[p.cell_mapping, ...]
+
+        return FieldData(data=cps)
 
 
 class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
@@ -475,6 +522,10 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     def discover_fields(self) -> None:
         """Discover all the fields in the HDF5 file."""
 
+        # Keep track of fields that have issued warnings, so we don't
+        # show multiple
+        warnings: set[str] = set()
+
         # Iterate over all steps and bases
         for step_grp in self.step_groups():
             for basis_name, basis_grp in step_grp.items():
@@ -494,14 +545,21 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
                 # Construct new field objects for the fields we haven't seen
                 # before.
                 for field_name, cellwise in fields:
-                    if field_name in self._fields:
+                    if field_name in self._fields or field_name in warnings:
                         continue
-                    self._fields[field_name] = IfemStandardField(
-                        name=field_name,
-                        cellwise=cellwise,
-                        basis=self._bases[basis_name],
-                        source=self,
-                    )
+                    try:
+                        field = IfemStandardField(
+                            name=field_name,
+                            cellwise=cellwise,
+                            basis=self._bases[basis_name],
+                            source=self,
+                        )
+                    except InvalidNcompsError as exc:
+                        logging.warning(exc)
+                        logging.warning("This field will be skipped")
+                        warnings.add(field_name)
+                        continue
+                    self._fields[field_name] = field
 
     @lru_cache(maxsize=1)
     def propose_recombinations(self) -> tuple[list[api.SplitFieldSpec], list[api.RecombineFieldSpec]]:

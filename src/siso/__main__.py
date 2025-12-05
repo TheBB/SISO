@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import logging
 import sys
+import traceback
 from functools import partial, wraps
 from itertools import chain
 from pathlib import Path
@@ -72,13 +73,14 @@ def catch(func: Callable) -> Callable:
         try:
             return func(**kwargs)
         except api.BadInput as e:
-            logging.critical(f"Bad input: {e.show()}")
+            logging.error(f"Bad input: {e.show()}")
             sys.exit(5)
         except api.Unexpected as e:
-            logging.critical(f"Unexpected: {e.show()}")
+            logging.error(f"Unexpected: {e.show()}")
             sys.exit(6)
         except api.Unsupported as e:
-            logging.critical(f"Unsupported: {e.show()}")
+            logging.error(f"Unsupported: {e.show()}")
+            logging.debug(traceback.format_exc())
             sys.exit(7)
 
     return inner
@@ -278,6 +280,17 @@ def find_source(inpath: Sequence[Path], settings: FindReaderSettings) -> Source:
     ),
     metavar="NAME[,NAME]*",
 )
+@optgroup.option(
+    "--exclude",
+    "field_exclude",
+    multiple=True,
+    default=None,
+    help=(
+        "Specify which fields to exclude. "
+        "This option can be provided multiple times, or you can supply a comma-separated list of field names."
+    ),
+    metavar="NAME[,NAME]*",
+)
 # Endianness
 @optgroup.group("Endianness")
 @optgroup.option(
@@ -430,6 +443,7 @@ def main(
     nvis: int,
     no_fields: bool,
     field_filter: tuple[str],
+    field_exclude: tuple[str],
     # Writer options
     output_mode: OutputMode | None,
     out_endianness: Endianness,
@@ -636,13 +650,28 @@ def main(
         # Apply field filtering if necessary.
         if no_fields:
             logging.debug("Attaching FieldFilter (--no-fields)")
-            source = filter.FieldFilter(source, set())
-        elif field_filter:
-            logging.debug("Attaching FieldFilter (--filter)")
-            allowed_fields = set(
-                chain.from_iterable(map(str.casefold, field_name.split(",")) for field_name in field_filter)
+            source = filter.FieldFilter(source, None, "all")
+        elif field_filter or field_exclude:
+            logging.debug("Attaching FieldFilter (--filter, --exclude)")
+            allowed_fields = (
+                set(
+                    chain.from_iterable(
+                        map(str.casefold, field_name.split(",")) for field_name in field_filter
+                    )
+                )
+                if field_filter
+                else None
             )
-            source = filter.FieldFilter(source, allowed_fields)
+            excluded_fields = (
+                set(
+                    chain.from_iterable(
+                        map(str.casefold, field_name.split(",")) for field_name in field_exclude
+                    )
+                )
+                if field_exclude
+                else None
+            )
+            source = filter.FieldFilter(source, allowed_fields, excluded_fields)
 
         # Apply another strict verification filter.
         if verify_strict:

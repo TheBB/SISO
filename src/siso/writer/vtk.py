@@ -13,6 +13,7 @@ from vtkmodules.vtkCommonDataModel import (
     VTK_HEXAHEDRON,
     VTK_LINE,
     VTK_QUAD,
+    VTK_TRIANGLE,
     vtkCellArray,
     vtkPointSet,
     vtkStructuredGrid,
@@ -85,11 +86,17 @@ def get_grid_and_writer(
     for zone in zones:
         topology = source.topology(step, source.basis_of(geometry), zone)
 
-        if topology.celltype not in (CellType.Line, CellType.Quadrilateral, CellType.Hexahedron):
+        if topology.celltype not in (
+            CellType.Line,
+            CellType.Triangle,
+            CellType.Quadrilateral,
+            CellType.Hexahedron,
+        ):
             raise api.Unsupported("VTK writer only supports lines, quadrilaterals and hexahedra")
 
         celltype = {
             CellType.Line: VTK_LINE,
+            CellType.Triangle: VTK_TRIANGLE,
             CellType.Quadrilateral: VTK_QUAD,
             CellType.Hexahedron: VTK_HEXAHEDRON,
         }[topology.celltype]
@@ -213,32 +220,6 @@ class VtkWriterBase(ABC, Writer):
             array = data.vtk()
             array.SetName(field.name)
             target.AddArray(array)
-
-        # grid, writer = self.grid_and_writer(topology)
-
-        # data = source.field_data(step, geometry, zone)
-        # data = transpose(data, grid, geometry.cellwise)
-
-        # points = vtkPoints()
-        # p = data.ensure_ncomps(3, allow_scalar=False)
-        # points.SetData(p.vtk())
-        # grid.SetPoints(points)
-
-        # for field in source.fields(source.single_basis()):
-        #     if field.is_geometry:
-        #         continue
-        #     target = grid.GetCellData() if field.cellwise else grid.GetPointData()
-        #     data = source.field_data(step, field, zone)
-        #     if field.is_displacement:
-        #         data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
-        #     else:
-        #         data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
-        #     data = transpose(data, grid, field.cellwise)
-        #     if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
-        #         data = data.nan_filter()
-        #     array = data.vtk()
-        #     array.SetName(field.name)
-        #     target.AddArray(array)
 
         writer.SetFileName(str(filename))
         writer.SetInputData(grid)

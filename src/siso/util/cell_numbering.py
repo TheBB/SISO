@@ -13,11 +13,19 @@ if TYPE_CHECKING:
 NUMBERINGS: dict[tuple[CellType, int], dict[CellOrdering, NDArray[integer]]] = {
     # Linear line
     (CellType.Line, 1): {
+        CellOrdering.Ifem: np.arange(2),
         CellOrdering.Siso: np.arange(2),
         CellOrdering.Vtk: np.arange(2),
     },
+    # Linear triangle
+    (CellType.Triangle, 1): {
+        CellOrdering.Ifem: np.arange(3),
+        CellOrdering.Siso: np.arange(3),
+        CellOrdering.Vtk: np.arange(3),
+    },
     # Bilinear quadrilateral
     (CellType.Quadrilateral, 1): {
+        CellOrdering.Ifem: np.arange(4).reshape(2, 2),
         CellOrdering.Siso: np.arange(4).reshape(2, 2),
         CellOrdering.Vtk: np.array([0, 1, 3, 2]).reshape(2, 2).transpose(),
     },
