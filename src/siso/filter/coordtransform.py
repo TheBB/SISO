@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from siso import api, util
-from siso.api import B, F, S, T, Z
+from siso.api import Basis, Field, Step, Topology, Zone
 from siso.coord import ConversionPath, convert_coords, convert_vectors
 
 from .passthrough import PassthroughAll
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from siso.util import FieldData
 
 
-class CoordTransform(PassthroughAll[B, F, S, T, Z]):
+class CoordTransform[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](PassthroughAll[B, F, S, T, Z]):
     """Coordinate transform filter.
 
     This filter converts geometries and vector fields from one coordinate system

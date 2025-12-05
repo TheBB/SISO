@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from siso.api import B, F, S, T, Z
+from siso.api import Basis, Field, Step, Topology, Zone
 
 from .passthrough import PassthroughAll
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from siso import api
 
 
-class FieldFilter(PassthroughAll[B, F, S, T, Z]):
+class FieldFilter[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](PassthroughAll[B, F, S, T, Z]):
     """Filter that removes fields that don't match the set of allowed names."""
 
     allowed_names: set[str] | None

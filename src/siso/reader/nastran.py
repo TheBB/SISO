@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TextIO, TypeVar
+from typing import TYPE_CHECKING, Any, TextIO
 
 import numpy as np
 from more_itertools import peekable
@@ -35,9 +35,6 @@ IGNORED_CARDS = {
 class Card:
     kind: str
     args: list[str]
-
-
-T = TypeVar("T", bound=np.generic)
 
 
 class GrowableArray[T: np.generic]:

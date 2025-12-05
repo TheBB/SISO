@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING
 
 from siso import api, util
-from siso.api import B, DiscreteTopology, F, S, T, Z
+from siso.api import Basis, DiscreteTopology, Field, Step, Topology, Zone
 
 from .passthrough import PassthroughAll
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from siso.util import FieldData
 
 
-class Strict(PassthroughAll[B, F, S, T, Z]):
+class Strict[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](PassthroughAll[B, F, S, T, Z]):
     """Filter that changes nothing, but checks some invariants. Use for
     debugging. Should be always used in tests.
     """

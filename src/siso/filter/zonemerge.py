@@ -4,7 +4,7 @@ from functools import reduce
 from typing import TYPE_CHECKING
 
 from siso import util
-from siso.api import B, F, Points, S, SourceProperties, Z, Zone, ZoneShape
+from siso.api import Basis, Field, Points, SourceProperties, Step, Zone, ZoneShape
 from siso.topology import DiscreteTopology, UnstructuredTopology
 from siso.util import FieldData
 
@@ -16,7 +16,9 @@ if TYPE_CHECKING:
     from numpy import floating
 
 
-class ZoneMerge(PassthroughBFST[B, F, S, DiscreteTopology, Z, Zone[int]]):
+class ZoneMerge[B: Basis, F: Field, S: Step, Z: Zone](
+    PassthroughBFST[B, F, S, DiscreteTopology, Z, Zone[int]]
+):
     """Filter that merges all zones into one.
 
     This requires that the source data is discrete.

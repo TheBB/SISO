@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Callable
-from typing import TYPE_CHECKING, ClassVar, Self, TypeVar, cast
+from typing import TYPE_CHECKING, ClassVar, Self, cast
 
 import erfa
 import numpy as np
@@ -202,13 +202,13 @@ class Wgs72(ErfaEllipsoid):
     name: ClassVar[str] = "WGS72"
 
 
-T = TypeVar("T", bound=api.CoordinateSystem)
-S = TypeVar("S", bound=api.CoordinateSystem)
-
-
-CoordConverter = Callable[[T, S, FieldData[floating]], FieldData[floating]]
-VectorConverter = Callable[[T, S, FieldData[floating], FieldData[floating]], FieldData[floating]]
-ConversionPath = list[api.CoordinateSystem]
+type CoordConverter[T: api.CoordinateSystem, S: api.CoordinateSystem] = Callable[
+    [T, S, FieldData[floating]], FieldData[floating]
+]
+type VectorConverter[T: api.CoordinateSystem, S: api.CoordinateSystem] = Callable[
+    [T, S, FieldData[floating], FieldData[floating]], FieldData[floating]
+]
+type ConversionPath = list[api.CoordinateSystem]
 
 
 NEIGHBORS: dict[str, list[str]] = {}
@@ -216,7 +216,7 @@ COORD_CONVERTERS: dict[tuple[str, str], CoordConverter] = {}
 VECTOR_CONVERTERS: dict[tuple[str, str], VectorConverter] = {}
 
 
-def register_coords(
+def register_coords[T: api.CoordinateSystem, S: api.CoordinateSystem](
     src: type[api.CoordinateSystem], tgt: type[api.CoordinateSystem]
 ) -> Callable[[CoordConverter[T, S]], CoordConverter[T, S]]:
     def decorator(conv: CoordConverter) -> CoordConverter:
@@ -227,7 +227,7 @@ def register_coords(
     return decorator
 
 
-def register_vectors(
+def register_vectors[T: api.CoordinateSystem, S: api.CoordinateSystem](
     src: type[api.CoordinateSystem], tgt: type[api.CoordinateSystem]
 ) -> Callable[[VectorConverter[T, S]], VectorConverter[T, S]]:
     def decorator(conv: VectorConverter) -> VectorConverter:

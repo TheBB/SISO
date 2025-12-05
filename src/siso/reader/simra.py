@@ -13,7 +13,6 @@ from typing import (
     Literal,
     Self,
     TextIO,
-    TypeVar,
     cast,
 )
 
@@ -21,7 +20,7 @@ import f90nml
 import numpy as np
 import scipy.io
 from attrs import define
-from numpy import floating, generic
+from numpy import floating
 
 from siso import api, util
 from siso.api import CellShape, NodeShape, Points, Zone, ZoneShape
@@ -39,8 +38,6 @@ if TYPE_CHECKING:
 
     from . import FindReaderSettings
 
-G = TypeVar("G", bound=generic)
-
 
 class FortranFile(scipy.io.FortranFile):
     """Subclass of Scipy's Fortran file reader with some utility methods."""
@@ -51,7 +48,7 @@ class FortranFile(scipy.io.FortranFile):
         self._fp.seek(size, 1)
         assert self._read_size() == size
 
-    def read_first(self, dtype: np.dtype[G]) -> G:
+    def read_first[G: np.generic](self, dtype: np.dtype[G]) -> G:
         """Read only the first element from the current record, and advance to
         the next one.
         """
@@ -145,9 +142,6 @@ def mesh_offset(root: Path, dim: Literal[2] | Literal[3]) -> np.ndarray:
     with filename.open() as f:
         dx, dy = map(float, next(f).split())
     return np.array((dx, dy)) if dim == 2 else np.array((dx, dy, 0.0))
-
-
-T = TypeVar("T", int, float)
 
 
 def read_many[T: (int, float)](

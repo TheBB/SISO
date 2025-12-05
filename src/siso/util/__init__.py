@@ -10,7 +10,6 @@ from typing import (
     ClassVar,
     Protocol,
     Self,
-    TypeVar,
     cast,
     overload,
     runtime_checkable,
@@ -36,11 +35,6 @@ class HasName(Protocol):
     name: ClassVar[str]
 
 
-W = TypeVar("W")
-M = TypeVar("M", bound=Hashable)
-Q = TypeVar("Q", bound=HasName)
-
-
 class Registry[W]:
     classes: dict[str, W]
 
@@ -51,7 +45,7 @@ class Registry[W]:
     def register(self, arg: str) -> Callable[[W], W]: ...
 
     @overload
-    def register(self, arg: type[Q]) -> type[Q]: ...
+    def register[Q: HasName](self, arg: type[Q]) -> type[Q]: ...
 
     def register(self, arg):  # type: ignore[no-untyped-def]
         if not isinstance(arg, str):
@@ -337,9 +331,6 @@ def stagger(data: np.ndarray, axis: int) -> np.ndarray:
     retval[last] += data[last] - data[penultimate] / 2
 
     return retval
-
-
-T = TypeVar("T")
 
 
 def pairwise[T](iterable: Iterable[T]) -> Iterator[tuple[T, T]]:

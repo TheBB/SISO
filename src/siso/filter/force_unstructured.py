@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from siso.api import B, F, S, Z
+from siso.api import Basis, Field, Step, Zone
 from siso.topology import DiscreteTopology, UnstructuredTopology
 
 from .passthrough import PassthroughBFSZ
 
 
-class ForceUnstructured(PassthroughBFSZ[B, F, S, Z, DiscreteTopology, UnstructuredTopology]):
+class ForceUnstructured[B: Basis, F: Field, S: Step, Z: Zone](
+    PassthroughBFSZ[B, F, S, Z, DiscreteTopology, UnstructuredTopology]
+):
     """Filter that converts all topologies to unstructured topologies.
 
     Requires that the input guarantees discrete topologies.

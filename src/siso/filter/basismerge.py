@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from siso import api
-from siso.api import F, InB, InT, S, Z
-from siso.impl import Basis
+from siso.api import Basis, Field, Step, Topology, Zone
+from siso.impl import Basis as ImplBasis
 
 from .passthrough import PassthroughFSZ
 
@@ -16,10 +16,12 @@ if TYPE_CHECKING:
     from siso.util import FieldData
 
 # The singleton basis object to yield.
-BASIS = Basis("mesh")
+BASIS = ImplBasis("mesh")
 
 
-class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, InT, api.Topology]):
+class BasisMerge[F: Field, S: Step, Z: Zone, InB: Basis, InT: Topology](
+    PassthroughFSZ[F, S, Z, InB, ImplBasis, InT, api.Topology]
+):
     """Source filter that merges bases.
 
     This filter will attempt (potentially unsuccessfully) to map all the fields
@@ -46,17 +48,17 @@ class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, InT, api.Topology]):
             single_basis=True,
         )
 
-    def bases(self) -> Iterator[Basis]:
+    def bases(self) -> Iterator[ImplBasis]:
         yield BASIS
 
-    def basis_of(self, field: F) -> Basis:
+    def basis_of(self, field: F) -> ImplBasis:
         return BASIS
 
-    def fields(self, basis: Basis) -> Iterator[F]:
+    def fields(self, basis: ImplBasis) -> Iterator[F]:
         for inner_basis in self.source.bases():
             yield from self.source.fields(inner_basis)
 
-    def geometries(self, basis: Basis) -> Iterator[F]:
+    def geometries(self, basis: ImplBasis) -> Iterator[F]:
         for inner_basis in self.source.bases():
             yield from self.source.geometries(inner_basis)
 
@@ -66,7 +68,7 @@ class BasisMerge(PassthroughFSZ[F, S, Z, InB, Basis, InT, api.Topology]):
 
     # This method will only be called once per step and zone, because we have
     # only produced one basis object.
-    def topology(self, step: S, basis: Basis, zone: Z) -> api.Topology:
+    def topology(self, step: S, basis: ImplBasis, zone: Z) -> api.Topology:
         # Get the 'master topology' from the inner source.
         topology = self.source.topology(step, self.master_basis, zone)
 

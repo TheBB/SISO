@@ -19,20 +19,10 @@ from typing import TYPE_CHECKING, Self
 
 from siso import api
 from siso.api import (
-    B,
     Basis,
-    F,
     Field,
-    InB,
-    InF,
-    InS,
-    InT,
-    InZ,
-    S,
     Step,
-    T,
     Topology,
-    Z,
     Zone,
 )
 

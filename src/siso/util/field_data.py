@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import sys
 from itertools import product
-from typing import TYPE_CHECKING, TypeVar, cast, overload
+from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 from attrs import define
@@ -30,8 +30,6 @@ if TYPE_CHECKING:
     from scipy.spatial.transform import Rotation
     from vtkmodules.vtkCommonCore import vtkDataArray
 
-T = TypeVar("T", bound=number)
-S = TypeVar("S", bound=number)
 Index = int | slice | None | NDArray[integer]
 Indices = Index | tuple[Index, ...]
 

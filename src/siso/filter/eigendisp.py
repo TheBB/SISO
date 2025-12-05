@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from attrs import define
 
 from siso import api
-from siso.api import B, F, S, T, Z
+from siso.api import Basis, Field, Step, Topology, Zone
 
 from .passthrough import PassthroughBSTZ, WrappedField
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 @define
-class Wrapped(WrappedField[F]):
+class Wrapped[F: Field](WrappedField[F]):
     """Field wrapper object that converts eigenmode fields to displacement
     fields.
     """
@@ -39,7 +39,9 @@ class Wrapped(WrappedField[F]):
         )
 
 
-class EigenDisp(PassthroughBSTZ[B, S, T, Z, F, Wrapped[F]]):
+class EigenDisp[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+    PassthroughBSTZ[B, S, T, Z, F, Wrapped[F]]
+):
     """Filter that converts all eigenmode fields to displacement vector
     fields.
     """

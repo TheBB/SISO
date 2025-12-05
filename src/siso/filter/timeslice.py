@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from itertools import count, islice
-from typing import TYPE_CHECKING, TypeVar, overload
+from typing import TYPE_CHECKING, overload
 
 from attrs import define
 
-from siso.api import B, Basis, F, Field, S, Step, T, Topology, Z, Zone
+from siso.api import Basis, Field, Step, Topology, Zone
 
 from .passthrough import PassthroughBFTZ
 
@@ -54,9 +54,6 @@ def islice_flag(*args):  # type: ignore[no-untyped-def]
                 next_index = next(counter)
             except StopIteration:
                 return
-
-
-Q = TypeVar("Q")
 
 
 @overload
@@ -130,7 +127,7 @@ class GroupedTimeSource[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
         return any(self.source.field_updates(s, field) for s in step.steps)
 
 
-class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
+class StepSlice[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](GroupedTimeSource[B, F, S, T, Z]):
     """Filter that slices a sequence of timesteps, just like `itertools.islice`
     would.
 
@@ -166,7 +163,7 @@ class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
             yield GroupedStep(i, times)
 
 
-class LastTime(GroupedTimeSource[B, F, S, T, Z]):
+class LastTime[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](GroupedTimeSource[B, F, S, T, Z]):
     """Filter that returns only the last timestep in a data source."""
 
     @property

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from siso.api import B, F, S, T, Z
+from siso.api import Basis, Field, Step, Topology, Zone
 from siso.topology import DiscreteTopology
 
 from .passthrough import PassthroughBFSZ
@@ -14,7 +14,9 @@ if TYPE_CHECKING:
     from siso.util import FieldData
 
 
-class Discretize(PassthroughBFSZ[B, F, S, Z, T, DiscreteTopology]):
+class Discretize[B: Basis, F: Field, S: Step, Z: Zone, T: Topology](
+    PassthroughBFSZ[B, F, S, Z, T, DiscreteTopology]
+):
     """Filter that discretizes all topologies, producing guaranteed either
     structured or unstructured topologies with degree 1.
     """

@@ -4,10 +4,10 @@ import logging
 from collections.abc import Iterator, MutableMapping
 from functools import reduce
 from operator import itemgetter
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, cast
 
 from siso import api
-from siso.api import B, F, Point, S, Source, SourceProperties, T, Z, Zone, ZoneShape
+from siso.api import Basis, Field, Point, Source, SourceProperties, Step, Topology, Zone, ZoneShape
 from siso.util import FieldData, bisect
 
 from .passthrough import PassthroughBFST
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from numpy import floating
 
 
-class KeyZones(PassthroughBFST[B, F, S, T, Z, Zone[int]]):
+class KeyZones[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](PassthroughBFST[B, F, S, T, Z, Zone[int]]):
     manager: ZoneManager
     mapping: dict[Zone[int], Z]
 
@@ -81,10 +81,7 @@ class ZoneManager:
         )
 
 
-Q = TypeVar("Q")
-
-
-class VertexDict(MutableMapping[Point, Q]):
+class VertexDict[Q](MutableMapping[Point, Q]):
     rtol: float
     atol: float
 

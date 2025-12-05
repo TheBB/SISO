@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from attrs import define
 
 from siso import api, coord
-from siso.api import Points, T, Topology, Zone, ZoneShape
+from siso.api import Points, Topology, Zone, ZoneShape
 from siso.impl import Basis, Field, Step
 
 if TYPE_CHECKING:

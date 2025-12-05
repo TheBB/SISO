@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from attrs import define
 
 from siso import api
-from siso.api import B, Basis, F, Field, S, Step, T, Topology, Z, Zone
+from siso.api import Basis, Field, Step, Topology, Zone
 
 from .passthrough import PassthroughBSTZ, WrappedField
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 @define
-class DecomposedField(WrappedField[F]):
+class DecomposedField[F: Field](WrappedField[F]):
     """Class for a 'decomposed' field: a field sources its data from
     another field, but using a subset of components.
 
@@ -78,7 +78,7 @@ class DecomposeBase[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
         return self.source.field_updates(timestep, field.wrapped_field)
 
 
-class Decompose(DecomposeBase[B, F, S, T, Z]):
+class Decompose[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](DecomposeBase[B, F, S, T, Z]):
     """Decompose filter. This filter automatically decomposes all vector fields
     that are marked as splittable with up to three components.
 
@@ -100,7 +100,7 @@ class Decompose(DecomposeBase[B, F, S, T, Z]):
                 yield DecomposedField(name=name, wrapped_field=field, components=[i], splittable=False)
 
 
-class Split(DecomposeBase[B, F, S, T, Z]):
+class Split[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](DecomposeBase[B, F, S, T, Z]):
     """Split filter. This filter decomposes fields as indicated by a list of
     `SplitFieldSpec` objects. This list is produced by a source object. This
     allows us to not implement the splitting logic itself in each source type

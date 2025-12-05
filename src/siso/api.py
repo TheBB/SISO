@@ -29,7 +29,6 @@ from typing import (
     NewType,
     Protocol,
     Self,
-    TypeVar,
     cast,
     overload,
 )
@@ -64,10 +63,6 @@ class Aritmetical(Protocol):
     def __add__(self, other: int, /) -> Self: ...
 
     def __sub__(self, other: int, /) -> Self: ...
-
-
-M = TypeVar("M", Nodal, Cellular)
-P = TypeVar("P", bound=Aritmetical)
 
 
 class ShapeTuple[M: (Nodal, Cellular), P: Aritmetical](tuple[P, ...]):
@@ -131,9 +126,6 @@ class ZoneShape(Enum):
 
     # Misc
     Shapeless = auto()
-
-
-K = TypeVar("K")
 
 
 @define(frozen=True)
@@ -782,24 +774,6 @@ class DiscreteTopology(Topology):
         convention.
         """
         ...
-
-
-# Some of these typevars are used in this file. All are for export.
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-T = TypeVar("T", bound=Topology)
-Z = TypeVar("Z", bound=Zone)
-InB = TypeVar("InB", bound=Basis)
-InF = TypeVar("InF", bound=Field)
-InS = TypeVar("InS", bound=Step)
-InT = TypeVar("InT", bound=Topology)
-InZ = TypeVar("InZ", bound=Zone)
-OutB = TypeVar("OutB", bound=Basis)
-OutF = TypeVar("OutF", bound=Field)
-OutS = TypeVar("OutS", bound=Step)
-OutT = TypeVar("OutT", bound=Topology)
-OutZ = TypeVar("OutZ", bound=Zone)
 
 
 class Source[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](ABC):

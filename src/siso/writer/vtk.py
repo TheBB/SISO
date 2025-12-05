@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-from typing import IO, TYPE_CHECKING, Self, TypeVar
+from typing import IO, TYPE_CHECKING, Self
 
 import numpy as np
 from vtkmodules.util.numpy_support import numpy_to_vtk, numpy_to_vtkIdTypeArray
@@ -23,7 +23,7 @@ from vtkmodules.vtkIOLegacy import vtkDataWriter, vtkStructuredGridWriter, vtkUn
 from vtkmodules.vtkIOXML import vtkXMLStructuredGridWriter, vtkXMLUnstructuredGridWriter, vtkXMLWriter
 
 from siso import api, util
-from siso.api import B, CellOrdering, DiscreteTopology, F, NodeShape, S, Source, T, Z
+from siso.api import Basis, CellOrdering, DiscreteTopology, Field, NodeShape, Source, Step, Topology, Zone
 from siso.topology import CellType, StructuredTopology
 from siso.util import FieldData
 
@@ -40,7 +40,6 @@ class Behavior(Enum):
     Whatever = auto()
 
 
-Sc = TypeVar("Sc", bound=np.number)
 BackendWriter = vtkXMLWriter | vtkDataWriter
 
 
@@ -55,7 +54,7 @@ def transpose[Sc: np.number](data: FieldData[Sc], grid: vtkPointSet, cellwise: b
     return data.transpose(NodeShape(shape), (2, 1, 0))
 
 
-def get_grid_and_writer(
+def get_grid_and_writer[B: Basis, F: Field, S: Step, Z: Zone](
     source: Source[B, F, S, DiscreteTopology, Z], geometry: F, step: S, legacy: bool, behavior: Behavior
 ) -> tuple[vtkPointSet, BackendWriter]:
     zones = list(source.zones())
@@ -178,11 +177,11 @@ class VtkWriterBase(ABC, Writer):
             self.output_mode = settings.output_mode
 
     @abstractmethod
-    def grid_and_writer(
+    def grid_and_writer[B: Basis, F: Field, S: Step, Z: Zone](
         self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
     ) -> tuple[vtkPointSet, BackendWriter]: ...
 
-    def consume_timestep(
+    def consume_timestep[B: Basis, F: Field, S: Step, Z: Zone](
         self, step: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F
     ) -> None:
         grid, writer = self.grid_and_writer(source, step, geometry)
@@ -227,7 +226,9 @@ class VtkWriterBase(ABC, Writer):
 
         logging.info(filename)
 
-    def consume(self, source: Source[B, F, S, T, Z], geometry: F) -> None:
+    def consume[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+        self, source: Source[B, F, S, T, Z], geometry: F
+    ) -> None:
         casted = source.cast_discrete_topology()
         filenames = util.filename_generator(self.filename, source.properties.instantaneous)
         for step, filename in zip(casted.steps(), filenames):
@@ -240,7 +241,7 @@ class VtkWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(
+    def grid_and_writer[B: Basis, F: Field, S: Step, Z: Zone](
         self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
     ) -> tuple[vtkPointSet, BackendWriter]:
         return get_grid_and_writer(source, geometry, step, legacy=True, behavior=Behavior.Whatever)
@@ -252,7 +253,7 @@ class VtuWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(
+    def grid_and_writer[B: Basis, F: Field, S: Step, Z: Zone](
         self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
     ) -> tuple[vtkPointSet, BackendWriter]:
         return get_grid_and_writer(source, geometry, step, legacy=False, behavior=Behavior.OnlyUnstructured)
@@ -264,7 +265,7 @@ class VtsWriter(VtkWriterBase):
     def __init__(self, filename: Path):
         super().__init__(filename)
 
-    def grid_and_writer(
+    def grid_and_writer[B: Basis, F: Field, S: Step, Z: Zone](
         self, source: Source[B, F, S, DiscreteTopology, Z], step: S, geometry: F
     ) -> tuple[vtkPointSet, BackendWriter]:
         return get_grid_and_writer(source, geometry, step, legacy=False, behavior=Behavior.OnlyStructured)
@@ -299,7 +300,7 @@ class PvdWriter(VtuWriter):
         self.pvd.__exit__(exc_type, exc_val, exc_tb)
         logging.info(self.pvd_filename)
 
-    def consume_timestep(
+    def consume_timestep[B: Basis, F: Field, S: Step, Z: Zone](
         self, timestep: S, filename: Path, source: Source[B, F, S, DiscreteTopology, Z], geometry: F
     ) -> None:
         super().consume_timestep(timestep, filename, source, geometry)

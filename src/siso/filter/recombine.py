@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from attrs import define
 
-from siso.api import B, F, S, T, Z
+from siso.api import Basis, Field, Step, Topology, Zone
 from siso.util import FieldData
 
 from .passthrough import PassthroughBSTZ, WrappedField
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 @define
-class RecombinedField(WrappedField[F]):
+class RecombinedField[F: Field](WrappedField[F]):
     """Class for a 'recombined' field: a field that combines components from
     multiple sources into one.
 
@@ -51,7 +51,9 @@ class RecombinedField(WrappedField[F]):
         return False
 
 
-class Recombine(PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]):
+class Recombine[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+    PassthroughBSTZ[B, S, T, Z, F, RecombinedField[F]]
+):
     """Filter that recombines fields as indicated by a list of
     `RecombineFieldSpec` objects. This list is produced by a source object. This
     allows us to not implement the recombination logic itself in each source
