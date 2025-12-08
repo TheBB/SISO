@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Protocol, Self
 
 from attrs import define
 
-from siso.api import Basis, Endianness, Field, Source, Step, Topology, Zone
+from siso.api import Endianness, Field, SourceF
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -46,6 +46,4 @@ class Writer(Protocol):
 
     def configure(self, settings: WriterSettings) -> None: ...
 
-    def consume[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
-        self, source: Source[B, F, S, T, Z], geometry: F
-    ) -> None: ...
+    def consume[F: Field](self, source: SourceF[F], geometry: F) -> None: ...

@@ -8,7 +8,7 @@ from numpy.linalg import norm
 from scipy.io import FortranFile
 
 from siso import api, util
-from siso.api import Basis, CellShape, Field, Step, Topology, Zone
+from siso.api import CellShape, Field, SourceF
 from siso.topology import StructuredTopology
 from siso.util import cell_numbering
 
@@ -54,9 +54,7 @@ class SimraWriter(Writer):
         self.f4_type = settings.endianness.f4_type()
         self.u4_type = settings.endianness.u4_type()
 
-    def consume[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
-        self, source: api.Source[B, F, S, T, Z], geometry: F
-    ) -> None:
+    def consume[F: Field](self, source: SourceF[F], geometry: Field) -> None:
         casted = source.cast_discrete_topology()
         step = casted.single_step()
         zone = casted.single_zone()

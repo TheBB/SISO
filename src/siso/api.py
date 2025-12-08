@@ -1022,3 +1022,9 @@ def impl_use_geometry[C, F: Field](
         return func(self, cast("F", field))
 
     return inner
+
+
+type DiscreteSource = Source[Basis, Field, Step, DiscreteTopology, Zone[Any]]
+type DiscreteGloballyKeyedSource = Source[Basis, Field, Step, DiscreteTopology, Zone[int]]
+type GenericSource = Source[Basis, Field, Step, Topology, Zone[Any]]
+type SourceF[F: Field] = Source[Basis, F, Step, Topology, Zone[Any]]

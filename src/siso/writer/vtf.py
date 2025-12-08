@@ -7,7 +7,14 @@ import vtfwriter as vtf
 from attrs import define
 
 from siso import api
-from siso.api import Basis, CellOrdering, DiscreteTopology, Field, Step, StepInterpretation, Topology, Zone
+from siso.api import (
+    CellOrdering,
+    DiscreteGloballyKeyedSource,
+    Field,
+    SourceF,
+    Step,
+    StepInterpretation,
+)
 
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
@@ -88,9 +95,7 @@ class VtfWriter(Writer):
         self.out.__exit__(exc_type, exc_val, exc_tb)
         logging.info(self.filename)
 
-    def update_geometry[B: Basis, F: Field, S: Step](
-        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
-    ) -> None:
+    def update_geometry(self, timestep: Step, source: DiscreteGloballyKeyedSource, geometry: Field) -> None:
         for zone in source.zones():
             topology = source.topology(timestep, source.basis_of(geometry), zone)
             nodes = source.field_data(timestep, geometry, zone).ensure_ncomps(3)
@@ -112,9 +117,7 @@ class VtfWriter(Writer):
 
         self.geometry_block.BindElementBlocks(*(e for _, e in self.geometry_blocks), step=timestep.index + 1)
 
-    def update_field[B: Basis, F: Field, S: Step](
-        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], field: F
-    ) -> None:
+    def update_field(self, timestep: Step, source: DiscreteGloballyKeyedSource, field: Field) -> None:
         for zone in source.zones():
             data = source.field_data(timestep, field, zone)
             data = data.ensure_ncomps(3, allow_scalar=field.is_scalar, pad_right=not field.is_displacement)
@@ -137,18 +140,14 @@ class VtfWriter(Writer):
             steps = self.field_info[field.name].steps
             steps.setdefault(timestep.index + 1, []).append(result_block)
 
-    def consume_timestep[B: Basis, F: Field, S: Step](
-        self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
-    ) -> None:
+    def consume_timestep(self, timestep: Step, source: DiscreteGloballyKeyedSource, geometry: Field) -> None:
         if source.field_updates(timestep, geometry):
             self.update_geometry(timestep, source, geometry)
         for field in source.fields(source.single_basis()):
             if source.field_updates(timestep, field):
                 self.update_field(timestep, source, field)
 
-    def consume[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
-        self, source: api.Source[B, F, S, T, Z], geometry: F
-    ) -> None:
+    def consume[F: Field](self, source: SourceF[F], geometry: F) -> None:
         casted = source.cast_discrete_topology().cast_globally_keyed()
         self.step_interpretation = source.properties.step_interpretation
         for step in casted.steps():
