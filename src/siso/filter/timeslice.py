@@ -5,16 +5,26 @@ from typing import TYPE_CHECKING, overload
 
 from attrs import define
 
-from siso.api import Basis, Field, Step, Topology, Zone
+from siso.api import (
+    Basis,
+    Field,
+    Step,
+    Topology,
+    Zone,
+    impl_field_data,
+    impl_field_updates,
+    impl_topology,
+    impl_topology_updates,
+)
 
 from .passthrough import PassthroughBFTZ
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from numpy import floating
-
-    from siso import api, util
+    from siso import api
+    from siso.types import Float
+    from siso.util.field_data import FloatFieldData
 
 
 @overload
@@ -104,7 +114,7 @@ class GroupedStep[S: Step]:
     steps: list[S]
 
     @property
-    def value(self) -> float | None:
+    def value(self) -> Float | None:
         # Act as the last step of the group.
         return self.steps[-1].value
 
@@ -114,15 +124,19 @@ class GroupedTimeSource[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
 ):
     """Base class for all filters that group timesteps into `GroupedStep`."""
 
+    @impl_topology
     def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> T:
         return self.source.topology(step.steps[-1], basis, zone)
 
+    @impl_topology_updates
     def topology_updates(self, step: GroupedStep[S], basis: B) -> bool:
         return any(self.source.topology_updates(s, basis) for s in step.steps)
 
-    def field_data(self, step: GroupedStep[S], field: F, zone: Z) -> util.FieldData[floating]:
+    @impl_field_data
+    def field_data(self, step: GroupedStep[S], field: F, zone: Z) -> FloatFieldData:
         return self.source.field_data(step.steps[-1], field, zone)
 
+    @impl_field_updates
     def field_updates(self, step: GroupedStep[S], field: F) -> bool:
         return any(self.source.field_updates(s, field) for s in step.steps)
 

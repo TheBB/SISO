@@ -8,6 +8,7 @@ from enum import Enum, auto
 from functools import lru_cache, partial
 from itertools import count
 from typing import (
+    IO,
     TYPE_CHECKING,
     ClassVar,
     Literal,
@@ -20,10 +21,22 @@ import f90nml
 import numpy as np
 import scipy.io
 from attrs import define
-from numpy import floating
 
 from siso import api, util
-from siso.api import CellShape, NodeShape, Points, Zone, ZoneShape
+from siso.api import (
+    CellShape,
+    NodeShape,
+    Points,
+    Zone,
+    ZoneShape,
+    impl_basis_of,
+    impl_field_data,
+    impl_fields,
+    impl_geometries,
+    impl_topology,
+    impl_topology_updates,
+    impl_use_geometry,
+)
 from siso.coord import Generic
 from siso.impl import Basis, Field, Step
 from siso.topology import CellType, StructuredTopology
@@ -34,7 +47,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import TracebackType
 
-    from numpy.typing import NDArray
+    from siso.types import Array, Matrix, Vector, f32d, f64d, u32d
+    from siso.util.field_data import FloatFieldData
 
     from . import FindReaderSettings
 
@@ -58,13 +72,16 @@ class FortranFile(scipy.io.FortranFile):
         assert self._read_size() == size
         return retval
 
-    def read_but_first(self, dtype: np.dtype) -> np.ndarray:
+    def read_but_first[D: np.dtype](self, dtype: D) -> Vector[D]:
         """Read all but the first element from the current record, and advance
         to the next one.
         """
         size = self._read_size(eof_ok=True)
         self._fp.seek(dtype.itemsize, 1)
-        retval = np.fromfile(self._fp, dtype=dtype, count=size // dtype.itemsize - 1)
+        retval = cast(
+            "Vector[D]",
+            np.fromfile(self._fp, dtype=dtype, count=size // dtype.itemsize - 1),
+        )
         assert self._read_size() == size
         return retval
 
@@ -111,17 +128,22 @@ class RandomAccessFortranFile(util.RandomAccessFile[FortranFile, int]):
     """Utility subclass for random access Fortran files."""
 
     def __init__(self, filename: Path, header_dtype: np.dtype):
+        wrapper = cast(
+            "Callable[[IO], FortranFile]",
+            partial(FortranFile, header_dtype=header_dtype),
+        )
+
         super().__init__(
             # No need to call __enter__ here, `RandomAccessFile` has an __enter__ method.
             fp=filename.open("rb"),
             # We intend to use FortranFile objects as file wrappers.
-            wrapper=partial(FortranFile, header_dtype=header_dtype),
+            wrapper=wrapper,
             # A marker generator that marks blocks by index.
             marker_generator=fortran_marker_generator,
         )
 
 
-def transpose(array: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
+def transpose[D: np.dtype](array: Array[D], shape: tuple[int, ...]) -> Matrix[D]:
     """Utility function for transposing SIMRA arrays, which are generally
     ordered with a nasty mix of row-major and column-major ordering (z-axis
     varying the quickest, y the slowest and x in between.)
@@ -129,7 +151,7 @@ def transpose(array: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
     return array.reshape(*shape, -1).transpose(1, 0, 2, 3).reshape(util.prod(shape), -1)
 
 
-def mesh_offset(root: Path, dim: Literal[2] | Literal[3]) -> np.ndarray:
+def mesh_offset(root: Path, dim: Literal[2] | Literal[3]) -> Vector[f64d]:
     """Read the info.txt file in the same folder as the root path, and return a
     mesh offset, either a two- or three-element array.
 
@@ -138,10 +160,10 @@ def mesh_offset(root: Path, dim: Literal[2] | Literal[3]) -> np.ndarray:
     filename = root.parent / "info.txt"
     if not filename.exists():
         logging.warning("Unable to find mesh origin info (info.txt) - coordinates may be unreliable")
-        return np.zeros((dim,), dtype=np.float32)
+        return np.zeros((dim,), dtype=np.float64)
     with filename.open() as f:
         dx, dy = map(float, next(f).split())
-    return np.array((dx, dy)) if dim == 2 else np.array((dx, dy, 0.0))
+    return np.array((dx, dy)) if dim == 2 else np.array((dx, dy, 0.0), dtype=np.float64)
 
 
 def read_many[T: (int, float)](
@@ -268,7 +290,7 @@ class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]
         )
 
     @abstractmethod
-    def nodes(self) -> FieldData[floating]:
+    def nodes(self) -> FloatFieldData:
         """Return the geometry nodal points."""
         ...
 
@@ -281,19 +303,23 @@ class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]
         if settings.mesh_filename:
             self.filename = settings.mesh_filename
 
+    @impl_use_geometry
     def use_geometry(self, geometry: Field) -> None:
         return
 
     def bases(self) -> Iterator[Basis]:
         yield Basis("mesh")
 
+    @impl_basis_of
     def basis_of(self, field: Field) -> Basis:
         return Basis("mesh")
 
+    @impl_fields
     def fields(self, basis: Basis) -> Iterator[Field]:
         return
         yield
 
+    @impl_geometries
     def geometries(self, basis: Basis) -> Iterator[Field]:
         yield Field("Geometry", type=api.Geometry(self.dim, coords=Generic()))
 
@@ -304,11 +330,13 @@ class SimraMeshBase(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]
         shape = ZoneShape.Hexahedron if self.pardim == 3 else ZoneShape.Quatrilateral
         yield Zone(shape=shape, coords=self.corners(), key=0)
 
+    @impl_topology
     def topology(self, step: Step, basis: Basis, zone: Zone[int]) -> StructuredTopology:
         celltype = CellType.Hexahedron if self.pardim == 3 else CellType.Quadrilateral
         return StructuredTopology(self.out_cellshape, celltype, degree=1)
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FloatFieldData:
         return self.nodes()
 
 
@@ -378,7 +406,7 @@ class SimraMap(SimraMeshBase):
                 values = tuple(map(float, line.split()))
 
     @lru_cache(maxsize=1)
-    def nodes(self) -> FieldData[floating]:
+    def nodes(self) -> FieldData[f64d]:
         nodes = FieldData.from_iter(self.coords())
 
         # SIMRA map files have a vertical resolution of 10 cm.
@@ -436,7 +464,7 @@ class Simra2dMesh(SimraMeshBase):
             yield
 
     @lru_cache(maxsize=1)
-    def nodes(self) -> FieldData[floating]:
+    def nodes(self) -> FieldData[f64d]:
         num_nodes = util.prod(self.simra_nodeshape)
         with self.save_excursion():
             next(self.mesh)
@@ -499,14 +527,14 @@ class Simra3dMesh(SimraMeshBase):
         self.mesh.__exit__(exc_type, exc_val, exc_tb)
 
     @lru_cache(maxsize=1)
-    def nodes(self) -> FieldData[floating]:
+    def nodes(self) -> FloatFieldData:
         # Leap to the second block (index one) to get the actual mesh coordinates
         with self.mesh.leap(1) as f:
             nodes = f.read_reals(self.f4_type)
 
         # Apply transposition to undo the stupid SIMRA node numbering, then
         # convert to native endianness.
-        data = FieldData(transpose(nodes, self.simra_nodeshape)).ensure_native()
+        data: FloatFieldData = FieldData(transpose(nodes, self.simra_nodeshape)).ensure_native()
 
         return data + mesh_offset(self.filename, dim=3)
 
@@ -543,6 +571,7 @@ class SimraHasMesh(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]]
     def configure(self, settings: api.ReaderSettings) -> None:
         self.mesh.configure(settings)
 
+    @impl_use_geometry
     def use_geometry(self, geometry: Field) -> None:
         return
 
@@ -552,15 +581,19 @@ class SimraHasMesh(api.Source[Basis, Field, Step, StructuredTopology, Zone[int]]
     def bases(self) -> Iterator[Basis]:
         return self.mesh.bases()
 
+    @impl_basis_of
     def basis_of(self, field: Field) -> Basis:
         return next(self.mesh.bases())
 
+    @impl_geometries
     def geometries(self, basis: Basis) -> Iterator[Field]:
         return self.mesh.geometries(basis)
 
+    @impl_topology
     def topology(self, timestep: Step, basis: Basis, zone: Zone[int]) -> StructuredTopology:
         return self.mesh.topology(timestep, basis, zone)
 
+    @impl_topology_updates
     def topology_updates(self, step: Step, basis: Basis) -> bool:
         return step.index == 0
 
@@ -649,11 +682,12 @@ class SimraBoundary(SimraHasMesh):
     def steps(self) -> Iterator[Step]:
         yield Step(index=0)
 
+    @impl_fields
     def fields(self, basis: Basis) -> Iterator[Field]:
         yield Field("nodal", type=api.Vector(16), splittable=False)
 
     @lru_cache(maxsize=1)
-    def data(self) -> FieldData[floating]:
+    def data(self) -> FieldData[f64d]:
         """Implementation of field_data for the non-geometry field."""
         with self.save_excursion():
             # Skip the first line
@@ -730,7 +764,8 @@ class SimraBoundary(SimraHasMesh):
         # Apply transposition to undo the stupid SIMRA node numbering.
         return FieldData(transpose(data, self.mesh.simra_nodeshape)).ensure_native()
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FloatFieldData:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         return self.data()
@@ -868,6 +903,7 @@ class SimraContinuation(SimraHasMesh):
         super().__exit__(exc_type, exc_val, exc_tb)
         self.source.__exit__(exc_type, exc_val, exc_tb)
 
+    @impl_fields
     def fields(self, basis: Basis) -> Iterator[Field]:
         # 11 or 12 nodal components, depending on whether the stratification
         # field is present.
@@ -889,12 +925,12 @@ class SimraContinuation(SimraHasMesh):
         yield Step(index=0, value=time)
 
     @lru_cache(maxsize=1)
-    def data(self) -> tuple[FieldData[floating], FieldData[floating] | None]:
+    def data(self) -> tuple[FloatFieldData, FloatFieldData | None]:
         """Return a tuple of nodal data and optional cellwise data."""
         cells = None
         with self.source.leap(0) as f:
             # First block of nodal data: ignore the timestep value
-            nodals: NDArray[floating] = f.read_but_first(dtype=self.f4_type).reshape(-1, 11)
+            nodals = f.read_but_first(dtype=self.f4_type).reshape(-1, 11)
             if not self.is_init:
                 # Continuation files with stratification field: add it to the
                 # nodal array.
@@ -918,14 +954,18 @@ class SimraContinuation(SimraHasMesh):
             nodals[..., 6] *= scales.speed * scales.length
 
         # Construct field data objects, convert to native endianness and return.
-        ndata = FieldData(transpose(nodals, self.mesh.simra_nodeshape)).ensure_native()
+        ndata: FloatFieldData = FieldData(transpose(nodals, self.mesh.simra_nodeshape)).ensure_native()
+
+        cdata: FloatFieldData | None
         if cells is not None:
             cdata = FieldData(transpose(cells, self.mesh.simra_cellshape)).ensure_native()
         else:
             cdata = None
+
         return ndata, cdata
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FloatFieldData:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data()
@@ -941,8 +981,8 @@ class SimraHistory(SimraHasMesh):
     filename: Path
     source: RandomAccessFortranFile
 
-    f4_type: np.dtype
-    u4_type: np.dtype
+    f4_type: f32d
+    u4_type: u32d
 
     @staticmethod
     def applicable(path: Path, settings: FindReaderSettings) -> bool:
@@ -1026,6 +1066,7 @@ class SimraHistory(SimraHasMesh):
         super().__exit__(exc_type, exc_val, exc_tb)
         self.source.__exit__(exc_type, exc_val, exc_tb)
 
+    @impl_fields
     def fields(self, basis: Basis) -> Iterator[Field]:
         yield Field("nodal", type=api.Vector(12))
         yield Field("pressure", type=api.Scalar(), cellwise=True)
@@ -1042,7 +1083,8 @@ class SimraHistory(SimraHasMesh):
                 return
             yield Step(index=ts_index, value=time)
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: Step, field: Field, zone: Zone[int]) -> FloatFieldData:
         if field.is_geometry:
             return self.mesh.field_data(timestep, field, zone)
         ndata, cdata = self.data(timestep.index)
@@ -1052,15 +1094,15 @@ class SimraHistory(SimraHasMesh):
         return ndata
 
     @lru_cache(maxsize=1)
-    def data(self, index: int) -> tuple[FieldData[floating], FieldData[floating]]:
+    def data(self, index: int) -> tuple[FieldData[f32d], FieldData[f32d]]:
         """Return a tuple of nodal data and cellwise data."""
 
         # The first timestep uses block 1 and 2, the second uses blocks 3 and 4,
         # and so on. The first block is for nodal data (and time, which we skip),
         # and the second block for cellwise data.
         with self.source.leap(2 * index + 1) as f:
-            ndata = f.read_but_first(self.f4_type)
-            cdata = f.read_reals(self.f4_type)
+            ndata: Array[f32d] = f.read_but_first(self.f4_type)
+            cdata: Array[f32d] = f.read_reals(self.f4_type)
 
         # Reshape, scale, construct field data objects, convert to native
         # endianness and return.

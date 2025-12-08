@@ -126,10 +126,14 @@ first_value = "1"
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
 
+[tool.basedpyright]
+include = ["src"]
+reportUnusedCallResult = "none"
+
 [dependency-groups]
 dev = [
     "bump-my-version>=1.2.4",
-    "mypy>=1.18.2",
+    "mypy>=1.19.0",
     "pytest>=9.0.1",
     "ruff>=0.14.6",
     "vtfwriter-stubs>=1.1.0",

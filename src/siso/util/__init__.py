@@ -16,7 +16,6 @@ from typing import (
 )
 
 import numpy as np
-from numpy import integer
 
 from siso import api
 
@@ -28,6 +27,8 @@ if TYPE_CHECKING:
     from typing import Any
 
     import lrspline as lr
+
+    from siso.types import Array, Floatd, Matrix, i32d
 
 
 @runtime_checkable
@@ -277,7 +278,7 @@ def pluralize(num: int, singular: str, plural: str) -> str:
     return f"{num} {singular if num == 1 else plural}"
 
 
-def flatten_2d(array: np.ndarray) -> np.ndarray:
+def flatten_2d[D: Floatd](array: Array[D]) -> Matrix[D]:
     if array.ndim == 1:
         return array[:, np.newaxis]
     return array.reshape(-1, array.shape[-1])
@@ -421,11 +422,11 @@ def structured_cells(
     cellshape: api.CellShape,
     pardim: int,
     nodemap: np.ndarray | None = None,
-) -> FieldData[integer]:
+) -> FieldData[i32d]:
     nodeshape = tuple(cellshape.nodal)
     ranges = [range(k) for k in cellshape]
     nidxs = [np.array(q) for q in zip(*product(*ranges))]
-    eidxs = np.zeros((len(nidxs[0]), 2 ** len(nidxs)), dtype=int)
+    eidxs = np.zeros((len(nidxs[0]), 2 ** len(nidxs)), dtype=np.int32)
     if pardim == 1:
         eidxs[:, 0] = nidxs[0]
         eidxs[:, 1] = nidxs[0] + 1

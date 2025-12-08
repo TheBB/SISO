@@ -24,15 +24,21 @@ from siso.api import (
     Step,
     Topology,
     Zone,
+    impl_basis_of,
+    impl_field_data,
+    impl_field_updates,
+    impl_fields,
+    impl_geometries,
+    impl_topology,
+    impl_topology_updates,
+    impl_use_geometry,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from types import TracebackType
 
-    from numpy import floating
-
-    from siso.util import FieldData
+    from siso.util.field_data import FloatFieldData
 
 
 # In general a filter is parametrized on ten types: the input and output B, F, S
@@ -102,27 +108,33 @@ class PassthroughBFST[B: Basis, F: Field, S: Step, T: Topology, InZ: Zone, OutZ:
 ):
     """Base class for filters that change the Zone type."""
 
+    @impl_use_geometry
     def use_geometry(self, geometry: F) -> None:
         self.source.use_geometry(geometry)
 
     def bases(self) -> Iterator[B]:
         return self.source.bases()
 
+    @impl_basis_of
     def basis_of(self, field: F) -> B:
         return self.source.basis_of(field)
 
+    @impl_geometries
     def geometries(self, basis: B) -> Iterator[F]:
         return self.source.geometries(basis)
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[F]:
         return self.source.fields(basis)
 
     def steps(self) -> Iterator[S]:
         return self.source.steps()
 
+    @impl_topology_updates
     def topology_updates(self, step: S, basis: B) -> bool:
         return self.source.topology_updates(step, basis)
 
+    @impl_field_updates
     def field_updates(self, step: S, field: F) -> bool:
         return self.source.field_updates(step, field)
 
@@ -132,18 +144,22 @@ class PassthroughBFSZ[B: Basis, F: Field, S: Step, Z: Zone, InT: Topology, OutT:
 ):
     """Base class for filters that change the Topology type."""
 
+    @impl_use_geometry
     def use_geometry(self, geometry: F) -> None:
         self.source.use_geometry(geometry)
 
     def bases(self) -> Iterator[B]:
         return self.source.bases()
 
+    @impl_basis_of
     def basis_of(self, field: F) -> B:
         return self.source.basis_of(field)
 
+    @impl_geometries
     def geometries(self, basis: B) -> Iterator[F]:
         return self.source.geometries(basis)
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[F]:
         return self.source.fields(basis)
 
@@ -153,12 +169,15 @@ class PassthroughBFSZ[B: Basis, F: Field, S: Step, Z: Zone, InT: Topology, OutT:
     def zones(self) -> Iterator[Z]:
         return self.source.zones()
 
+    @impl_topology_updates
     def topology_updates(self, step: S, basis: B) -> bool:
         return self.source.topology_updates(step, basis)
 
-    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, step: S, field: F, zone: Z) -> FloatFieldData:
         return self.source.field_data(step, field, zone)
 
+    @impl_field_updates
     def field_updates(self, step: S, field: F) -> bool:
         return self.source.field_updates(step, field)
 
@@ -168,18 +187,22 @@ class PassthroughBFTZ[B: Basis, F: Field, T: Topology, Z: Zone, InS: Step, OutS:
 ):
     """Base class for filters that change the Step type."""
 
+    @impl_use_geometry
     def use_geometry(self, geometry: F) -> None:
         self.source.use_geometry(geometry)
 
     def bases(self) -> Iterator[B]:
         return self.source.bases()
 
+    @impl_basis_of
     def basis_of(self, field: F) -> B:
         return self.source.basis_of(field)
 
+    @impl_geometries
     def geometries(self, basis: B) -> Iterator[F]:
         return self.source.geometries(basis)
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[F]:
         return self.source.fields(basis)
 
@@ -201,9 +224,11 @@ class PassthroughBSTZ[B: Basis, S: Step, T: Topology, Z: Zone, InF: Field, OutF:
     def zones(self) -> Iterator[Z]:
         return self.source.zones()
 
+    @impl_topology
     def topology(self, step: S, basis: B, zone: Z) -> T:
         return self.source.topology(step, basis, zone)
 
+    @impl_topology_updates
     def topology_updates(self, step: S, basis: B) -> bool:
         return self.source.topology_updates(step, basis)
 
@@ -219,9 +244,11 @@ class PassthroughFSZ[F: Field, S: Step, Z: Zone, InB: Basis, OutB: Basis, InT: T
     def zones(self) -> Iterator[Z]:
         return self.source.zones()
 
-    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, step: S, field: F, zone: Z) -> FloatFieldData:
         return self.source.field_data(step, field, zone)
 
+    @impl_field_updates
     def field_updates(self, step: S, field: F) -> bool:
         return self.source.field_updates(step, field)
 
@@ -231,18 +258,22 @@ class PassthroughAll[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
 ):
     """Base class for filters that don't change any of the type parameters."""
 
+    @impl_use_geometry
     def use_geometry(self, geometry: F) -> None:
         self.source.use_geometry(geometry)
 
     def bases(self) -> Iterator[B]:
         return self.source.bases()
 
+    @impl_basis_of
     def basis_of(self, field: F) -> B:
         return self.source.basis_of(field)
 
+    @impl_geometries
     def geometries(self, basis: B) -> Iterator[F]:
         return self.source.geometries(basis)
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[F]:
         return self.source.fields(basis)
 
@@ -252,15 +283,19 @@ class PassthroughAll[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
     def zones(self) -> Iterator[Z]:
         return self.source.zones()
 
+    @impl_topology
     def topology(self, step: S, basis: B, zone: Z) -> T:
         return self.source.topology(step, basis, zone)
 
+    @impl_topology_updates
     def topology_updates(self, step: S, basis: B) -> bool:
         return self.source.topology_updates(step, basis)
 
-    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, step: S, field: F, zone: Z) -> FloatFieldData:
         return self.source.field_data(step, field, zone)
 
+    @impl_field_updates
     def field_updates(self, step: S, field: F) -> bool:
         return self.source.field_updates(step, field)
 

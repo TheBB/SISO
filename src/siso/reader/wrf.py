@@ -6,11 +6,22 @@ from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
 from netCDF4 import Dataset
-from numpy import floating, integer
 from scipy.spatial.transform import Rotation
 
 from siso import api, util
-from siso.api import CellShape, NodeShape, Zone, ZoneShape
+from siso.api import (
+    CellShape,
+    NodeShape,
+    Zone,
+    ZoneShape,
+    impl_basis_of,
+    impl_field_data,
+    impl_fields,
+    impl_geometries,
+    impl_topology,
+    impl_topology_updates,
+    impl_use_geometry,
+)
 from siso.coord import Generic, Geodetic, Wgs84
 from siso.impl import Basis, Field, Step
 from siso.topology import CellType, DiscreteTopology, StructuredTopology, UnstructuredTopology
@@ -20,6 +31,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
     from types import TracebackType
+
+    from siso.types import FloatArray, f32d
+    from siso.util.field_data import FloatFieldData, IntFieldData
 
 
 class FieldDimensionality(Enum):
@@ -142,7 +156,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         index: int,
         extrude_if_volumetric: bool = True,
         include_poles_if_periodic: bool = True,
-    ) -> FieldData[floating]:
+    ) -> FieldData[f32d]:
         time, *dimensions = self.dataset[name].dimensions
         assert time == "Time"
         assert len(dimensions) in (2, 3)
@@ -186,7 +200,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
 
         return FieldData(data.reshape(-1, 1))
 
-    def periodic_planar_topology(self) -> FieldData[integer]:
+    def periodic_planar_topology(self) -> IntFieldData:
         cells = [util.structured_cells(self.wrf_planar_cellshape, pardim=2)]
 
         nodemap = util.nodemap((self.num_latitude, 2), (self.num_longitude, self.num_longitude - 1))
@@ -206,7 +220,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
 
         return FieldData.join_dofs(cells)
 
-    def periodic_volumetric_topology(self) -> FieldData[integer]:
+    def periodic_volumetric_topology(self) -> IntFieldData:
         cells = [util.structured_cells(self.wrf_cellshape, pardim=3)]
 
         cells[0] += cells[0] // self.num_planar * 2
@@ -257,6 +271,7 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
             "ZYZ", [-self.dataset.STAND_LON, -self.dataset.MOAD_CEN_LAT, intrinsic], degrees=True
         )
 
+    @impl_use_geometry
     def use_geometry(self, geometry: Field) -> None:
         self.geodetic = geometry.name == "Geodetic"
 
@@ -279,18 +294,22 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
     def bases(self) -> Iterator[Basis]:
         yield Basis("mesh")
 
+    @impl_basis_of
     def basis_of(self, field: Field) -> Basis:
         return Basis("mesh")
 
+    @impl_geometries
     def geometries(self, basis: Basis) -> Iterator[Field]:
         yield Field("Generic", type=api.Geometry(num_comps=3, coords=Generic()))
         yield Field("Geodetic", type=api.Geometry(num_comps=3, coords=Geodetic(Wgs84())))
 
+    @impl_fields
     def fields(self, basis: Basis) -> Iterator[Field]:
         for variable in self.dataset.variables:
             if self.field_domain(variable) in self.valid_domains:
                 yield Field(variable, type=api.Scalar())
 
+    @impl_topology
     def topology(self, timestep: Step, basis: Basis, zone: Zone) -> DiscreteTopology:
         if self.periodic:
             num_nodes = self.num_planar + 2
@@ -311,22 +330,24 @@ class NetCdf(api.Source[Basis, Field, Step, DiscreteTopology, Zone[int]]):
         celltype = CellType.Hexahedron if self.volumetric else CellType.Quadrilateral
         return StructuredTopology(self.wrf_cellshape, celltype, degree=1)
 
+    @impl_topology_updates
     def topology_updates(self, step: Step, basis: Basis) -> bool:
         return step.index == 0
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FloatFieldData:
         if not field.is_geometry and not field.is_vector:
             return self.field_data_raw(field.name, timestep.index)
         assert field.is_geometry
         return self.geometry(timestep.index)
 
-    def height(self, index: int) -> FieldData[floating]:
+    def height(self, index: int) -> FloatFieldData:
         if self.volumetric:
             return (self.field_data_raw("PH", index) + self.field_data_raw("PHB", index)) / 9.81
         return self.field_data_raw(self.height_name, 0)
 
     @lru_cache(maxsize=1)
-    def geometry(self, index: int) -> FieldData[floating]:
+    def geometry(self, index: int) -> FloatFieldData:
         if self.geodetic:
             return FieldData.join_comps(
                 self.field_data_raw(self.longitude_name, index),
@@ -384,17 +405,19 @@ class Wrf(NetCdf):
             time = self.dataset["XTIME"][index] * 60
             yield Step(index=index, value=time)
 
+    @impl_fields
     def fields(self, basis: Basis) -> Iterator[Field]:
         yield from super().fields(basis)
         yield Field("WIND", type=api.Vector(3, api.VectorInterpretation.Flow), splittable=False)
 
-    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: Step, field: Field, zone: Zone) -> FloatFieldData:
         if field.name == "WIND":
             return self.wind(timestep.index)
         return super().field_data(timestep, field, zone)
 
     @lru_cache(maxsize=1)
-    def wind(self, index: int) -> FieldData[floating]:
+    def wind(self, index: int) -> FloatFieldData:
         local = FieldData.join_comps(
             self.field_data_raw("U", index, include_poles_if_periodic=False),
             self.field_data_raw("V", index, include_poles_if_periodic=False),
@@ -415,10 +438,12 @@ class Wrf(NetCdf):
             .cartesian_to_spherical(with_radius=False)
         )
 
-        vectors = local.spherical_to_cartesian_vector_field(points).numpy(-1, *self.wrf_planar_nodeshape)
+        vectors: FloatArray = local.spherical_to_cartesian_vector_field(points).numpy(
+            -1, *self.wrf_planar_nodeshape
+        )
 
-        south: np.ndarray | None = None
-        north: np.ndarray | None = None
+        south: FloatArray | None = None
+        north: FloatArray | None = None
         if self.periodic:
             south = np.mean(vectors[:, 0, ...], axis=-2)[:, np.newaxis, :]
             north = np.mean(vectors[:, -1, ...], axis=-2)[:, np.newaxis, :]
@@ -431,14 +456,14 @@ class Wrf(NetCdf):
             vectors = np.append(vectors, south, axis=1)
             vectors = np.append(vectors, north, axis=1)
 
-        vectors = vectors.reshape(-1, 3)
+        fd_vectors: FloatFieldData = FieldData(vectors.reshape(-1, 3))
 
         lonlat = FieldData.join_comps(
             self.field_data_raw(self.longitude_name, index),
             self.field_data_raw(self.latitude_name, index),
         )
 
-        return FieldData(vectors).rotate(self.rotation()).cartesian_to_spherical_vector_field(lonlat)
+        return fd_vectors.rotate(self.rotation()).cartesian_to_spherical_vector_field(lonlat)
 
 
 class GeoGrid(NetCdf):

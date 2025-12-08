@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from siso.api import Basis, Field, Step, Topology, Zone
+from siso.api import Basis, Field, Step, Topology, Zone, impl_fields
 
 from .passthrough import PassthroughAll
 
@@ -28,6 +28,7 @@ class FieldFilter[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](Passthrough
         self.allowed_names = allowed_names
         self.disallowed_names = disallowed_names
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[F]:
         for field in self.source.fields(basis):
             if self.disallowed_names == "all":

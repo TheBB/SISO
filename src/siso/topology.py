@@ -7,13 +7,12 @@ from __future__ import annotations
 import logging
 from functools import partial
 from io import BytesIO, StringIO
-from typing import TYPE_CHECKING, TextIO, overload
+from typing import TYPE_CHECKING, TextIO, cast, overload
 
 import lrspline as lr
 import numpy as np
 import splipy.utils
 from attrs import define
-from numpy import floating, integer
 from splipy import BSplineBasis, SplineObject
 from splipy.io import G2
 
@@ -36,7 +35,8 @@ from .util import FieldData, cell_numbering
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-    from numpy.typing import NDArray
+    from siso.types import FloatArray, Int, IntVector, Matrix, f64d, i32d
+    from siso.util.field_data import FloatFieldData, IntFieldData
 
 
 # Map of supported declared celltypes
@@ -58,7 +58,7 @@ KNOWN_CELLTYPES: dict[tuple[CellType, int], tuple[CellType, int] | None] = {
 
 
 class DiscreteTopologyImpl(DiscreteTopology):
-    def cells_as(self, ordering: CellOrdering) -> FieldData[integer]:
+    def cells_as(self, ordering: CellOrdering) -> IntFieldData:
         permutation = cell_numbering.permute_to(self.celltype, self.degree, ordering)
         return self.cells.permute_components(permutation)
 
@@ -74,7 +74,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
     """
 
     num_nodes: int
-    cells: FieldData[integer]
+    cells: IntFieldData
     celltype: CellType
     degree: int
 
@@ -83,7 +83,13 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         data: bytes,
     ) -> Iterator[
         tuple[
-            Points, UnstructuredTopology, FieldData[floating], NDArray[np.int64], NDArray[np.int64], int, int
+            Points,
+            UnstructuredTopology,
+            FieldData[f64d],
+            IntVector,
+            IntVector,
+            int,
+            int,
         ]
     ]:
         """Special purpose constructor for parsing an IFEM Lagriangian patch
@@ -123,7 +129,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
 
         # Multiple blocks for different cell types. The cell type in the file
         # can lie: we can't guarantee that the file contains uniform cell types.
-        blocks: dict[tuple[CellType, int], tuple[FieldData[np.integer], list[int]]] = {}
+        blocks: dict[tuple[CellType, int], tuple[IntFieldData, list[int]]] = {}
 
         for cellno in range(num_cells):
             line = next(io)
@@ -138,47 +144,40 @@ class UnstructuredTopology(DiscreteTopologyImpl):
 
             if (actual_celltype, degree) not in blocks:
                 blocks[actual_celltype, degree] = (
-                    FieldData(np.empty((0, len(cell_ids)), dtype=np.int64)),
+                    FieldData(np.empty((0, len(cell_ids)), dtype=np.int32)),
                     [],
                 )
 
             origdata, cellnos = blocks[actual_celltype, degree]
             cellnos.append(cellno)
-            origdata = FieldData.join_dofs(origdata, FieldData(np.array([cell_ids], dtype=np.int64)))
+            origdata = FieldData.join_dofs(origdata, FieldData(np.array([cell_ids], dtype=np.int32)))
             blocks[actual_celltype, degree] = (origdata, cellnos)
-
-            # blocks[actual_celltype, degree][0] = FieldData.join_dofs(
-            #     blocks[actual_celltype, degree][0],
-            #     FieldData(np.array([cell_ids], dtype=np.int64))
-            # )
-
-            # blocks[actual_celltype, degree][1].append(cellno)
 
         # For each block, yield
         for (celltype, degree), (cell_data, cellnos) in blocks.items():
             permutation = cell_numbering.permute_from(celltype, degree, cell_numbering.CellOrdering.Ifem)
             cell_data = cell_data.permute_components(permutation)
 
-            # Get the corners of the block
-            corners = FieldData(nodes).slice_dofs(list(set(cell_data.data.flatten()))).bounding_corners()  # type: ignore[misc]
-
             # Get the unique node IDs that this block references
-            node_ids = np.array(sorted(set(cell_data.data.flatten())), dtype=np.int64)
+            unique_node_ids = cast("IntVector", np.unique(cell_data.data))
+
+            # Get the corners of the block
+            corners = FieldData(nodes).slice_dofs(unique_node_ids).bounding_corners()
 
             # Reverse the mapping
             rev_node_ids = np.empty((num_nodes,), dtype=np.int64)
-            rev_node_ids[node_ids] = np.arange(len(node_ids))
+            rev_node_ids[unique_node_ids] = np.arange(len(unique_node_ids))
 
             # Apply the mapping
             cell_data.data.flat[:] = rev_node_ids[cell_data.data.flat]
 
-            topology = UnstructuredTopology(len(node_ids), cell_data, celltype, degree)
+            topology = UnstructuredTopology(len(unique_node_ids), cell_data, celltype, degree)
             yield (
                 corners,
                 topology,
                 FieldData(nodes),
-                node_ids,
-                np.array(cellnos, dtype=np.int64),
+                unique_node_ids,
+                np.array(cellnos, dtype=np.int32),
                 num_nodes,
                 num_cells,
             )
@@ -192,7 +191,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
     def join(*other: DiscreteTopology) -> UnstructuredTopology: ...
 
     @staticmethod
-    def join(*other: UnstructuredTopology) -> UnstructuredTopology:
+    def join(*other) -> UnstructuredTopology:  # type: ignore[no-untyped-def]
         """Join two or more unstructured topologies together.
 
         This does not perform any actual 'joining': the nodes in each topology
@@ -210,7 +209,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
         # Utility function for producing cell arrays. Keeps internal track of
         # the number of nodes seen so far, and adjusts the cell indices
         # accordingly. Crashes if cell types are incompatible.
-        def consume() -> Iterable[FieldData[integer]]:
+        def consume() -> Iterable[IntFieldData]:
             nonlocal num_nodes, celltype, degree
             for topo in iterable:
                 if celltype is None:
@@ -269,7 +268,7 @@ class UnstructuredTopology(DiscreteTopologyImpl):
                 or topology.degree != self.degree
             ):
                 raise api.Unsupported("Merging incompatible unstructured topologies")
-            return topology, lambda field, data: data
+            return topology, lambda _, data: data
 
         return merger
 
@@ -298,7 +297,7 @@ class UnstructuredTesselator:
     pick_indexes: list[int]
 
     # Cell array of new topology
-    new_cells: FieldData[integer]
+    new_cells: FieldData[i32d]
 
     def __init__(self, master: UnstructuredTopology):
         self.master = master
@@ -312,7 +311,7 @@ class UnstructuredTesselator:
         retain: set[int] = set()
 
         # New cells, in terms of old node indices
-        new_cells: list[list[int]] = []
+        new_cells: list[list[Int]] = []
 
         # For each cell, extract its corners, mark them as retained, and create
         # a new cell.
@@ -332,7 +331,7 @@ class UnstructuredTesselator:
         new_node_numbers[self.pick_indexes] = np.arange(len(retain))
 
         # Extract the new node numbers for the cell array.
-        self.new_cells = FieldData(new_node_numbers[np.array(new_cells, dtype=int)])
+        self.new_cells = FieldData(new_node_numbers[np.array(new_cells, dtype=np.int32)])
         if (self.new_cells.data < 0).any():
             raise api.Unexpected("Nodes that shouldn't be picked were picked")
 
@@ -353,11 +352,12 @@ class UnstructuredTesselator:
             degree=1,
         )
 
-    def tesselate_field(self, field: Field, data: FieldData[floating]) -> FieldData[floating]:
+    def tesselate_field(self, field: Field, data: FloatFieldData) -> FloatFieldData:
         # Cellwise fields: the new topology has the same cells as the master topology.
         if field.cellwise:
             return data
-        return FieldData(data.data[self.pick_indexes, :])
+        return data.slice_dofs(self.pick_indexes)
+        # return FieldData(data.data[self.pick_indexes, :])
 
 
 @define
@@ -382,7 +382,7 @@ class StructuredTopology(DiscreteTopologyImpl):
         return util.prod(s + 1 for s in self.cellshape)
 
     @property
-    def cells(self) -> FieldData[integer]:
+    def cells(self) -> IntFieldData:
         """Produce an array of cells on demand."""
         return util.structured_cells(self.cellshape, self.pardim)
 
@@ -454,10 +454,10 @@ class SplineTopology(Topology):
     """A B-Spline or NURBS topology as represented by Splipy."""
 
     bases: list[BSplineBasis]
-    weights: np.ndarray | None
+    weights: FloatArray | None
 
     @staticmethod
-    def from_splineobject(obj: SplineObject) -> tuple[Points, SplineTopology, FieldData[floating]]:
+    def from_splineobject(obj: SplineObject) -> tuple[Points, SplineTopology, FloatFieldData]:
         """Construct a spline topology from a Splipy SplineObject.
 
         Returns a sequence of coordinates (the corners) for constructing zone
@@ -484,12 +484,12 @@ class SplineTopology(Topology):
         )
 
     @staticmethod
-    def from_bytes(data: bytes) -> Iterator[tuple[Points, SplineTopology, FieldData[floating]]]:
+    def from_bytes(data: bytes) -> Iterator[tuple[Points, SplineTopology, FloatFieldData]]:
         """Special constructor parsing bytestring in G2-format."""
         yield from SplineTopology.from_string(data.decode())
 
     @staticmethod
-    def from_string(data: str) -> Iterator[tuple[Points, SplineTopology, FieldData[floating]]]:
+    def from_string(data: str) -> Iterator[tuple[Points, SplineTopology, FloatFieldData]]:
         """Special constructor for parsing a string in G2-format."""
         with G2Object(StringIO(data), "r") as g2:
             for obj in g2.read():
@@ -510,7 +510,11 @@ class SplineTopology(Topology):
     def discretize(self, nvis: int) -> tuple[DiscreteTopology, FieldDataFilter]:
         tesselator = SplineTesselator(self, nvis)
         discrete = tesselator.tesselate_topology(self)
-        return discrete, lambda field, data: tesselator.tesselate_field(self, field, data)
+
+        def field_data_filter(field: Field, data: FloatFieldData) -> FloatFieldData:
+            return tesselator.tesselate_field(self, field, data)
+
+        return discrete, field_data_filter
 
     def create_merger(self) -> api.TopologyMerger:
         return SplineTesselator(self, nvis=1)
@@ -572,8 +576,8 @@ class SplineTesselator(api.TopologyMerger):
         self,
         topology: SplineTopology,
         field: Field,
-        field_data: FieldData[floating],
-    ) -> FieldData[floating]:
+        field_data: FloatFieldData,
+    ) -> FloatFieldData:
         """Convert a field data array to make it compatible with the discretized
         topology.
         """
@@ -586,20 +590,21 @@ class SplineTesselator(api.TopologyMerger):
             bases = [BSplineBasis(order=1, knots=basis.knot_spans()) for basis in topology.bases]
             shape = tuple(basis.num_functions() for basis in bases)
             knots = self.cellwise_knots
-            coeffs = field_data.data
+            # coeffs = field_data.data
             rational = False
 
         else:
             bases = topology.bases
             shape = tuple(basis.num_functions() for basis in topology.bases)
             knots = self.nodal_knots
-            coeffs = field_data.data
+            # coeffs = field_data.data
             if topology.weights is not None:
-                coeffs = np.hstack((coeffs, util.flatten_2d(topology.weights)))
+                field_data = FieldData.join_comps(field_data, topology.weights.flatten())
+                # coeffs = np.hstack((coeffs, util.flatten_2d(topology.weights)), dtype=coeffs.dtype)
             rational = topology.weights is not None
 
         # Construct a spline object and evaluate it
-        coeffs = splipy.utils.reshape(coeffs, shape, order="F")
+        coeffs = splipy.utils.reshape(field_data.data, shape, order="F")
         new_spline = SplineObject(bases, coeffs, rational=rational, raw=True)
         return FieldData(util.flatten_2d(new_spline(*knots)))
 
@@ -615,7 +620,7 @@ class LrTopology(Topology):
     def from_lrobject(
         obj: lr.LRSplineObject,
         rationality: Rationality | None,
-    ) -> tuple[Points, LrTopology, FieldData[floating]]:
+    ) -> tuple[Points, LrTopology, FieldData[f64d]]:
         """Construct an LR topology from an LRSplineObject.
 
         Returns a sequence of coordinates (the corners) for constructing zone
@@ -646,10 +651,10 @@ class LrTopology(Topology):
         # Separate weights and control points (weights belong to the topology)
         if rational:
             weights = obj.controlpoints[:, -1]
-            cps = obj.controlpoints[:, :-1]
+            cps = cast("Matrix[f64d]", obj.controlpoints[:, :-1])
         else:
             weights = None
-            cps = obj.controlpoints
+            cps = cast("Matrix[f64d]", obj.controlpoints)
 
         return (
             corners,
@@ -661,7 +666,7 @@ class LrTopology(Topology):
     def from_bytes(
         data: bytes,
         rationality: Rationality | None,
-    ) -> Iterator[tuple[Points, LrTopology, FieldData[floating]]]:
+    ) -> Iterator[tuple[Points, LrTopology, FieldData[f64d]]]:
         """Special constructor parsing bytestring in LR-format."""
         yield from LrTopology.from_string(data.decode(), rationality)
 
@@ -669,7 +674,7 @@ class LrTopology(Topology):
     def from_string(
         data: str,
         rationality: Rationality | None,
-    ) -> Iterator[tuple[Points, LrTopology, FieldData[floating]]]:
+    ) -> Iterator[tuple[Points, LrTopology, FieldData[f64d]]]:
         """Special constructor parsing string in LR-format."""
         for obj in lr.LRSplineObject.read_many(StringIO(data)):
             yield LrTopology.from_lrobject(obj, rationality)
@@ -716,7 +721,7 @@ class LrTesselator(api.TopologyMerger):
     """
 
     nodes: np.ndarray
-    cells: FieldData[integer]
+    cells: IntFieldData
     weights: np.ndarray | None
     nvis: int
 
@@ -757,8 +762,8 @@ class LrTesselator(api.TopologyMerger):
         self,
         topology: LrTopology,
         field: Field,
-        field_data: FieldData[floating],
-    ) -> FieldData[floating]:
+        field_data: FloatFieldData,
+    ) -> FloatFieldData:
         """Convert a field data array to make it compatible with the discretized
         topology.
         """

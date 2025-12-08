@@ -83,7 +83,7 @@ class VtfWriter(Writer):
             desc = str(self.step_interpretation)
             for timestep in self.timesteps:
                 time = timestep.value if timestep.value is not None else float(timestep.index)
-                setter(timestep.index + 1, f"{desc} {time:.4g}", time)
+                setter(timestep.index + 1, f"{desc} {time:.4g}", float(time))
 
         self.out.__exit__(exc_type, exc_val, exc_tb)
         logging.info(self.filename)

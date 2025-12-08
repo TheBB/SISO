@@ -2,16 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from siso.api import Basis, Field, Step, Topology, Zone
+from siso.api import Basis, Field, Step, Topology, Zone, impl_field_data, impl_topology
 from siso.topology import DiscreteTopology
 
 from .passthrough import PassthroughBFSZ
 
 if TYPE_CHECKING:
-    from numpy import floating
-
     from siso import api
-    from siso.util import FieldData
+    from siso.util.field_data import FloatFieldData
 
 
 class Discretize[B: Basis, F: Field, S: Step, Z: Zone, T: Topology](
@@ -43,6 +41,7 @@ class Discretize[B: Basis, F: Field, S: Step, Z: Zone, T: Topology](
             discrete_topology=True,
         )
 
+    @impl_topology
     def topology(self, step: S, basis: B, zone: Z) -> DiscreteTopology:
         topology = self.source.topology(step, basis, zone)
 
@@ -52,7 +51,8 @@ class Discretize[B: Basis, F: Field, S: Step, Z: Zone, T: Topology](
 
         return discrete
 
-    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, step: S, field: F, zone: Z) -> FloatFieldData:
         data = self.source.field_data(step, field, zone)
         basis = self.source.basis_of(field)
 

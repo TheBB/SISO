@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import TracebackType
 
+    from siso.util.field_data import FloatFieldData
+
 
 class Behavior(Enum):
     OnlyStructured = auto()
@@ -43,7 +45,7 @@ class Behavior(Enum):
 BackendWriter = vtkXMLWriter | vtkDataWriter
 
 
-def transpose[Sc: np.number](data: FieldData[Sc], grid: vtkPointSet, cellwise: bool = False) -> FieldData[Sc]:
+def transpose(data: FloatFieldData, grid: vtkPointSet, cellwise: bool = False) -> FloatFieldData:
     if not isinstance(grid, vtkStructuredGrid):
         return data
     shape = [0, 0, 0]
@@ -105,7 +107,7 @@ def get_grid_and_writer[B: Basis, F: Field, S: Step, Z: Zone](
             [
                 cells,
                 FieldData.join_comps(
-                    topology.cells.constant_like(topology.cells.num_comps, ncomps=1, dtype=int),
+                    topology.cells.constant_like(topology.cells.num_comps, ncomps=1, dtype=np.int32),
                     topology.cells_as(CellOrdering.Vtk) + total_nodes,
                 )
                 .numpy()
@@ -187,7 +189,7 @@ class VtkWriterBase(ABC, Writer):
         grid, writer = self.grid_and_writer(source, step, geometry)
         apply_output_mode(writer, self.output_mode)
 
-        data: FieldData[np.floating] = FieldData(np.empty((0, geometry.num_comps), dtype=np.float64))
+        data: FloatFieldData = FieldData(np.empty((0, geometry.num_comps), dtype=np.float64))
         for zone in source.zones():
             new_data = source.field_data(step, geometry, zone)
             data = FieldData.join_dofs(data, new_data)
