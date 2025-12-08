@@ -19,6 +19,7 @@ Supported readers:
 - GoTools_ (B-Spline) geometries (.g2)
 - SIMRA_ result files (.res)
 - WRF_ result files (NetCDF4)
+- Nastran_ BDF files
 
 Supported writers:
 
@@ -188,3 +189,4 @@ with valid arguments being ``native`` (default), ``little`` and
 .. _VTK: https://vtk.org/
 .. _LRSplines: https://github.com/TheBB/lrsplines-python
 .. _VTFWriter: https://github.com/TheBB/vtfwriter
+.. _Nastran: https://en.wikipedia.org/wiki/Nastran
