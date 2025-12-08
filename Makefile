@@ -4,7 +4,7 @@ package := siso
 # Convenience targets
 
 .PHONY: sync
-install:
+sync:
 	uv sync
 
 

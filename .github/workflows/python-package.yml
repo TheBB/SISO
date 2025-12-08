@@ -21,7 +21,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ['3.12', '3.13', '3.14']
+        # TODO: Add 3.14 once VTK publishes wheels for it
+        python-version: ['3.12', '3.13']
         os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
