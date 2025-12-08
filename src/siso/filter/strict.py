@@ -4,19 +4,29 @@ from copy import deepcopy
 from typing import TYPE_CHECKING
 
 from siso import api, util
-from siso.api import B, DiscreteTopology, F, S, T, Z
+from siso.api import (
+    Basis,
+    DiscreteTopology,
+    Field,
+    Step,
+    Topology,
+    Zone,
+    impl_field_data,
+    impl_fields,
+    impl_geometries,
+    impl_topology,
+    impl_use_geometry,
+)
 
 from .passthrough import PassthroughAll
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from numpy import floating
-
-    from siso.util import FieldData
+    from siso.util.field_data import FloatFieldData
 
 
-class Strict(PassthroughAll[B, F, S, T, Z]):
+class Strict[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](PassthroughAll[B, F, S, T, Z]):
     """Filter that changes nothing, but checks some invariants. Use for
     debugging. Should be always used in tests.
     """
@@ -41,6 +51,7 @@ class Strict(PassthroughAll[B, F, S, T, Z]):
         assert properties == self.original_properties
         return properties
 
+    @impl_use_geometry
     def use_geometry(self, geometry: F) -> None:
         super().use_geometry(geometry)
         self.geometry = deepcopy(geometry)
@@ -51,6 +62,7 @@ class Strict(PassthroughAll[B, F, S, T, Z]):
             assert len(bases) == 1
         yield from bases
 
+    @impl_geometries
     def geometries(self, basis: B) -> Iterator[F]:
         for field in self.source.geometries(basis):
             assert field.is_geometry
@@ -65,6 +77,7 @@ class Strict(PassthroughAll[B, F, S, T, Z]):
                 assert spec.type == field.type
             yield field
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[F]:
         for field in self.source.fields(basis):
             assert not field.is_geometry
@@ -101,6 +114,7 @@ class Strict(PassthroughAll[B, F, S, T, Z]):
             assert all(isinstance(zone.key, int) for zone in zones)
         yield from zones
 
+    @impl_topology
     def topology(self, step: S, basis: B, zone: Z) -> T:
         topology = self.source.topology(step, basis, zone)
         if self.original_properties.discrete_topology:
@@ -110,7 +124,8 @@ class Strict(PassthroughAll[B, F, S, T, Z]):
             assert topology.degree == 1
         return topology
 
-    def field_data(self, timestep: S, field: F, zone: Z) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: S, field: F, zone: Z) -> FloatFieldData:
         if field.is_geometry:
             assert field.name == self.geometry.name
         data = self.source.field_data(timestep, field, zone)

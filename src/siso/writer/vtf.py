@@ -7,7 +7,7 @@ import vtfwriter as vtf
 from attrs import define
 
 from siso import api
-from siso.api import B, CellOrdering, DiscreteTopology, F, S, Step, StepInterpretation, T, Z, Zone
+from siso.api import Basis, CellOrdering, DiscreteTopology, Field, Step, StepInterpretation, Topology, Zone
 
 from .api import OutputMode, Writer, WriterProperties, WriterSettings
 
@@ -83,12 +83,12 @@ class VtfWriter(Writer):
             desc = str(self.step_interpretation)
             for timestep in self.timesteps:
                 time = timestep.value if timestep.value is not None else float(timestep.index)
-                setter(timestep.index + 1, f"{desc} {time:.4g}", time)
+                setter(timestep.index + 1, f"{desc} {time:.4g}", float(time))
 
         self.out.__exit__(exc_type, exc_val, exc_tb)
         logging.info(self.filename)
 
-    def update_geometry(
+    def update_geometry[B: Basis, F: Field, S: Step](
         self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
     ) -> None:
         for zone in source.zones():
@@ -112,7 +112,7 @@ class VtfWriter(Writer):
 
         self.geometry_block.BindElementBlocks(*(e for _, e in self.geometry_blocks), step=timestep.index + 1)
 
-    def update_field(
+    def update_field[B: Basis, F: Field, S: Step](
         self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], field: F
     ) -> None:
         for zone in source.zones():
@@ -137,7 +137,7 @@ class VtfWriter(Writer):
             steps = self.field_info[field.name].steps
             steps.setdefault(timestep.index + 1, []).append(result_block)
 
-    def consume_timestep(
+    def consume_timestep[B: Basis, F: Field, S: Step](
         self, timestep: S, source: api.Source[B, F, S, DiscreteTopology, Zone[int]], geometry: F
     ) -> None:
         if source.field_updates(timestep, geometry):
@@ -146,7 +146,9 @@ class VtfWriter(Writer):
             if source.field_updates(timestep, field):
                 self.update_field(timestep, source, field)
 
-    def consume(self, source: api.Source[B, F, S, T, Z], geometry: F) -> None:
+    def consume[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+        self, source: api.Source[B, F, S, T, Z], geometry: F
+    ) -> None:
         casted = source.cast_discrete_topology().cast_globally_keyed()
         self.step_interpretation = source.properties.step_interpretation
         for step in casted.steps():

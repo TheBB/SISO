@@ -6,14 +6,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from attrs import define, field
-from numpy import floating
 from numpy.polynomial import Polynomial
-from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from jax.typing import ArrayLike as JaxArray
 
-Array = NDArray[floating]
+    from siso.types import Floatd, FloatVector
 
 
 def normalize_pair(x: JaxArray, y: JaxArray) -> tuple[JaxArray, JaxArray]:
@@ -64,15 +62,23 @@ class UtmConverter:
             cast("float", Polynomial([0, 0, 0, 56 / 15])(self.n)),
         )
 
-    def to_utm(self, lon: Array, lat: Array) -> tuple[Array, Array]:
+    def to_utm(self, lon: FloatVector, lat: FloatVector) -> tuple[FloatVector, FloatVector]:
         e, n = self._to_utm(jnp.array(lon), jnp.array(lat))
-        return np.array(e), np.array(n)
+        return (
+            cast("FloatVector", np.array(e, dtype=lon.dtype)),
+            cast("FloatVector", np.array(n, dtype=lon.dtype)),
+        )
 
-    def to_lonlat(self, e: Array, n: Array) -> tuple[Array, Array]:
+    def to_lonlat(self, e: FloatVector, n: FloatVector) -> tuple[FloatVector, FloatVector]:
         lon, lat = self._to_lonlat(jnp.array(e), jnp.array(n))
-        return np.array(lon), np.array(lat)
+        return (
+            cast("FloatVector", np.array(lon, dtype=e.dtype)),
+            cast("FloatVector", np.array(lat, dtype=e.dtype)),
+        )
 
-    def to_utm_vf(self, lon: Array, lat: Array, vx: Array, vy: Array) -> tuple[Array, Array]:
+    def to_utm_vf(
+        self, lon: FloatVector, lat: FloatVector, vx: FloatVector, vy: FloatVector
+    ) -> tuple[FloatVector, FloatVector]:
         lonj, latj = jnp.array(lon), jnp.array(lat)
 
         de_dlon, de_dlat = jax.vmap(jax.grad(self._to_easting, (0, 1)))(lonj, latj)
@@ -81,12 +87,15 @@ class UtmConverter:
         dn_dlon, dn_dlat = jax.vmap(jax.grad(self._to_northing, (0, 1)))(lonj, latj)
         dn_dlon, dn_dlat = normalize_pair(dn_dlon, dn_dlat)
 
+        dtype: Floatd = lon.dtype
         return (
-            np.array(de_dlon) * vx + np.array(de_dlat) * vy,
-            np.array(dn_dlon) * vx + np.array(dn_dlat) * vy,
+            np.array(de_dlon, dtype=dtype) * vx + np.array(de_dlat, dtype=dtype) * vy,  # type: ignore[operator]
+            np.array(dn_dlon, dtype=dtype) * vx + np.array(dn_dlat, dtype=dtype) * vy,  # type: ignore[operator]
         )
 
-    def to_lonlat_vf(self, e: Array, n: Array, vx: Array, vy: Array) -> tuple[Array, Array]:
+    def to_lonlat_vf(
+        self, e: FloatVector, n: FloatVector, vx: FloatVector, vy: FloatVector
+    ) -> tuple[FloatVector, FloatVector]:
         ej, nj = jnp.array(e), jnp.array(n)
 
         dlon_dx, dlon_dy = jax.vmap(jax.grad(self._to_lon, (0, 1)))(ej, nj)
@@ -95,9 +104,10 @@ class UtmConverter:
         dlat_dx, dlat_dy = jax.vmap(jax.grad(self._to_lat, (0, 1)))(ej, nj)
         dlat_dx, dlat_dy = normalize_pair(dlat_dx, dlat_dy)
 
+        dtype: Floatd = e.dtype
         return (
-            np.array(dlon_dx) * vx + np.array(dlon_dy) * vy,
-            np.array(dlat_dx) * vx + np.array(dlat_dy) * vy,
+            np.array(dlon_dx, dtype=dtype) * vx + np.array(dlon_dy, dtype=dtype) * vy,  # type: ignore[operator]
+            np.array(dlat_dx, dtype=dtype) * vx + np.array(dlat_dy, dtype=dtype) * vy,  # type: ignore[operator]
         )
 
     def _to_easting(self, lon: JaxArray, lat: JaxArray) -> JaxArray:

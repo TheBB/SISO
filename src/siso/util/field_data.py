@@ -13,69 +13,113 @@ from __future__ import annotations
 import logging
 import sys
 from itertools import product
-from typing import TYPE_CHECKING, Generic, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Self, cast, overload
 
 import numpy as np
-from attrs import define
-from numpy import floating, integer, number
-from numpy.typing import DTypeLike, NDArray
+from numpy import integer
+from numpy.typing import NDArray
 from vtkmodules.util.numpy_support import numpy_to_vtk
 
 from siso.api import NodeShape, Point, Points
+from siso.types import (
+    Array,
+    Float,
+    FloatArray,
+    Floatd,
+    FloatVector,
+    Int,
+    IntArray,
+    Intd,
+    IntVector,
+    Matrix,
+    Scalar,
+    Vector,
+    f32d,
+    f64d,
+    i32,
+    i32d,
+    i64,
+    i64d,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
-    from typing import Any
 
     from scipy.spatial.transform import Rotation
     from vtkmodules.vtkCommonCore import vtkDataArray
 
-T = TypeVar("T", bound=number)
-S = TypeVar("S", bound=number)
+
 Index = int | slice | None | NDArray[integer]
 Indices = Index | tuple[Index, ...]
 
 
-def ensure_2d_dof(array: NDArray[T]) -> NDArray[T]:
+def ensure_2d_dof[D: np.dtype](array: Array[D]) -> Matrix[D]:
     """Ensure an array is 2D, potentially adding a dof axis."""
     if array.ndim < 2:
         return array.reshape(-1, 1)
     assert array.ndim == 2
-    return array
+    return cast("Matrix[D]", array)
 
 
-def ensure_2d_comp(array: NDArray[T]) -> NDArray[T]:
+def ensure_2d_comp[D: np.dtype](array: Array[D]) -> Matrix[D]:
     """Ensure an array is 2D, potentially adding a comp axis."""
     if array.ndim < 2:
         return array.reshape(1, -1)
     assert array.ndim == 2
-    return array
+    return cast("Matrix[D]", array)
 
 
-def pad_comps(array: NDArray[T], ncomps: int, value: T) -> NDArray[T]:
+def pad_comps[D: np.dtype](array: Matrix[D], ncomps: int, value: Scalar) -> Matrix[D]:
     """Add extra components to an array."""
     if array.shape[1] == ncomps:
         return array
-    return np.hstack([array, np.full((array.shape[0], ncomps - array.shape[1]), value, dtype=array.dtype)])
+    return cast(
+        "Matrix[D]",
+        np.hstack([array, np.full((array.shape[0], ncomps - array.shape[1]), value, dtype=array.dtype)]),
+    )
 
 
-@define
-class FieldData(Generic[T]):
+type IntFieldData = FieldData[i32d] | FieldData[i64d]
+type FloatFieldData = FieldData[f32d] | FieldData[f64d]
+type SliceParam = Int | Sequence[int] | Sequence[i32] | Sequence[i64] | IntVector
+
+
+class FieldData[D: np.dtype]:
     """Wrapper for a numpy array with a dof and a comp axis."""
 
-    data: NDArray[T]
+    data: Matrix[D]
 
-    def __attrs_post_init__(self) -> None:
-        # Runtime assertion to ensure that only 2D arrays end up in here.
+    @overload
+    def __init__[T: np.dtype](self, data: Array[T], /, *, dtype: D) -> None: ...
+
+    @overload
+    def __init__(self: FloatFieldData, data: FloatArray) -> None: ...
+
+    @overload
+    def __init__(self: IntFieldData, data: IntArray) -> None: ...
+
+    def __init__(self, data, /, *, dtype=None):  # type: ignore[no-untyped-def]
+        if dtype is not None:
+            self.data = data.astype(dtype, casting="same_kind", copy=False)
+        else:
+            self.data = data
         assert self.data.ndim == 2
 
     @overload
     @staticmethod
-    def join_comps(other: Iterable[FieldData[T] | NDArray[T]], /) -> FieldData[T]: ...
+    def join_comps(other: Iterable[FloatFieldData | FloatArray], /) -> FloatFieldData: ...
 
     @overload
     @staticmethod
-    def join_comps(*other: FieldData[T] | NDArray[T]) -> FieldData[T]: ...
+    def join_comps(*other: FloatFieldData | FloatArray) -> FloatFieldData: ...
+
+    @overload
+    @staticmethod
+    def join_comps(other: Iterable[IntFieldData | IntArray], /) -> IntFieldData: ...
+
+    @overload
+    @staticmethod
+    def join_comps(*other: IntFieldData | IntArray) -> IntFieldData: ...
 
     @staticmethod
     def join_comps(*other):  # type: ignore[no-untyped-def]
@@ -92,12 +136,20 @@ class FieldData(Generic[T]):
     @overload
     @staticmethod
     def join_dofs(
-        other: Iterable[FieldData[T] | NDArray[T]], /, *, pad_with: T | None = None
-    ) -> FieldData[T]: ...
+        other: Iterable[FloatFieldData | FloatArray], /, *, pad_with: D | None = None
+    ) -> FloatFieldData: ...
 
     @overload
     @staticmethod
-    def join_dofs(*other: FieldData[T] | NDArray[T], pad_with: T | None = None) -> FieldData[T]: ...
+    def join_dofs(*other: FloatFieldData | FloatArray, pad_with: D | None = None) -> FloatFieldData: ...
+
+    @overload
+    @staticmethod
+    def join_dofs(other: Iterable[IntFieldData | IntArray], /) -> IntFieldData: ...
+
+    @overload
+    @staticmethod
+    def join_dofs(*other: IntFieldData | IntArray) -> IntFieldData: ...
 
     @staticmethod
     def join_dofs(*other, pad_with=None):  # type: ignore[no-untyped-def]
@@ -116,16 +168,20 @@ class FieldData(Generic[T]):
 
     @overload
     @staticmethod
-    def from_iter(
-        iterable: Iterable[Iterable[float | int]], dtype: DTypeLike = float
-    ) -> FieldData[floating]: ...
+    def from_iter(iterable: Iterable[Iterable[Scalar]]) -> FieldData[f64d]: ...
 
     @overload
     @staticmethod
-    def from_iter(iterable: Iterable[Iterable[T]], dtype: DTypeLike = float) -> FieldData[T]: ...
+    def from_iter[T: np.dtype](iterable: Iterable[Iterable[Scalar]], *, dtype: T) -> FieldData[T]: ...
+
+    @overload
+    @staticmethod
+    def from_iter[T: np.generic](
+        iterable: Iterable[Iterable[Scalar]], *, dtype: T
+    ) -> FieldData[np.dtype[T]]: ...
 
     @staticmethod
-    def from_iter(iterable, dtype: DTypeLike = float):  # type: ignore[no-untyped-def]
+    def from_iter(iterable, *, dtype=np.float64):  # type: ignore[no-untyped-def]
         """Construct a field data object from an iterable of iterables of scalars.
         The outer iterable loops through the rows (dof axis) and the inner
         iterables loop through the columns (comp axis).
@@ -153,44 +209,44 @@ class FieldData(Generic[T]):
         return FieldData(array.reshape(num_dofs, -1))
 
     @property
-    def dtype(self) -> np.dtype:
+    def dtype(self) -> D:
         return self.data.dtype
 
     @property
     def num_comps(self) -> int:
-        return cast("int", self.data.shape[-1])
+        return self.data.shape[-1]
 
     @property
     def num_dofs(self) -> int:
-        return cast("int", self.data.shape[0])
+        return self.data.shape[0]
 
     @property
-    def comps(self) -> Iterable[NDArray[T]]:
+    def comps(self) -> Iterable[Vector[D]]:
         """Return a sequence of one-dimensional numpy arrays, one for each
         component.
         """
-        return self.data.T
+        return cast("Iterable[Vector[D]]", self.data.T)
 
     @property
-    def dofs(self) -> Iterable[NDArray[T]]:
+    def dofs(self) -> Iterable[Vector[D]]:
         """Return a sequence of one-dimensional numpy arrays, one for each
         dof.
         """
-        return self.data
+        return cast("Iterable[Vector[D]]", self.data)
 
-    def mean(self) -> NDArray[T]:
+    def mean(self) -> Vector[D]:
         """Take the average over the dof axis."""
-        return cast("NDArray[T]", self.data.mean(axis=0))
+        return cast("Vector[D]", self.data.mean(axis=0))
 
-    def slice_comps(self, index: int | list[int]) -> FieldData[T]:
+    def slice_comps(self, index: SliceParam) -> FieldData[D]:
         """Extract a subset of components as a new field data object."""
         return FieldData(ensure_2d_comp(self.data[:, index]))
 
-    def slice_dofs(self, index: int | list[int] | NDArray[integer]) -> FieldData[T]:
+    def slice_dofs(self, index: SliceParam) -> FieldData[D]:
         """Extract a subset of dofs as a new field data object."""
         return FieldData(ensure_2d_dof(self.data[index, :]))
 
-    def nan_filter(self, fill: T | None = None) -> FieldData[T]:
+    def nan_filter[G: Floatd](self: FieldData[G], fill: Scalar | None = None) -> FieldData[G]:
         """Fill NANs with a specified value. If set to None, will use the
         appropriate zero.
         """
@@ -200,7 +256,7 @@ class FieldData(Generic[T]):
             self.data[i] = fill if fill is not None else np.zeros((), dtype=self.data.dtype)
         return self
 
-    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = False, pad_right: bool = True) -> FieldData[T]:
+    def ensure_ncomps(self, ncomps: int, allow_scalar: bool = False, pad_right: bool = True) -> FieldData[D]:
         """Ensure the data array has at least a certain number of components.
 
         Parameters:
@@ -216,9 +272,10 @@ class FieldData(Generic[T]):
         new_comps = ncomps - self.data.shape[-1]
         filler = np.zeros((self.data.shape[0], new_comps), dtype=self.data.dtype)
         to_stack = (self.data, filler) if pad_right else (filler, self.data)
-        return FieldData(data=np.hstack(to_stack))
+        data = cast("Matrix[D]", np.hstack(to_stack))
+        return FieldData(data)
 
-    def ensure_native(self) -> FieldData[T]:
+    def ensure_native(self) -> FieldData[D]:
         """Ensure the data array has native byte order."""
         if self.data.dtype.byteorder in ("=", sys.byteorder):
             return self
@@ -226,7 +283,7 @@ class FieldData(Generic[T]):
         new_array = swapped.view(swapped.dtype.newbyteorder())
         return FieldData(new_array)
 
-    def corners(self: FieldData[floating], shape: NodeShape) -> Points:
+    def corners(self: FloatFieldData, shape: NodeShape) -> Points:
         """Return a sequence of corner points by interpreting the array as a
         cartesian product with a certain shape.
         """
@@ -235,15 +292,16 @@ class FieldData(Generic[T]):
         corners = corners.reshape(-1, self.num_comps)
         return Points(tuple(Point(tuple(corner)) for corner in corners))
 
-    def bounding_corners(self: FieldData[floating]) -> Points:
+    def bounding_corners(self: FloatFieldData) -> Points:
         """Return a bounding box as a sequence of corner points by interpreting
         the array as a point cloud.
         """
-        minima = tuple(np.min(comp) for comp in self.comps)
-        maxima = tuple(np.max(comp) for comp in self.comps)
-        return Points(tuple(map(Point, product(*zip(minima, maxima)))))
+        minima: tuple[Float, ...] = tuple(np.min(comp) for comp in self.comps)  # type: ignore[misc]
+        maxima: tuple[Float, ...] = tuple(np.max(comp) for comp in self.comps)  # type: ignore[misc]
+        points = map(Point, product(*zip(minima, maxima)))
+        return Points(tuple(points))
 
-    def collapse_weights(self: FieldData[floating]) -> FieldData[floating]:
+    def collapse_weights[G: Floatd](self: FieldData[G]) -> FieldData[G]:
         """Reduce the number of components by one, by dividing the first ncomps-1
         components with the last.
 
@@ -253,7 +311,7 @@ class FieldData(Generic[T]):
         data = self.data[..., :-1] / self.data[..., -1:]
         return FieldData(data)
 
-    def transpose(self, shape: NodeShape, transposition: tuple[int, ...]) -> FieldData[T]:
+    def transpose(self, shape: NodeShape, transposition: tuple[int, ...]) -> FieldData[D]:
         """Perform a transposition operation.
 
         Parameters:
@@ -266,23 +324,31 @@ class FieldData(Generic[T]):
             .reshape(self.data.shape)
         )
 
-    def swap_components(self, i: int, j: int) -> FieldData[T]:
+    def swap_components(self, i: int, j: int) -> Self:
         """Swap two components by index."""
         self.data[:, i], self.data[:, j] = self.data[:, j].copy(), self.data[:, i].copy()
         return self
 
-    def permute_components(self, permutation: Sequence[int]) -> FieldData[T]:
+    def permute_components(self, permutation: Sequence[int]) -> FieldData[D]:
         return FieldData(self.data[:, permutation])
 
     @overload
-    def constant_like(
-        self, value: int, ndofs: int | None = None, ncomps: int | None = None, dtype: DTypeLike = None
-    ) -> FieldData[integer]: ...
+    def constant_like(self, value: Int, *, ndofs: int | None = None, ncomps: int | None = None) -> Self: ...
 
     @overload
     def constant_like(
-        self, value: float, ndofs: int | None = None, ncomps: int | None = None, dtype: DTypeLike = None
-    ) -> FieldData[floating]: ...
+        self: FloatFieldData, value: Float, *, ndofs: int | None = None, ncomps: int | None = None
+    ) -> FieldData[f64d]: ...
+
+    @overload
+    def constant_like[T: np.dtype](
+        self, value: Scalar, *, dtype: T, ndofs: int | None = None, ncomps: int | None = None
+    ) -> FieldData[T]: ...
+
+    @overload
+    def constant_like[T: np.generic](
+        self, value: Scalar, *, dtype: type[T], ndofs: int | None = None, ncomps: int | None = None
+    ) -> FieldData[np.dtype[T]]: ...
 
     def constant_like(self, value, ndofs=None, ncomps=None, dtype=None):  # type: ignore[no-untyped-def]
         """Return a new constant FieldData array.
@@ -304,7 +370,7 @@ class FieldData(Generic[T]):
         retval.fill(value)
         return FieldData(retval)
 
-    def trigonometric(self) -> FieldData[floating]:
+    def trigonometric(self) -> FloatFieldData:
         """Interpret the first two components as longitude and latitude, and
         return a new field data object with four components:
 
@@ -319,21 +385,25 @@ class FieldData(Generic[T]):
         retval[:, 1] = np.cos(np.deg2rad(lat))
         retval[:, 2] = np.sin(np.deg2rad(lon))
         retval[:, 3] = np.sin(np.deg2rad(lat))
-        return FieldData(retval)
+        return cast("FloatFieldData", FieldData(retval))
 
-    def spherical_to_cartesian(self) -> FieldData[floating]:
+    def spherical_to_cartesian(self: FloatFieldData) -> FloatFieldData:
         """Interpret the first two components as longitude and latitude, and
         return a new field data object with points in Cartesian coordinates. If
         there's a third component, it is interpreted as radius from the
         center.
         """
         clon, clat, slon, slat = self.trigonometric().comps
-        retval = FieldData.join_comps(clon * clat, slon * clat, slat)
+        retval = FieldData.join_comps(
+            clon * clat,
+            slon * clat,
+            slat,
+        )
         if self.num_comps > 2:
-            retval.data *= self.data[:, 2]
+            retval *= self.data[:, 2]
         return retval
 
-    def cartesian_to_spherical(self, with_radius: bool = True) -> FieldData[floating]:
+    def cartesian_to_spherical(self: FloatFieldData, with_radius: bool = True) -> FloatFieldData:
         """Interpret the components as x, y and z coordinates and return a new
         field data object with longitude and latitude.
 
@@ -350,7 +420,7 @@ class FieldData(Generic[T]):
         radius = np.sqrt(x**2 + y**2 + z**2)
         return FieldData.join_comps(lon, lat, radius)
 
-    def spherical_to_cartesian_vector_field(self, coords: FieldData[floating]) -> FieldData[floating]:
+    def spherical_to_cartesian_vector_field(self: FloatFieldData, coords: FloatFieldData) -> FloatFieldData:
         """Interpret the components as a vector field in spherical coordinates
         (that is, longitudinal, latitudinal and radial components), and return a
         new field data object with the same vector field in Cartesian
@@ -372,7 +442,7 @@ class FieldData(Generic[T]):
         retval[..., 2] += clat * v
         return FieldData(retval)
 
-    def cartesian_to_spherical_vector_field(self, coords: FieldData[floating]) -> FieldData[floating]:
+    def cartesian_to_spherical_vector_field(self: FloatFieldData, coords: FloatFieldData) -> FloatFieldData:
         """Interpret the components as a vector field in Cartesian coordinates,
         and return a new field data object with the same vector field in
         spherical coordinates (that is, longitudinal, latitudinal and radial
@@ -394,13 +464,19 @@ class FieldData(Generic[T]):
         retval[..., 1] += clat * w
         return FieldData(retval)
 
-    def rotate(self, rotation: Rotation) -> FieldData[floating]:
+    def rotate(self: FloatFieldData, rotation: Rotation) -> FloatFieldData:
         """Apply a scipy rotation to the data and return a new field data
         object.
         """
-        return FieldData(rotation.apply(self.data))
+        return cast("FloatFieldData", FieldData(rotation.apply(self.data)))
 
-    def numpy(self, *shape: int) -> NDArray[T]:
+    @overload
+    def numpy(self) -> Matrix[D]: ...
+
+    @overload
+    def numpy(self, s: int, /, *shape: int) -> Array[D]: ...
+
+    def numpy(self, *shape: int) -> Array[D]:
         """Return the wrapped array as a numpy array, potentially reshaped."""
         if not shape:
             return self.data
@@ -410,21 +486,23 @@ class FieldData(Generic[T]):
         """Return the wrapped array as a VTK array."""
         return cast("vtkDataArray", numpy_to_vtk(self.data, deep=1))
 
-    def __add__(self, other: Any) -> FieldData:
+    @overload
+    def __add__[T: Intd](self: FieldData[T], other: Int | IntVector | IntFieldData) -> FieldData[T]: ...
+
+    @overload
+    def __add__[T: Floatd](self: FieldData[T], other: Scalar | FloatVector | FieldData) -> FieldData[T]: ...
+
+    def __add__(self, other) -> FieldData:  # type: ignore[no-untyped-def]
         """Implement the '+' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data + other.data)
         return FieldData(self.data + other)
 
     @overload
-    def __mul__(
-        self: FieldData[integer], other: int | NDArray[integer] | FieldData[integer]
-    ) -> FieldData[integer]: ...
+    def __mul__(self: IntFieldData, other: Int | IntArray | IntFieldData) -> IntFieldData: ...
 
     @overload
-    def __mul__(
-        self: FieldData[floating], other: int | float | NDArray[number] | FieldData[number]
-    ) -> FieldData[floating]: ...
+    def __mul__(self: FloatFieldData, other: Int | Float | FloatArray | FloatFieldData) -> FloatFieldData: ...
 
     def __mul__(self, other):  # type: ignore[no-untyped-def]
         """Implement the '*' operator."""
@@ -432,15 +510,15 @@ class FieldData(Generic[T]):
             return FieldData(self.data * other.data)
         return FieldData(self.data * other)
 
-    def __floordiv__(
-        self: FieldData[integer], other: int | NDArray[integer] | FieldData[integer]
-    ) -> FieldData[integer]:
+    def __floordiv__(self: IntFieldData, other: Int | IntVector | IntFieldData) -> IntFieldData:
         """Implement the '//' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data // other.data)
-        return FieldData(self.data // other)
+        return cast("IntFieldData", FieldData(self.data // other))
 
-    def __truediv__(self, other: int | float | NDArray[number] | FieldData[number]) -> FieldData:
+    def __truediv__(
+        self, other: Int | Float | FloatArray | IntArray | FloatFieldData | IntFieldData
+    ) -> FloatFieldData:
         """Implement the '/' operator."""
         if isinstance(other, FieldData):
             return FieldData(self.data / other.data)

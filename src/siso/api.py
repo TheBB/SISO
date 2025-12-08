@@ -23,33 +23,37 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from functools import wraps
 from typing import (
     TYPE_CHECKING,
     ClassVar,
-    Generic,
     NewType,
     Protocol,
     Self,
-    TypeVar,
     cast,
     overload,
 )
 
 import numpy as np
 from attrs import Factory, asdict, define
-from numpy import floating, integer
+from numpy import floating
 from numpy.typing import NDArray
 
+from siso.types import Float
+
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
+    from collections.abc import Callable, Iterable, Iterator, Sequence
     from pathlib import Path
     from types import TracebackType
     from typing import Any
 
-    from .util import FieldData
+    from siso.types import f32d, u32d
+    from siso.util.field_data import FloatFieldData
+
+    from .util.field_data import IntFieldData
 
 
-Point = NewType("Point", tuple[float, ...])
+Point = NewType("Point", tuple[Float, ...])
 Points = NewType("Points", tuple[Point, ...])
 KnotVector = NewType("KnotVector", NDArray[floating])
 Knots = NewType("Knots", tuple[KnotVector, ...])
@@ -67,11 +71,7 @@ class Aritmetical(Protocol):
     def __sub__(self, other: int, /) -> Self: ...
 
 
-M = TypeVar("M", Nodal, Cellular)
-P = TypeVar("P", bound=Aritmetical)
-
-
-class ShapeTuple(tuple[P, ...], Generic[M, P]):
+class ShapeTuple[M: (Nodal, Cellular), P: Aritmetical](tuple[P, ...]):
     @overload
     def __new__(cls, *args: P) -> Self: ...
 
@@ -134,11 +134,8 @@ class ZoneShape(Enum):
     Shapeless = auto()
 
 
-K = TypeVar("K")
-
-
 @define(frozen=True)
-class Zone(Generic[K]):
+class Zone[K]:
     """A zone is a distinct and identified region of the spatial domain.
 
     Most sources provide only one zone (a single grid for the entire domain),
@@ -173,13 +170,13 @@ class Endianness(Enum):
             return np.dtype(f"<{root}")
         return np.dtype(f">{root}")
 
-    def u4_type(self) -> np.dtype:
+    def u4_type(self) -> u32d:
         """Create a four-byte unsigned integer numpy dtype with the appropriate
         endianness.
         """
         return self.make_dtype("u4")
 
-    def f4_type(self) -> np.dtype:
+    def f4_type(self) -> f32d:
         """Create a four-byte floating point numpy dtype with the appropriate
         endianness.
         """
@@ -620,7 +617,7 @@ class Step(Protocol):
         ...
 
     @property
-    def value(self) -> float | None:
+    def value(self) -> Float | None:
         """The value associated with this step, if available. This will be time
         if the 'time axis' is actual time, or it may be eigenvalue if the 'time
         axis' is eigenmodes.
@@ -655,7 +652,7 @@ class ReaderSettings:
 class FieldDataFilter(Protocol):
     """Callable that modifies field data."""
 
-    def __call__(self, field: Field, field_data: FieldData[floating]) -> FieldData[floating]: ...
+    def __call__(self, field: Field, field_data: FloatFieldData, /) -> FloatFieldData: ...
 
 
 class TopologyMerger(Protocol):
@@ -773,37 +770,19 @@ class DiscreteTopology(Topology):
 
     @property
     @abstractmethod
-    def cells(self) -> FieldData[integer]:
+    def cells(self) -> IntFieldData:
         """Return a matrix describing the cells (as nodal indices)."""
         ...
 
     @abstractmethod
-    def cells_as(self, ordering: CellOrdering) -> FieldData[integer]:
+    def cells_as(self, ordering: CellOrdering) -> IntFieldData:
         """Return a matrix describing the cells, ordered according to a certain
         convention.
         """
         ...
 
 
-# Some of these typevars are used in this file. All are for export.
-B = TypeVar("B", bound=Basis)
-F = TypeVar("F", bound=Field)
-S = TypeVar("S", bound=Step)
-T = TypeVar("T", bound=Topology)
-Z = TypeVar("Z", bound=Zone)
-InB = TypeVar("InB", bound=Basis)
-InF = TypeVar("InF", bound=Field)
-InS = TypeVar("InS", bound=Step)
-InT = TypeVar("InT", bound=Topology)
-InZ = TypeVar("InZ", bound=Zone)
-OutB = TypeVar("OutB", bound=Basis)
-OutF = TypeVar("OutF", bound=Field)
-OutS = TypeVar("OutS", bound=Step)
-OutT = TypeVar("OutT", bound=Topology)
-OutZ = TypeVar("OutZ", bound=Zone)
-
-
-class Source(ABC, Generic[B, F, S, T, Z]):
+class Source[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](ABC):
     """The primary object for representing a data source.
 
     This type is parametrized on the type of basis, field, step, topology and
@@ -850,7 +829,7 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         """
         return
 
-    def use_geometry(self, geometry: F) -> None:
+    def use_geometry(self, geometry: Field) -> None:
         """Instruct the source of the geometry field that the pipeline intends
         to use.
         """
@@ -866,19 +845,19 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         ...
 
     @abstractmethod
-    def basis_of(self, field: F) -> B:
+    def basis_of(self, field: Field) -> B:
         """Return the basis associated with a certain field."""
         ...
 
     @abstractmethod
-    def fields(self, basis: B) -> Iterator[F]:
+    def fields(self, basis: Basis) -> Iterator[F]:
         """Return an iterator of all the non-geometry fields associated with a
         basis.
         """
         ...
 
     @abstractmethod
-    def geometries(self, basis: B) -> Iterator[F]:
+    def geometries(self, basis: Basis) -> Iterator[F]:
         """Return an iterator of all the geometry fields associated with a
         basis.
         """
@@ -903,11 +882,11 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         ...
 
     @abstractmethod
-    def topology(self, step: S, basis: B, zone: Z) -> T:
+    def topology(self, step: Step, basis: Basis, zone: Zone) -> T:
         """Return the topology associated with a step, basis and zone."""
         ...
 
-    def topology_updates(self, step: S, basis: B) -> bool:
+    def topology_updates(self, step: Step, basis: Basis) -> bool:
         """Return true if the topologies associated with a given basis
         change at a given step. If false, the user may assume that the
         topologies from the previous timestep can be re-used.
@@ -915,11 +894,11 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         return True
 
     @abstractmethod
-    def field_data(self, step: S, field: F, zone: Z) -> FieldData[floating]:
+    def field_data(self, step: Step, field: Field, zone: Zone) -> FloatFieldData:
         """Return the data of a field at a certain step and zone."""
         ...
 
-    def field_updates(self, step: S, field: F) -> bool:
+    def field_updates(self, step: Step, field: Field) -> bool:
         """Return true if the data of a field changes at a given step.
         If false, the user may assume that the data from the previous timestep
         can be re-used."""
@@ -963,3 +942,83 @@ class Source(ABC, Generic[B, F, S, T, Z]):
         if not self.properties.instantaneous:
             raise Unexpected("Source does not guarantee single step")
         return next(self.steps())
+
+
+def impl_basis_of[C, F: Field, B: Basis](
+    func: Callable[[C, F], B],
+) -> Callable[[C, Field], B]:
+    @wraps(func)
+    def inner(self: C, field: Field) -> B:
+        return func(self, cast("F", field))
+
+    return inner
+
+
+def impl_fields[C, B: Basis, F: Field](
+    func: Callable[[C, B], Iterator[F]],
+) -> Callable[[C, Basis], Iterator[F]]:
+    @wraps(func)
+    def inner(self: C, basis: Basis) -> Iterator[F]:
+        return func(self, cast("B", basis))
+
+    return inner
+
+
+def impl_field_data[C, F: Field, S: Step, Z: Zone](
+    func: Callable[[C, S, F, Z], FloatFieldData],
+) -> Callable[[C, Step, Field, Zone], FloatFieldData]:
+    @wraps(func)
+    def inner(self: C, step: Step, field: Field, zone: Zone) -> FloatFieldData:
+        return func(self, cast("S", step), cast("F", field), cast("Z", zone))
+
+    return inner
+
+
+def impl_field_updates[C, F: Field, S: Step](
+    func: Callable[[C, S, F], bool],
+) -> Callable[[C, Step, Field], bool]:
+    @wraps(func)
+    def inner(self: C, step: Step, field: Field) -> bool:
+        return func(self, cast("S", step), cast("F", field))
+
+    return inner
+
+
+def impl_geometries[C, B: Basis, F: Field](
+    func: Callable[[C, B], Iterator[F]],
+) -> Callable[[C, Basis], Iterator[F]]:
+    @wraps(func)
+    def inner(self: C, basis: Basis) -> Iterator[F]:
+        return func(self, cast("B", basis))
+
+    return inner
+
+
+def impl_topology[C, B: Basis, S: Step, Z: Zone, T: Topology](
+    func: Callable[[C, S, B, Z], T],
+) -> Callable[[C, Step, Basis, Zone], T]:
+    @wraps(func)
+    def inner(self: C, step: Step, basis: Basis, zone: Zone) -> T:
+        return func(self, cast("S", step), cast("B", basis), cast("Z", zone))
+
+    return inner
+
+
+def impl_topology_updates[C, B: Basis, S: Step](
+    func: Callable[[C, S, B], bool],
+) -> Callable[[C, Step, Basis], bool]:
+    @wraps(func)
+    def inner(self: C, step: Step, basis: Basis) -> bool:
+        return func(self, cast("S", step), cast("B", basis))
+
+    return inner
+
+
+def impl_use_geometry[C, F: Field](
+    func: Callable[[C, F], None],
+) -> Callable[[C, Field], None]:
+    @wraps(func)
+    def inner(self: C, field: Field) -> None:
+        return func(self, cast("F", field))
+
+    return inner

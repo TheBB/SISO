@@ -2,19 +2,22 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import deque
-from collections.abc import Callable
-from typing import TYPE_CHECKING, ClassVar, Self, TypeVar, cast
+from typing import TYPE_CHECKING, ClassVar, Protocol, Self, cast
 
 import erfa
 import numpy as np
 from attrs import define
-from numpy import floating
+
+from siso.types import Floatd
 
 from . import api, util
 from .util import FieldData, coord
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
+
+    from siso.types import Floatd
+    from siso.util.field_data import FloatFieldData
 
 systems: util.Registry[type[api.CoordinateSystem]] = util.Registry()
 ellpsoids: util.Registry[type[Ellipsoid]] = util.Registry()
@@ -136,7 +139,10 @@ class Utm(api.CoordinateSystem):
 @systems.register
 class Geocentric(api.CoordinateSystem):
     name: ClassVar[str] = "Geocentric"
-    parameters = cast("tuple[str]", ())
+
+    @property
+    def parameters(self) -> tuple[str, ...]:
+        return ()
 
     @classmethod
     def make(cls, params: Sequence[str]) -> Self:
@@ -202,13 +208,27 @@ class Wgs72(ErfaEllipsoid):
     name: ClassVar[str] = "WGS72"
 
 
-T = TypeVar("T", bound=api.CoordinateSystem)
-S = TypeVar("S", bound=api.CoordinateSystem)
+class CoordConverter[S: api.CoordinateSystem, T: api.CoordinateSystem](Protocol):
+    def __call__[D: Floatd](self, src: S, tgt: T, data: FloatFieldData) -> FloatFieldData: ...
 
 
-CoordConverter = Callable[[T, S, FieldData[floating]], FieldData[floating]]
-VectorConverter = Callable[[T, S, FieldData[floating], FieldData[floating]], FieldData[floating]]
-ConversionPath = list[api.CoordinateSystem]
+class VectorConverter[S: api.CoordinateSystem, T: api.CoordinateSystem](Protocol):
+    def __call__(self, src: S, tgt: T, data: FloatFieldData, coords: FloatFieldData) -> FloatFieldData: ...
+
+
+class CoordConverterRegistrator(Protocol):
+    def __call__[S: api.CoordinateSystem, T: api.CoordinateSystem](
+        self, conv: CoordConverter[S, T]
+    ) -> CoordConverter[S, T]: ...
+
+
+class VectorConverterRegistrator(Protocol):
+    def __call__[S: api.CoordinateSystem, T: api.CoordinateSystem](
+        self, conv: VectorConverter[S, T]
+    ) -> VectorConverter[S, T]: ...
+
+
+type ConversionPath = list[api.CoordinateSystem]
 
 
 NEIGHBORS: dict[str, list[str]] = {}
@@ -216,9 +236,9 @@ COORD_CONVERTERS: dict[tuple[str, str], CoordConverter] = {}
 VECTOR_CONVERTERS: dict[tuple[str, str], VectorConverter] = {}
 
 
-def register_coords(
-    src: type[api.CoordinateSystem], tgt: type[api.CoordinateSystem]
-) -> Callable[[CoordConverter[T, S]], CoordConverter[T, S]]:
+def register_coords[S: api.CoordinateSystem, T: api.CoordinateSystem](
+    src: type[S], tgt: type[T]
+) -> Callable[[CoordConverter[S, T]], CoordConverter[S, T]]:
     def decorator(conv: CoordConverter) -> CoordConverter:
         NEIGHBORS.setdefault(src.name, []).append(tgt.name)
         COORD_CONVERTERS[(src.name, tgt.name)] = conv
@@ -229,7 +249,7 @@ def register_coords(
 
 def register_vectors(
     src: type[api.CoordinateSystem], tgt: type[api.CoordinateSystem]
-) -> Callable[[VectorConverter[T, S]], VectorConverter[T, S]]:
+) -> VectorConverterRegistrator:
     def decorator(conv: VectorConverter) -> VectorConverter:
         VECTOR_CONVERTERS[(src.name, tgt.name)] = conv
         return conv
@@ -286,25 +306,25 @@ def optimal_system(
     return optimal
 
 
-def convert_coords(
+def convert_coords[D: Floatd](
     src: api.CoordinateSystem,
     tgt: api.CoordinateSystem,
-    data: FieldData[floating],
-) -> FieldData[floating]:
+    data: FloatFieldData,
+) -> FloatFieldData:
     return COORD_CONVERTERS[(src.name, tgt.name)](src, tgt, data)
 
 
 def convert_vectors(
     src: api.CoordinateSystem,
     tgt: api.CoordinateSystem,
-    data: FieldData[floating],
-    coords: FieldData[floating],
-) -> FieldData[floating]:
+    data: FloatFieldData,
+    coords: FloatFieldData,
+) -> FloatFieldData:
     return VECTOR_CONVERTERS[(src.name, tgt.name)](src, tgt, data, coords)
 
 
 @register_coords(Geodetic, Geocentric)
-def _(src: Geodetic, tgt: Geocentric, data: FieldData[floating]) -> FieldData[floating]:
+def _[D: Floatd](src: Geodetic, tgt: Geocentric, data: FloatFieldData) -> FloatFieldData:
     lon, lat, height = data.comps
     return FieldData(
         erfa.gd2gce(
@@ -318,14 +338,14 @@ def _(src: Geodetic, tgt: Geocentric, data: FieldData[floating]) -> FieldData[fl
 
 
 @register_vectors(Geodetic, Geocentric)
-def _(
-    src: Geodetic, tgt: Geocentric, data: FieldData[floating], coords: FieldData[floating]
-) -> FieldData[floating]:
+def _[D: Floatd](
+    src: Geodetic, tgt: Geocentric, data: FloatFieldData, coords: FloatFieldData
+) -> FloatFieldData:
     return data.spherical_to_cartesian_vector_field(coords)
 
 
 @register_coords(Geodetic, Utm)
-def _(src: Geodetic, tgt: Utm, data: FieldData[floating]) -> FieldData[floating]:
+def _(src: Geodetic, tgt: Utm, data: FloatFieldData) -> FloatFieldData:
     lon, lat, *rest = data.comps
     converter = coord.UtmConverter(src.semi_major_axis, src.flattening, tgt.zone_number, tgt.northern)
     x, y = converter.to_utm(lon, lat)
@@ -333,7 +353,7 @@ def _(src: Geodetic, tgt: Utm, data: FieldData[floating]) -> FieldData[floating]
 
 
 @register_vectors(Geodetic, Utm)
-def _(src: Geodetic, tgt: Utm, data: FieldData[floating], coords: FieldData[floating]) -> FieldData[floating]:
+def _(src: Geodetic, tgt: Utm, data: FloatFieldData, coords: FloatFieldData) -> FloatFieldData:
     lon, lat, *_ = coords.comps
     in_x, in_y, *rest = data.comps
     converter = coord.UtmConverter(src.semi_major_axis, src.flattening, tgt.zone_number, tgt.northern)
@@ -342,7 +362,7 @@ def _(src: Geodetic, tgt: Utm, data: FieldData[floating], coords: FieldData[floa
 
 
 @register_coords(Utm, Geodetic)
-def _(src: Utm, tgt: Geodetic, data: FieldData[floating]) -> FieldData[floating]:
+def _(src: Utm, tgt: Geodetic, data: FloatFieldData) -> FloatFieldData:
     x, y, *rest = data.comps
     converter = coord.UtmConverter(tgt.semi_major_axis, tgt.flattening, src.zone_number, src.northern)
     lon, lat = converter.to_lonlat(x, y)
@@ -350,7 +370,7 @@ def _(src: Utm, tgt: Geodetic, data: FieldData[floating]) -> FieldData[floating]
 
 
 @register_vectors(Utm, Geodetic)
-def _(src: Utm, tgt: Geodetic, data: FieldData[floating], coords: FieldData[floating]) -> FieldData[floating]:
+def _(src: Utm, tgt: Geodetic, data: FloatFieldData, coords: FloatFieldData) -> FloatFieldData:
     x, y, *_ = coords.comps
     in_x, in_y, *rest = data.comps
     converter = coord.UtmConverter(tgt.semi_major_axis, tgt.flattening, src.zone_number, src.northern)

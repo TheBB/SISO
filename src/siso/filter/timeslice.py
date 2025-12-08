@@ -1,20 +1,30 @@
 from __future__ import annotations
 
 from itertools import count, islice
-from typing import TYPE_CHECKING, Generic, TypeVar, overload
+from typing import TYPE_CHECKING, overload
 
 from attrs import define
 
-from siso.api import B, F, S, T, Z
+from siso.api import (
+    Basis,
+    Field,
+    Step,
+    Topology,
+    Zone,
+    impl_field_data,
+    impl_field_updates,
+    impl_topology,
+    impl_topology_updates,
+)
 
 from .passthrough import PassthroughBFTZ
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from numpy import floating
-
-    from siso import api, util
+    from siso import api
+    from siso.types import Float
+    from siso.util.field_data import FloatFieldData
 
 
 @overload
@@ -56,15 +66,12 @@ def islice_flag(*args):  # type: ignore[no-untyped-def]
                 return
 
 
-Q = TypeVar("Q")
+@overload
+def islice_group[Q](it: Iterator[Q], stop: int | None, /) -> Iterator[list[Q]]: ...
 
 
 @overload
-def islice_group(it: Iterator[Q], stop: int | None, /) -> Iterator[list[Q]]: ...
-
-
-@overload
-def islice_group(
+def islice_group[Q](
     it: Iterator[Q], start: int | None, stop: int | None, step: int | None, /
 ) -> Iterator[list[Q]]: ...
 
@@ -100,35 +107,41 @@ def islice_group(it, *args):  # type: ignore[no-untyped-def]
 
 
 @define
-class GroupedStep(Generic[S]):
+class GroupedStep[S: Step]:
     """A step composed of a multiple steps in sequence."""
 
     index: int
     steps: list[S]
 
     @property
-    def value(self) -> float | None:
+    def value(self) -> Float | None:
         # Act as the last step of the group.
         return self.steps[-1].value
 
 
-class GroupedTimeSource(PassthroughBFTZ[B, F, T, Z, S, GroupedStep[S]], Generic[B, F, S, T, Z]):
+class GroupedTimeSource[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+    PassthroughBFTZ[B, F, T, Z, S, GroupedStep[S]]
+):
     """Base class for all filters that group timesteps into `GroupedStep`."""
 
+    @impl_topology
     def topology(self, step: GroupedStep[S], basis: B, zone: Z) -> T:
         return self.source.topology(step.steps[-1], basis, zone)
 
+    @impl_topology_updates
     def topology_updates(self, step: GroupedStep[S], basis: B) -> bool:
         return any(self.source.topology_updates(s, basis) for s in step.steps)
 
-    def field_data(self, step: GroupedStep[S], field: F, zone: Z) -> util.FieldData[floating]:
+    @impl_field_data
+    def field_data(self, step: GroupedStep[S], field: F, zone: Z) -> FloatFieldData:
         return self.source.field_data(step.steps[-1], field, zone)
 
+    @impl_field_updates
     def field_updates(self, step: GroupedStep[S], field: F) -> bool:
         return any(self.source.field_updates(s, field) for s in step.steps)
 
 
-class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
+class StepSlice[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](GroupedTimeSource[B, F, S, T, Z]):
     """Filter that slices a sequence of timesteps, just like `itertools.islice`
     would.
 
@@ -164,7 +177,7 @@ class StepSlice(GroupedTimeSource[B, F, S, T, Z]):
             yield GroupedStep(i, times)
 
 
-class LastTime(GroupedTimeSource[B, F, S, T, Z]):
+class LastTime[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](GroupedTimeSource[B, F, S, T, Z]):
     """Filter that returns only the last timestep in a data source."""
 
     @property

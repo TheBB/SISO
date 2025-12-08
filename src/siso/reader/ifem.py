@@ -15,7 +15,19 @@ import h5py
 from attrs import define, field
 
 from siso import api, util
-from siso.api import Topology, Zone, ZoneShape
+from siso.api import (
+    Topology,
+    Zone,
+    ZoneShape,
+    impl_basis_of,
+    impl_field_data,
+    impl_field_updates,
+    impl_fields,
+    impl_geometries,
+    impl_topology,
+    impl_topology_updates,
+    impl_use_geometry,
+)
 from siso.coord import Named
 from siso.impl import Basis, Field, Step
 from siso.topology import LrTopology, SplineTopology, UnstructuredTopology
@@ -26,9 +38,8 @@ if TYPE_CHECKING:
     from pathlib import Path
     from types import TracebackType
 
-    import numpy as np
-    from numpy import floating
-    from numpy.typing import NDArray
+    from siso.types import IntVector
+    from siso.util.field_data import FloatFieldData
 
 
 class InvalidNcompsError(Exception):
@@ -51,9 +62,9 @@ class IfemPatch:
 
     zone: Zone[ZoneKey]
     topology: api.Topology
-    data: FieldData[floating]
-    node_mapping: NDArray[np.int64] | None
-    cell_mapping: NDArray[np.int64] | None
+    data: FloatFieldData
+    node_mapping: IntVector | None
+    cell_mapping: IntVector | None
     original_ndofs: int
     original_ncells: int
 
@@ -183,6 +194,7 @@ class IfemBasis(Basis):
         raw_data = memoryview(cast("bytes", patchdata)).tobytes()
         topology: api.Topology
 
+        cps: FloatFieldData
         if initial.startswith(b"# LAGRANGIAN"):
             # Lagrangian IFEM meshes may consist of multiple blocks. In case
             # there are e.g. mixed quads and triangles, we get one block for
@@ -269,7 +281,7 @@ class IfemField(Field):
             )
 
     @abstractmethod
-    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FieldData[floating]:
+    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FloatFieldData:
         """Return the control point data for this field at a given step and patch."""
         ...
 
@@ -297,7 +309,7 @@ class IfemGeometryField(IfemField):
             basis=basis,
         )
 
-    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FieldData[floating]:
+    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FloatFieldData:
         p = self.basis.patches_at(step, patch, source)[block]
         if p.node_mapping is not None:
             return p.data.slice_dofs(p.node_mapping)
@@ -397,7 +409,7 @@ class IfemStandardField(IfemField):
             self.cellwise,
         )
 
-    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FieldData[floating]:
+    def cps_at(self, step: int, patch: int, block: int, source: Ifem) -> FloatFieldData:
         """Return the control points for this field at a given step and
         patch.
         """
@@ -410,7 +422,7 @@ class IfemStandardField(IfemField):
         elif self.cellwise and p.cell_mapping is not None:
             cps = cps[p.cell_mapping, ...]
 
-        return FieldData(data=cps)
+        return FieldData(cps)
 
 
 class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
@@ -598,6 +610,7 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
 
         return splits, recombinations
 
+    @impl_use_geometry
     def use_geometry(self, geometry: Field) -> None:
         self.geometry = self._bases[geometry.name]
 
@@ -614,25 +627,32 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     def bases(self) -> Iterator[IfemBasis]:
         return iter(self._bases.values())
 
+    @impl_basis_of
     def basis_of(self, field: IfemField) -> IfemBasis:
         return field.basis
 
+    @impl_geometries
     def geometries(self, basis: IfemBasis) -> Iterator[IfemField]:
         yield IfemGeometryField(basis, self)
 
+    @impl_fields
     def fields(self, basis: IfemBasis) -> Iterator[IfemField]:
         return iter(basis.fields)
 
+    @impl_topology
     def topology(self, step: Step, basis: IfemBasis, zone: Zone[ZoneKey]) -> api.Topology:
         block = basis.patches_at(step.index, zone.key.patch, self)[zone.key.subblock]
         return block.topology
 
+    @impl_topology_updates
     def topology_updates(self, step: Step, basis: IfemBasis) -> bool:
         return basis.updates_at(step.index, self)
 
-    def field_data(self, step: Step, field: IfemField, zone: Zone[ZoneKey]) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, step: Step, field: IfemField, zone: Zone[ZoneKey]) -> FloatFieldData:
         return field.cps_at(step.index, zone.key.patch, zone.key.subblock, self)
 
+    @impl_field_updates
     def field_updates(self, step: Step, field: IfemField) -> bool:
         if field.is_geometry:
             return field.basis.updates_at(step.index, self)
@@ -703,6 +723,7 @@ class IfemModes(Ifem):
             time = group["Value"][0] if "Value" in group else group["Frequency"][0]
             yield Step(index=i, value=time)
 
+    @impl_field_updates
     def field_updates(self, timestep: Step, field: IfemField) -> bool:
         if field.is_geometry:
             return timestep.index == 0

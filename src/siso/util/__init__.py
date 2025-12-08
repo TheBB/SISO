@@ -8,17 +8,14 @@ from typing import (
     IO,
     TYPE_CHECKING,
     ClassVar,
-    Generic,
     Protocol,
     Self,
-    TypeVar,
     cast,
     overload,
     runtime_checkable,
 )
 
 import numpy as np
-from numpy import integer
 
 from siso import api
 
@@ -31,18 +28,15 @@ if TYPE_CHECKING:
 
     import lrspline as lr
 
+    from siso.types import Array, Floatd, Matrix, i32d
+
 
 @runtime_checkable
 class HasName(Protocol):
     name: ClassVar[str]
 
 
-W = TypeVar("W")
-M = TypeVar("M", bound=Hashable)
-Q = TypeVar("Q", bound=HasName)
-
-
-class Registry(Generic[W]):
+class Registry[W]:
     classes: dict[str, W]
 
     def __init__(self) -> None:
@@ -52,7 +46,7 @@ class Registry(Generic[W]):
     def register(self, arg: str) -> Callable[[W], W]: ...
 
     @overload
-    def register(self, arg: type[Q]) -> type[Q]: ...
+    def register[Q: HasName](self, arg: type[Q]) -> type[Q]: ...
 
     def register(self, arg):  # type: ignore[no-untyped-def]
         if not isinstance(arg, str):
@@ -79,7 +73,7 @@ class Registry(Generic[W]):
 class NoSuchMarkError(Exception): ...
 
 
-class RandomAccessFile(Generic[W, M]):
+class RandomAccessFile[W, M: Hashable]:
     """Utility class for wrapping a file pointer in an interface that allows
     random access. The file pointer in question must be seekable.
 
@@ -209,7 +203,7 @@ class RandomAccessFile(Generic[W, M]):
         return RandomAccessTracker(self, self.loc_at(mark))
 
 
-class RandomAccessTracker(Generic[W, M]):
+class RandomAccessTracker[W, M: Hashable]:
     """A tracking object for use with `RandomAccessFile`.
 
     The tracker remembers the last location that it was used with, and can be
@@ -284,7 +278,7 @@ def pluralize(num: int, singular: str, plural: str) -> str:
     return f"{num} {singular if num == 1 else plural}"
 
 
-def flatten_2d(array: np.ndarray) -> np.ndarray:
+def flatten_2d[D: Floatd](array: Array[D]) -> Matrix[D]:
     if array.ndim == 1:
         return array[:, np.newaxis]
     return array.reshape(-1, array.shape[-1])
@@ -340,10 +334,7 @@ def stagger(data: np.ndarray, axis: int) -> np.ndarray:
     return retval
 
 
-T = TypeVar("T")
-
-
-def pairwise(iterable: Iterable[T]) -> Iterator[tuple[T, T]]:
+def pairwise[T](iterable: Iterable[T]) -> Iterator[tuple[T, T]]:
     it = iter(iterable)
     left = next(it)
     for right in it:
@@ -413,7 +404,7 @@ def prod(values: Iterable[int]) -> int:
     return reduce(lambda x, y: x * y, values, 1)
 
 
-def first_and_has_more(values: Iterable[T]) -> tuple[T, bool]:
+def first_and_has_more[T](values: Iterable[T]) -> tuple[T, bool]:
     it = iter(values)
     first = next(it)
     try:
@@ -423,7 +414,7 @@ def first_and_has_more(values: Iterable[T]) -> tuple[T, bool]:
         return first, False
 
 
-def only(values: Iterable[T]) -> T:
+def only[T](values: Iterable[T]) -> T:
     return next(iter(values))
 
 
@@ -431,11 +422,11 @@ def structured_cells(
     cellshape: api.CellShape,
     pardim: int,
     nodemap: np.ndarray | None = None,
-) -> FieldData[integer]:
+) -> FieldData[i32d]:
     nodeshape = tuple(cellshape.nodal)
     ranges = [range(k) for k in cellshape]
     nidxs = [np.array(q) for q in zip(*product(*ranges))]
-    eidxs = np.zeros((len(nidxs[0]), 2 ** len(nidxs)), dtype=int)
+    eidxs = np.zeros((len(nidxs[0]), 2 ** len(nidxs)), dtype=np.int32)
     if pardim == 1:
         eidxs[:, 0] = nidxs[0]
         eidxs[:, 1] = nidxs[0] + 1

@@ -2,25 +2,35 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING
 
 from attrs import define
 
 from siso import api
-from siso.api import B, F, S, T, Z
+from siso.api import (
+    Basis,
+    Field,
+    Step,
+    Topology,
+    Zone,
+    impl_basis_of,
+    impl_field_data,
+    impl_field_updates,
+    impl_fields,
+    impl_geometries,
+    impl_use_geometry,
+)
 
 from .passthrough import PassthroughBSTZ, WrappedField
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from numpy import floating
-
-    from siso.util import FieldData
+    from siso.util.field_data import FloatFieldData
 
 
 @define
-class DecomposedField(WrappedField[F]):
+class DecomposedField[F: Field](WrappedField[F]):
     """Class for a 'decomposed' field: a field sources its data from
     another field, but using a subset of components.
 
@@ -52,31 +62,38 @@ class DecomposedField(WrappedField[F]):
         return self.wrapped_field.type
 
 
-class DecomposeBase(PassthroughBSTZ[B, S, T, Z, F, DecomposedField[F]], Generic[B, F, S, T, Z]):
+class DecomposeBase[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](
+    PassthroughBSTZ[B, S, T, Z, F, DecomposedField[F]]
+):
     """Base class for decomposition filters."""
 
+    @impl_use_geometry
     def use_geometry(self, geometry: DecomposedField[F]) -> None:
         return self.source.use_geometry(geometry.wrapped_field)
 
+    @impl_basis_of
     def basis_of(self, field: DecomposedField[F]) -> B:
         return self.source.basis_of(field.wrapped_field)
 
+    @impl_geometries
     def geometries(self, basis: B) -> Iterator[DecomposedField[F]]:
         # Geometries should never be decomposed
         for field in self.source.geometries(basis):
             yield DecomposedField(name=field.name, wrapped_field=field, components=None, splittable=False)
 
-    def field_data(self, timestep: S, field: DecomposedField, zone: Z) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: S, field: DecomposedField, zone: Z) -> FloatFieldData:
         data = self.source.field_data(timestep, field.wrapped_field, zone)
         if field.components is not None:
             data = data.slice_comps(field.components)
         return data
 
+    @impl_field_updates
     def field_updates(self, timestep: S, field: DecomposedField[F]) -> bool:
         return self.source.field_updates(timestep, field.wrapped_field)
 
 
-class Decompose(DecomposeBase[B, F, S, T, Z]):
+class Decompose[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](DecomposeBase[B, F, S, T, Z]):
     """Decompose filter. This filter automatically decomposes all vector fields
     that are marked as splittable with up to three components.
 
@@ -84,6 +101,7 @@ class Decompose(DecomposeBase[B, F, S, T, Z]):
     of the original field.
     """
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[DecomposedField[F]]:
         for field in self.source.fields(basis):
             # Always pass through the original field unchanged
@@ -98,7 +116,7 @@ class Decompose(DecomposeBase[B, F, S, T, Z]):
                 yield DecomposedField(name=name, wrapped_field=field, components=[i], splittable=False)
 
 
-class Split(DecomposeBase[B, F, S, T, Z]):
+class Split[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](DecomposeBase[B, F, S, T, Z]):
     """Split filter. This filter decomposes fields as indicated by a list of
     `SplitFieldSpec` objects. This list is produced by a source object. This
     allows us to not implement the splitting logic itself in each source type
@@ -118,6 +136,7 @@ class Split(DecomposeBase[B, F, S, T, Z]):
             split_fields=[],
         )
 
+    @impl_fields
     def fields(self, basis: B) -> Iterator[DecomposedField[F]]:
         # Fields that should be destroyed (not passed on faithfully)
         to_destroy = {split.source_name for split in self.splits if split.destroy}

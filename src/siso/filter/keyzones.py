@@ -4,19 +4,32 @@ import logging
 from collections.abc import Iterator, MutableMapping
 from functools import reduce
 from operator import itemgetter
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, cast
 
 from siso import api
-from siso.api import B, F, Point, S, Source, SourceProperties, T, Z, Zone, ZoneShape
-from siso.util import FieldData, bisect
+from siso.api import (
+    Basis,
+    Field,
+    Point,
+    Source,
+    SourceProperties,
+    Step,
+    Topology,
+    Zone,
+    ZoneShape,
+    impl_field_data,
+    impl_topology,
+)
+from siso.util import bisect
 
 from .passthrough import PassthroughBFST
 
 if TYPE_CHECKING:
-    from numpy import floating
+    from siso.types import Float
+    from siso.util.field_data import FloatFieldData
 
 
-class KeyZones(PassthroughBFST[B, F, S, T, Z, Zone[int]]):
+class KeyZones[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](PassthroughBFST[B, F, S, T, Z, Zone[int]]):
     manager: ZoneManager
     mapping: dict[Zone[int], Z]
 
@@ -41,10 +54,12 @@ class KeyZones(PassthroughBFST[B, F, S, T, Z, Zone[int]]):
             self.mapping[new_zone] = zone
             yield new_zone
 
+    @impl_topology
     def topology(self, timestep: S, basis: B, zone: Zone[int]) -> T:
         return self.source.topology(timestep, basis, self.mapping[zone])
 
-    def field_data(self, timestep: S, field: F, zone: Zone[int]) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: S, field: F, zone: Zone[int]) -> FloatFieldData:
         return self.source.field_data(timestep, field, self.mapping[zone])
 
 
@@ -81,10 +96,7 @@ class ZoneManager:
         )
 
 
-Q = TypeVar("Q")
-
-
-class VertexDict(MutableMapping[Point, Q]):
+class VertexDict[Q](MutableMapping[Point, Q]):
     rtol: float
     atol: float
 
@@ -100,7 +112,7 @@ class VertexDict(MutableMapping[Point, Q]):
         self._values = []
         self.lut = {}
 
-    def _bounds(self, key: float) -> tuple[float, float]:
+    def _bounds(self, key: Float) -> tuple[Float, Float]:
         if key >= self.atol:
             return (
                 (key - self.atol) / (1 + self.rtol),

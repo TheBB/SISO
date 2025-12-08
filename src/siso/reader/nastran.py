@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generic, TextIO, TypeVar
+from typing import TYPE_CHECKING, Any, TextIO
 
 import numpy as np
 from more_itertools import peekable
 
 from siso.api import CellType, ZoneShape
 from siso.topology import UnstructuredTopology
+from siso.types import f64d, i32d
 from siso.util import FieldData
 
 from .puregeometry import PureGeometry, PureGeometryZone
@@ -16,7 +17,8 @@ from .puregeometry import PureGeometry, PureGeometryZone
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from numpy.typing import NDArray
+    from siso.types import Matrix
+
 
 IGNORED_CARDS = {
     "HDF5OUT",
@@ -37,16 +39,13 @@ class Card:
     args: list[str]
 
 
-T = TypeVar("T", bound=np.generic)
-
-
-class GrowableArray(Generic[T]):
+class GrowableMatrix[D: np.dtype]:
     __slots__ = ["data", "highest_used"]
 
-    data: NDArray[T]
+    data: Matrix[D]
     highest_used: int
 
-    def __init__(self, data: NDArray[T]) -> None:
+    def __init__(self, data: Matrix[D]) -> None:
         self.data = data
         self.highest_used = -1
 
@@ -57,26 +56,26 @@ class GrowableArray(Generic[T]):
         self.highest_used = max(self.highest_used, index)
 
 
-class GrowableGridArray(GrowableArray[np.double]):
+class GrowableGridArray(GrowableMatrix[f64d]):
     def __init__(self, ncomps: int) -> None:
         super().__init__(np.empty((10, ncomps), dtype=float))
 
-    def finalize(self) -> FieldData[np.floating]:
+    def finalize(self) -> FieldData[f64d]:
         return FieldData(self.data[: self.highest_used + 1])
 
 
-class GrowableCellArray(GrowableArray[np.int_]):
+class GrowableCellArray(GrowableMatrix[i32d]):
     def __init__(self, ncomps: int) -> None:
         super().__init__(np.empty((10, ncomps + 1), dtype=int))
 
     def __setitem__(self, index: int, data: Any) -> None:
         super().__setitem__(index, [len(data), *data])
 
-    def triangles(self) -> FieldData[np.integer]:
+    def triangles(self) -> FieldData[i32d]:
         (indices,) = np.where(self.data[: self.highest_used + 1, 0] == 3)
         return FieldData(self.data[indices, 1:4])
 
-    def quads(self) -> FieldData[np.integer]:
+    def quads(self) -> FieldData[i32d]:
         (indices,) = np.where(self.data[: self.highest_used + 1, 0] == 4)
         return FieldData(self.data[indices, 1:5])
 

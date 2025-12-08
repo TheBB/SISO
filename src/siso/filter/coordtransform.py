@@ -3,18 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from siso import api, util
-from siso.api import B, F, S, T, Z
+from siso.api import Basis, Field, Step, Topology, Zone, impl_field_data
 from siso.coord import ConversionPath, convert_coords, convert_vectors
 
 from .passthrough import PassthroughAll
 
 if TYPE_CHECKING:
-    from numpy import floating
-
-    from siso.util import FieldData
+    from siso.util.field_data import FloatFieldData
 
 
-class CoordTransform(PassthroughAll[B, F, S, T, Z]):
+class CoordTransform[B: Basis, F: Field, S: Step, T: Topology, Z: Zone](PassthroughAll[B, F, S, T, Z]):
     """Coordinate transform filter.
 
     This filter converts geometries and vector fields from one coordinate system
@@ -31,14 +29,15 @@ class CoordTransform(PassthroughAll[B, F, S, T, Z]):
     # Conversion of vector fields requires (in general) knowledge of the
     # coordinates of the points those vector fields are defined on. We store
     # them in this dict, mapping coordinate system name and zone to nodes.
-    cache: dict[tuple[str, Z], FieldData[floating]]
+    cache: dict[tuple[str, Z], FloatFieldData]
 
     def __init__(self, source: api.Source[B, F, S, T, Z], path: ConversionPath):
         super().__init__(source)
         self.path = path
         self.cache = {}
 
-    def field_data(self, timestep: S, field: F, zone: Z) -> FieldData[floating]:
+    @impl_field_data
+    def field_data(self, timestep: S, field: F, zone: Z) -> FloatFieldData:
         indata = self.source.field_data(timestep, field, zone)
 
         # Coordinate conversion leaves scalar fields alone.
