@@ -774,8 +774,9 @@ class LrTesselator(api.TopologyMerger):
             # Get the LRSpline internal cell ID for each cell center by calling
             # element_at(), and use that to index into the field data array.
             return FieldData.from_iter(
-                field_data.numpy()[topology.obj.element_at(*c).id] for c in cell_centers
-            )
+                (field_data.numpy()[topology.obj.element_at(*c).id] for c in cell_centers),
+                dtype=field_data.dtype,
+            )  # type: ignore
 
         # Clone the LRSpline object and replace its control points with the
         # field we want to evaluate. Then evaluate at the nodal parametric
