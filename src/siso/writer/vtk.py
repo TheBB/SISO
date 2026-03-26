@@ -194,14 +194,14 @@ class VtkWriterBase(ABC, Writer):
         grid, writer = self.grid_and_writer(source, step, geometry)
         apply_output_mode(writer, self.output_mode)
 
-        data: FloatFieldData = FieldData(np.empty((0, geometry.num_comps), dtype=np.float64))
+        geom_data: FloatFieldData = FieldData(np.empty((0, geometry.num_comps), dtype=np.float64))
         for zone in source.zones():
             new_data = source.field_data(step, geometry, zone)
-            data = FieldData.join_dofs(data, new_data)
+            geom_data = FieldData.join_dofs(geom_data, new_data)
 
-        data = transpose(data, grid, geometry.cellwise)
+        geom_data = transpose(geom_data, grid, geometry.cellwise)
         points = vtkPoints()
-        points.SetData(data.ensure_ncomps(3, allow_scalar=False).vtk())
+        points.SetData(geom_data.ensure_ncomps(3, allow_scalar=False).vtk())
         grid.SetPoints(points)
 
         for field in source.fields(source.single_basis()):
@@ -209,21 +209,22 @@ class VtkWriterBase(ABC, Writer):
                 continue
             target = grid.GetCellData() if field.cellwise else grid.GetPointData()
 
-            data = FieldData(np.empty((0, field.num_comps), dtype=np.float64))
+            field_data: FieldData | None = None
             for zone in source.zones():
                 new_data = source.field_data(step, field, zone)
-                data = FieldData.join_dofs(data, new_data)
+                field_data = new_data if field_data is None else FieldData.join_dofs(field_data, new_data)
+            assert field_data is not None
 
             if field.is_displacement:
-                data = data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
+                field_data = field_data.ensure_ncomps(3, allow_scalar=False, pad_right=False)
             else:
-                data = data.ensure_ncomps(3, allow_scalar=field.is_scalar)
-            data = transpose(data, grid, field.cellwise)
+                field_data = field_data.ensure_ncomps(3, allow_scalar=field.is_scalar)
+            field_data = transpose(field_data, grid, field.cellwise)
 
             if self.output_mode == OutputMode.Ascii and not self.allow_nan_in_ascii:
-                data = data.nan_filter()
+                field_data = field_data.nan_filter()
 
-            array = data.vtk()
+            array = field_data.vtk()
             array.SetName(field.name)
             target.AddArray(array)
 
