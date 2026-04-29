@@ -7,6 +7,8 @@ from os import chdir
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
+    Protocol,
+    TypedDict,
 )
 
 import numpy as np
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 
 
 @contextmanager
-def cd_temp() -> Path:
+def cd_temp() -> Iterator[Path]:
     """Context manager that creates a temporary directory and sets cwd to
     it, restoring it after.
     """
@@ -62,7 +64,7 @@ class PreparedTestCase:
             yield (path / filename, self.reference_path / filename)
 
     @contextmanager
-    def invoke(self, fmt: str, mode: str = "ascii") -> Path:
+    def invoke(self, fmt: str, mode: str = "ascii") -> Iterator[Path]:
         args = [
             "--debug",
             "--verify-strict",
@@ -102,8 +104,14 @@ SUFFIX = {
 }
 
 
+class TestCaseKwargs(TypedDict, total=False):
+    abs_tol: float
+    rel_tol: float
+    format_args: dict[str, list[str]] = {}
+
+
 def testcase(
-    sourcefile: Path,
+    sourcefile: Path | str,
     nsteps: int | None,
     formats: Sequence[str],
     *extra_args: str,
@@ -138,7 +146,11 @@ def testcase(
         TESTIDS.setdefault(fmt, []).append(f"{sourcefile.name} {args}")
 
 
-def filename_maker(ext: str | None, multistep: bool) -> Iterator[Path]:
+class FnMaker(Protocol):
+    def __call__(self, base: Path, nsteps: int | None = ...) -> list[Path]: ...
+
+
+def filename_maker(ext: str | None, multistep: bool) -> FnMaker:
     """Return a function that creates correct filenames for output
     formats.  EXT should be the expected extension (possibly None) and
     MULTISTEP should be True if the format supports multiple timesteps
@@ -163,7 +175,9 @@ def filename_maker(ext: str | None, multistep: bool) -> Iterator[Path]:
 # using the --unstructured option.
 formats = ["vtk", "vtu", "vts", "pvd", "vtf"]
 formats_novtf = ["vtk", "vtu", "vts", "pvd"]
-kwargs = {"format_args": {"vtk": ["--unstructured"]}}
+kwargs: TestCaseKwargs = {"format_args": {"vtk": ["--unstructured"]}}
+kwargs_tol: TestCaseKwargs = {**kwargs, "abs_tol": 1e-5, "rel_tol": 1e-5}
+
 testcase("hdf5/Annulus.hdf5", 3, formats, **kwargs)
 testcase("hdf5/Cavity-mixed.hdf5", 1, formats, **kwargs)
 testcase("hdf5/Cavity3D-compatible.hdf5", 1, formats, **kwargs)
@@ -175,15 +189,15 @@ testcase("hdf5/Square-modes.hdf5", 10, formats, "--ead", **kwargs)
 testcase("hdf5/Square-modes-freq.hdf5", 10, formats, "--ead", **kwargs)
 testcase("hdf5/Waterfall3D.hdf5", 1, formats, **kwargs)
 testcase("g2/annulus3D.g2", None, formats, **kwargs)
-testcase("geogrid/geo_em.d01.nc", None, formats_novtf, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase("geogrid/geo_em.d01.nc", None, formats_novtf, **kwargs_tol)
 
 # Single precision, therefore inflated tolerance
-testcase("simra/box/box.res", None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
-testcase("simra/box/map.dat", None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
-testcase("simra/box/mesh2d.dat", None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
-testcase("simra/box/mesh.dat", None, formats, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
-testcase("simra/boun/boun.dat", None, formats_novtf, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
-testcase("simra/hist/hist.res", 1, formats_novtf, **kwargs, abs_tol=1e-5, rel_tol=1e-5)
+testcase("simra/box/box.res", None, formats, **kwargs_tol)
+testcase("simra/box/map.dat", None, formats, **kwargs_tol)
+testcase("simra/box/mesh2d.dat", None, formats, **kwargs_tol)
+testcase("simra/box/mesh.dat", None, formats, **kwargs_tol)
+testcase("simra/boun/boun.dat", None, formats_novtf, **kwargs_tol)
+testcase("simra/hist/hist.res", 1, formats_novtf, **kwargs_tol)
 
 # Unstructured data sets
 formats = ["vtk", "vtu", "pvd", "vtf"]
@@ -231,7 +245,7 @@ testcase("g2/simra.g2", None, ["simra"])
 
 # Miscellaneous CLI options
 formats = ["vtk", "vtu", "pvd", "vtf"]
-kwargs = {"format_args": {"vtk": ["--unstructured"]}}
+kwargs: TestCaseKwargs = {"format_args": {"vtk": ["--unstructured"]}}
 testcase("hdf5/Square-ad.hdf5", 5, ["pvd"], "--times", "5", suffix="-endtime")
 testcase("hdf5/Square-ad.hdf5", 5, ["pvd"], "--times", ":5", suffix="-endtime")
 testcase("hdf5/Square-ad.hdf5", 6, ["pvd"], "--times", "5:", suffix="-starttime")
