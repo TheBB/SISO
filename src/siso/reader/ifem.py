@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from bisect import bisect_right
 from collections import defaultdict
 from functools import lru_cache
 from itertools import chain, count, repeat
 from typing import TYPE_CHECKING, ClassVar, Self, cast
 
 import h5py
+import numpy as np
 from attrs import define, field
 
 from siso import api, util
@@ -30,7 +32,7 @@ from siso.api import (
 )
 from siso.coord import Named
 from siso.impl import Basis, Field, Step
-from siso.topology import LrTopology, SplineTopology, UnstructuredTopology
+from siso.topology import DiscreteTopology, LrTopology, SplineTopology, UnstructuredTopology
 from siso.util import FieldData
 
 if TYPE_CHECKING:
@@ -67,6 +69,90 @@ class IfemPatch:
     cell_mapping: IntVector | None
     original_ndofs: int
     original_ncells: int
+
+
+MASK_FIELD = Field("mask", api.Scalar(), cellwise=True, splittable=False)
+
+
+def mask_discrete_topology(
+    discrete: DiscreteTopology, mapped_mask: FloatFieldData
+) -> tuple[UnstructuredTopology, IntVector, IntVector]:
+    active_cells = cast("IntVector", np.flatnonzero(mapped_mask.numpy().ravel()))
+    cells = discrete.cells.slice_dofs(active_cells).numpy().copy()
+    active_nodes = cast("IntVector", np.unique(cells))
+    node_mapping = np.empty((discrete.num_nodes,), dtype=np.int64)
+    node_mapping[active_nodes] = np.arange(len(active_nodes))
+    cells.flat[:] = node_mapping[cells.flat]
+
+    masked = UnstructuredTopology(
+        num_nodes=len(active_nodes),
+        cells=FieldData(cells),
+        celltype=discrete.celltype,
+        degree=discrete.degree,
+    )
+    return masked, active_cells, active_nodes
+
+
+@define
+class MaskedTopologyMerger:
+    merger: api.TopologyMerger
+    topology: UnstructuredTopology
+    active_cells: IntVector
+    active_nodes: IntVector
+
+    @classmethod
+    def from_topology(cls, topology: Topology, mask: FloatFieldData) -> tuple[MaskedTopologyMerger, Topology]:
+        merger = topology.create_merger()
+        discrete, mapper = merger(topology)
+        if not isinstance(discrete, DiscreteTopology):
+            raise api.Unexpected("Element-activation topology merger did not produce a discrete topology")
+        masked, active_cells, active_nodes = mask_discrete_topology(discrete, mapper(MASK_FIELD, mask))
+        return cls(merger, masked, active_cells, active_nodes), masked
+
+    def __call__(self, topology: Topology) -> tuple[Topology, api.FieldDataFilter]:
+        if isinstance(topology, MaskedTopology):
+            topology = topology.topology
+        _, mapper = self.merger(topology)
+
+        def field_data_filter(field: api.Field, data: FloatFieldData) -> FloatFieldData:
+            mapped = mapper(field, data)
+            return mapped.slice_dofs(self.active_cells if field.cellwise else self.active_nodes)
+
+        return self.topology, field_data_filter
+
+
+@define(frozen=True)
+class MaskedTopology(Topology):
+    """Topology with an IFEM element-activation mask."""
+
+    topology: Topology
+    mask: FloatFieldData
+
+    @property
+    def pardim(self) -> int:
+        return self.topology.pardim
+
+    @property
+    def num_nodes(self) -> int:
+        return self.topology.num_nodes
+
+    @property
+    def num_cells(self) -> int:
+        return self.topology.num_cells
+
+    def discretize(self, nvis: int) -> tuple[DiscreteTopology, api.FieldDataFilter]:
+        discrete, mapper = self.topology.discretize(nvis)
+        masked, active_cells, active_nodes = mask_discrete_topology(discrete, mapper(MASK_FIELD, self.mask))
+
+        def field_data_filter(field: api.Field, data: FloatFieldData) -> FloatFieldData:
+            mapped = mapper(field, data)
+            return mapped.slice_dofs(active_cells if field.cellwise else active_nodes)
+
+        return masked, field_data_filter
+
+    def create_merger(self) -> api.TopologyMerger:
+        merger, _ = MaskedTopologyMerger.from_topology(self.topology, self.mask)
+        return merger
 
 
 class Locator(ABC):
@@ -414,8 +500,17 @@ class IfemStandardField(IfemField):
         patch.
         """
         p = self.basis.patches_at(step, patch, source)[block]
-        cps = source.h5[self.coeff_path(step, patch)][:]
-        cps = cps.reshape(-1, self.num_comps)
+        coeff_path = self.coeff_path(step, patch)
+        if coeff_path in source.h5:
+            cps = source.h5[coeff_path][:].reshape(-1, self.num_comps)
+        else:
+            mask = source.mask_at(self.basis, step, patch, p.original_ncells)
+            if mask is None and self.basis != source.geometry:
+                mask = source.mask_at(source.geometry, step, patch, p.original_ncells)
+            if mask is None or np.any(mask.numpy()):
+                raise KeyError(f"Missing field data for active patch: {coeff_path}")
+            num_dofs = p.original_ncells if self.cellwise else p.original_ndofs
+            cps = np.zeros((num_dofs, self.num_comps), dtype=np.float64)
 
         if not self.cellwise and p.node_mapping is not None:
             cps = cps[p.node_mapping, ...]
@@ -439,6 +534,8 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     # Populated by discover_bases and discover_fields (called by __enter__)
     _bases: dict[str, IfemBasis]
     _fields: dict[str, IfemField]
+    _mask_bases: set[str]
+    _mask_updates: dict[tuple[str, int], list[tuple[int, FloatFieldData]]]
 
     # Options that can be overridden by subclasses (for eigenmodes)
     locator: ClassVar[Locator] = StandardLocator()
@@ -473,6 +570,8 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
             logging.debug(
                 f"Basis {basis.name} with {util.pluralize(basis.num_patches(self), 'patch', 'patches')}"
             )
+
+        self.discover_masks()
 
         # Find all fields
         self.discover_fields()
@@ -557,6 +656,8 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
                 # Construct new field objects for the fields we haven't seen
                 # before.
                 for field_name, cellwise in fields:
+                    if cellwise and field_name == "mask":
+                        continue
                     if field_name in self._fields or field_name in warnings:
                         continue
                     try:
@@ -572,6 +673,20 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
                         warnings.add(field_name)
                         continue
                     self._fields[field_name] = field
+
+    def discover_masks(self) -> None:
+        """Load the small element-activation masks and index their updates."""
+        self._mask_bases = set()
+        self._mask_updates = defaultdict(list)
+        for step, step_group in enumerate(self.step_groups()):
+            for basis_name in self._bases:
+                path = f"{basis_name}/knotspan/mask"
+                if path not in step_group:
+                    continue
+                self._mask_bases.add(basis_name)
+                for patch, dataset in step_group[path].items():
+                    mask = FieldData(dataset[:].astype(np.float64).reshape(-1, 1))
+                    self._mask_updates[basis_name, int(patch) - 1].append((step, mask))
 
     @lru_cache(maxsize=1)
     def propose_recombinations(self) -> tuple[list[api.SplitFieldSpec], list[api.RecombineFieldSpec]]:
@@ -627,6 +742,22 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     def bases(self) -> Iterator[IfemBasis]:
         return iter(self._bases.values())
 
+    def mask_path(self, basis: IfemBasis, step: int, patch: int) -> str:
+        return f"{step}/{basis.name}/knotspan/mask/{patch + 1}"
+
+    def basis_has_masks(self, basis: IfemBasis) -> bool:
+        return basis.name in self._mask_bases
+
+    @lru_cache(maxsize=None)
+    def mask_at(self, basis: IfemBasis, step: int, patch: int, num_cells: int) -> FloatFieldData | None:
+        if not self.basis_has_masks(basis):
+            return None
+        updates = self._mask_updates.get((basis.name, patch), ())
+        update = bisect_right(updates, step, key=lambda item: item[0]) - 1
+        if update >= 0:
+            return updates[update][1]
+        return FieldData(np.zeros((num_cells, 1), dtype=np.float64))
+
     @impl_basis_of
     def basis_of(self, field: IfemField) -> IfemBasis:
         return field.basis
@@ -642,11 +773,20 @@ class Ifem(api.Source[IfemBasis, IfemField, Step, Topology, Zone]):
     @impl_topology
     def topology(self, step: Step, basis: IfemBasis, zone: Zone[ZoneKey]) -> api.Topology:
         block = basis.patches_at(step.index, zone.key.patch, self)[zone.key.subblock]
-        return block.topology
+        mask = self.mask_at(basis, step.index, zone.key.patch, block.original_ncells)
+        if mask is None:
+            return block.topology
+        if block.cell_mapping is not None:
+            mask = mask.slice_dofs(block.cell_mapping)
+        return MaskedTopology(block.topology, mask)
 
     @impl_topology_updates
     def topology_updates(self, step: Step, basis: IfemBasis) -> bool:
-        return basis.updates_at(step.index, self)
+        mask_updated = any(
+            self.mask_path(basis, step.index, patch) in self.h5
+            for patch in range(basis.num_patches(self))
+        )
+        return basis.updates_at(step.index, self) or mask_updated
 
     @impl_field_data
     def field_data(self, step: Step, field: IfemField, zone: Zone[ZoneKey]) -> FloatFieldData:
